@@ -123,3 +123,20 @@ def test_restored_yesterday_total_is_not_falsely_reported_today():
     restored = ActualCostLedger.from_storage(ledger.to_storage())
     assert restored.actual_cost_today is None
     assert restored.summary()["complete"] is False
+
+
+def test_native_meter_rebinding_discards_incompatible_known_subtotals():
+    start = midnight()
+    ledger = ActualCostLedger()
+    tariffs = interval(start)
+    ledger.observe(start, 10, "sensor.first_energy", tariffs)
+    ledger.observe(
+        start + timedelta(minutes=5), 11, "sensor.first_energy", tariffs
+    )
+    assert ledger.summary()["known_subtotal_eur"] == 0.2
+    ledger.observe(
+        start + timedelta(minutes=10), 50, "sensor.replacement_energy", tariffs
+    )
+    assert ledger.summary()["known_subtotal_eur"] is None
+    assert ledger.summary()["known_energy_kwh"] is None
+    assert ledger.actual_cost_today is None
