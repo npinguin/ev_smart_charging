@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: "3.x"
       - run: python3 -m pip install black
-      - run: black --check .
+      - run: black --check --diff .
 
   legacy_regression_smoke:
     runs-on: "ubuntu-latest"
