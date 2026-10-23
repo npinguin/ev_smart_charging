@@ -10,7 +10,7 @@
 |---|---|---|
 | CI full Python matrix on current feature HEAD | Exact run URLs, green tests and meaningful timeout/listener teardown | **BLOCKED** — isolated PR #3 tests PASS on 3.11/3.12/3.13; 3.14 tests PASS but Codecov upload missing token; changes not promoted |
 | HACS repository validation | Issues enabled, valid topics, successful full check | **NO** — administrator must enable Issues and valid topics |
-| Strict Black formatting | Complete formatting checks without ignoring files | **PASS on separate PR #4**, 33 formatted Python files; unmerged |\n| Original Local regression | Upstream baseline and fork same environment, original command/state behavior | **PASS on PR #3**, unchanged selected Local assertions, not yet promoted |
+| Strict Black formatting | Complete formatting checks without ignoring files | **PASS**, 33 Python files formatted and merged into isolated fix branch at `844b487c`; not promoted to feature |\n| Original Local regression | Upstream baseline and fork same environment, original command/state behavior | **PASS on PR #3**, unchanged selected Local assertions, not yet promoted |
 | Entry setup/unload, singleton | 0/1/4 charger entries, restart/reload, exactly one controller, no orphan listeners | **PARTIAL** — managed one-charger fixture, singleton/reload PASS; zero/four native and physical proof missing |
 | Stable HA identity | Before/after diff original v8 config entry, device and entity unique IDs | **NO** |
 | Native single physical writer | Actual service-call trace per OCPP, Peblar, Fibaro and duplicate-target block | **NO** |
@@ -26,7 +26,7 @@
 
 **Current CI evidence (not a green release):**
 - [PR #3 run 39969458373](https://github.com/npinguin/ev_smart_charging/actions/runs/39969458373): Local upstream and feature smoke PASS, focused controller PASS; all test steps PASS on Python 3.11/3.12/3.13/3.14. Python 3.14 job FAIL only on Codecov missing token.
-- [PR #4 formatter review](https://github.com/npinguin/ev_smart_charging/pull/4): Black strict check PASS; source-only formatting must be reviewed/merged separately.
+- [PR #4 formatting review](https://github.com/npinguin/ev_smart_charging/pull/4) MERGED into isolated `fix/local-bootstrap-lifecycle` branch only. [CI run 39970270671](https://github.com/npinguin/ev_smart_charging/actions/runs/39970270671): Black, Local, upstream, controller and full Python 3.11–3.13 jobs PASS; Python 3.14 test step PASS, upload fails because Codecov token missing.
 - HACS still FAIL: Issues disabled, repository topics absent. Black, HACS and coverage-upload checks have **not** been bypassed.
 - No physical or four-charger production evidence. Keep this gate blocked.
 
