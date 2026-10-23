@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from custom_components.ev_smart_charging.controller.runtime import (
     ChargeSupervisor, is_supervised, resume_supervised, set_control_mode,
+    physical_grant,
 )
 from custom_components.ev_smart_charging.controller.sensors import ControllerSensor
 from homeassistant.components.sensor import SensorDeviceClass
@@ -281,3 +282,43 @@ async def test_peak_veto_replans_away_from_blocked_cheap_quarter():
         for a in manager.plan.assignments
     )
     assert manager.hass.data["ev_smart_charging"]["charger_1"].update_state.await_count == 1
+
+
+def test_live_admission_boundary_passes_local_without_plan():
+    hass, entries = ha()
+    assert physical_grant(hass, "charger_1", "automatic")
+
+
+def test_live_admission_boundary_denies_all_unplanned_supervised_starts():
+    hass, entries = ha()
+    set_control_mode(hass, "charger_1", "coordinated")
+    for reason in ("automatic", "retry", "low_soc", "low_price", "manual",
+                   "keep_on"):
+        assert not physical_grant(hass, "charger_1", reason)
+
+
+def test_live_admission_boundary_checks_real_grant_and_manual_stop():
+    manager, entries, states = peak_fixture()
+    # No site peak protection in this test: examine the actual runtime gate.
+    entries.controller.options["peak_shaving_enabled"] = False
+    manager.rebuild()
+    assert manager.plan.assignments
+    assert physical_grant(manager.hass, "charger_1", "automatic")
+    assert physical_grant(manager.hass, "charger_1", "retry")
+    assert not physical_grant(manager.hass, "charger_1", "manual")
+    entries.controller.options["paused_chargers"] = ["charger_1"]
+    assert not physical_grant(manager.hass, "charger_1", "retry")
+
+
+def test_live_admission_rejects_stale_plan():
+    from dataclasses import replace
+    from homeassistant.util import dt as dt_util
+
+    manager, entries, states = peak_fixture()
+    entries.controller.options["peak_shaving_enabled"] = False
+    manager.rebuild()
+    assert manager.plan.assignments
+    manager.plan = replace(
+        manager.plan, created_at=dt_util.utcnow() - timedelta(minutes=6)
+    )
+    assert not physical_grant(manager.hass, "charger_1", "automatic")

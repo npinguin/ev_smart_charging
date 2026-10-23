@@ -5,7 +5,6 @@ import pytest
 from custom_components.ev_smart_charging.controller.planner import (
     Charger, Policy, PriceSlot, aggregate_actual, build_plan, grant_for,
 )
-from custom_components.ev_smart_charging.controller.admission import SupervisionGate
 
 T = datetime(2026, 10, 23, 10, tzinfo=timezone.utc)
 
@@ -76,42 +75,3 @@ def test_unmanaged_local_load_is_not_advertised_as_safe():
     assert "LOCAL_LOAD_UNMEASURED_CAPACITY_NOT_GUARANTEED" in plan.warnings
 
 
-def test_admission_passes_local_no_plan():
-    gate = SupervisionGate()
-    assert gate.start("a", T, "automatic").granted
-
-
-def test_admission_blocks_unplanned_supervised():
-    gate = SupervisionGate()
-    gate.set_mode("a", "coordinated")
-    for reason in ("automatic", "retry", "low_soc", "low_price", "manual", "keep_on"):
-        assert not gate.start("a", T, reason).granted
-    assert gate.stop("a").granted
-
-
-def test_admission_granted_slot_not_other_car():
-    gate = SupervisionGate()
-    gate.set_mode("a", "coordinated")
-    gate.set_mode("b", "coordinated")
-    plan = build_plan([charger("a"), charger("b")], slots(), T)
-    gate.update_plan(plan)
-    active = plan.assignments[0]
-    other = "b" if active.charger_id == "a" else "a"
-    assert gate.start(active.charger_id, active.start, "automatic").granted
-    assert not gate.start(other, active.start, "retry").granted
-
-
-def test_admission_stale():
-    gate = SupervisionGate(max_plan_age=timedelta(minutes=5))
-    gate.set_mode("a", "coordinated")
-    gate.update_plan(build_plan([charger()], slots(), T))
-    assert not gate.start("a", T+timedelta(minutes=15), "automatic").granted
-
-
-def test_admission_requires_confirmation_to_go_local():
-    gate = SupervisionGate()
-    gate.set_mode("a", "coordinated")
-    with pytest.raises(PermissionError):
-        gate.set_mode("a", "local")
-    gate.set_mode("a", "local", operator_confirmed=True)
-    assert gate.start("a", T, "manual").granted
