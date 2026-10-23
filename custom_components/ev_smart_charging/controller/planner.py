@@ -58,6 +58,7 @@ class Charger:
     charging_speed_pct_h: float | None = None
     current_battery_kwh: float | None = None
     target_battery_kwh: float | None = None
+    enabled: bool = True
 
     def __post_init__(self):
         if not self.id.strip() or self.mode not in ("local", "coordinated"):
@@ -342,6 +343,14 @@ def build_plan(
             results.append(
                 ChargerResult(
                     c.id, required, 0.0, required, "LOCAL", "Independent charging"
+                )
+            )
+            continue
+        if not c.enabled:
+            results.append(
+                ChargerResult(
+                    c.id, required, 0.0, required,
+                    "BLOCKED", "EVSC disabled by operator",
                 )
             )
             continue
