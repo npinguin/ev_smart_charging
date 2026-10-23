@@ -284,7 +284,24 @@ def build_plan(
         used[start] += 1
         if remaining_kw[start] is not None:
             remaining_kw[start] -= c.charge_power_kw
-        assignments.append(replace(old, price_eur_per_kwh=current.eur_per_kwh))
+        # A restored active grant is a permit until its original end,
+        # never a claim that the FULL quarter's kWh still lies ahead.
+        remaining_hours = (utc(old.end) - t).total_seconds() / 3600
+        remaining_ac = (
+            c.charge_power_kw * remaining_hours
+            if c.charge_power_kw is not None else None
+        )
+        assignments.append(
+            replace(
+                old,
+                price_eur_per_kwh=current.eur_per_kwh,
+                grid_kwh=remaining_ac,
+                delivered_battery_kwh=(
+                    remaining_ac * c.efficiency
+                    if remaining_ac is not None else None
+                ),
+            )
+        )
     ordered = sorted(
         chargers,
         key=lambda c: (
@@ -360,6 +377,23 @@ def build_plan(
         # Active assignments are fixed; only future slots are optimized.
         current_grants = [a for a in assignments if a.charger_id == c.id]
         outstanding = max(0, needed_quarters - len(current_grants))
+        if required is not None and c.charge_power_kw is not None:
+            # Preserve the active permission, but meet the remaining
+            # battery demand using actual future quarter capacity.
+            committed_battery = sum(
+                a.delivered_battery_kwh
+                for a in current_grants
+                if a.delivered_battery_kwh is not None
+            )
+            if all(
+                a.delivered_battery_kwh is not None for a in current_grants
+            ):
+                remaining_battery = max(0.0, required - committed_battery)
+                outstanding = ceil(
+                    remaining_battery
+                    / (c.charge_power_kw * 0.25 * c.efficiency)
+                    - 1e-9
+                )
         eligible = [
             p
             for p in by_charger[c.id]
