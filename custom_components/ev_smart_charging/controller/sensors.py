@@ -34,7 +34,7 @@ class ControllerSensor(SensorEntity):
         ):
             self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_native_unit_of_measurement = "kWh"
-        elif key.startswith("indicative_cost"):
+        elif key.startswith("indicative_cost") or key == "actual_cost_today":
             self._attr_device_class = SensorDeviceClass.MONETARY
             self._attr_native_unit_of_measurement = "EUR"
 
@@ -124,8 +124,13 @@ class ControllerSensor(SensorEntity):
                     if self.manager.plan
                     else None
                 ),
-                "cost_eur": None,
-                "cost_reason": "Not calculated until the price source unit and metering coverage are verified.",
+                "cost_eur": self.manager.planning_summary()["indicative_cost"],
+                "cost_reason": (
+                    "Current priced controller plan only; not an actual bill"
+                    if self.manager.planning_summary()["indicative_cost"] is not None
+                    else "Unavailable until all planned rates/energy are validated"
+                ),
+                "actual_cost_coverage": self.manager.actual_cost_summary(),
             }
         return None
 
@@ -181,6 +186,12 @@ def controller_sensors(manager):
             manager,
             "indicative_cost_tomorrow",
             "Indicative cost tomorrow",
+            "mdi:currency-eur",
+        ),
+        ControllerSensor(
+            manager,
+            "actual_cost_today",
+            "Actual charging cost today",
             "mdi:currency-eur",
         ),
         ControllerSensor(
