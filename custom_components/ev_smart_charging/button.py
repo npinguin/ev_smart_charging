@@ -70,6 +70,7 @@ class EVSmartChargingButtonClearReadyBy(EVSmartChargingButton):
     """Return to the original recurring completion time without altering Options."""
 
     _entity_key = "clear_absolute_ready_by"
+    _attr_name = "Clear absolute Ready by"
     _attr_icon = "mdi:calendar-remove"
 
     async def async_press(self) -> None:
