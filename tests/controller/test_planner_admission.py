@@ -385,7 +385,7 @@ def test_native_kwh_planning_works_without_usable_capacity_or_soc():
         [c], {"native_energy": slots(4)}, T,
         Policy(max_parallel=1),
     )
-    assert c.required_battery_kwh == 3.24
+    assert c.required_battery_kwh == pytest.approx(3.24)
     assert c.required_quarters == 2
     assert len(p.assignments) == 2
     assert p.results[0].status == "PLANNED"
@@ -416,7 +416,7 @@ def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
         T + timedelta(hours=1), current_battery_kwh=None,
         target_battery_kwh=23.24,
     )
-    assert c.required_battery_kwh == 3.24
+    assert c.required_battery_kwh == pytest.approx(3.24)
     assert c.required_quarters == 2
 
 
