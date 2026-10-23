@@ -260,6 +260,11 @@ def build_plan(
         selected.add((c.id, key))
         used[key] = used.get(key, 0) + 1
         used_kw[key] = used_kw.get(key, 0.0) + (c.charge_power_kw or 0.0)
+        # A mid-quarter start delivers only a fraction of the expected SoC
+        # progression. Reserve the additional time in subsequent quarters.
+        remaining[c.id] = max(
+            0.0, remaining[c.id] - remaining_hours / 0.25
+        )
 
     def required_slots(c: Charger) -> int | None:
         if c.required_battery_kwh is not None and c.charge_power_kw is not None:
@@ -292,7 +297,6 @@ def build_plan(
         ), None)
         if slot is not None and can_fit(c, slot):
             record(c, slot)
-            remaining[c.id] -= 1
 
     # Allocate one whole quarter at a time. Protect low-slack deadlines;
     # otherwise prefer the charger with the highest cost of deferral.
@@ -327,7 +331,6 @@ def build_plan(
             break
         _, _, _, _, _, chosen, slot = min(candidates, key=lambda x: x[:5])
         record(chosen, slot)
-        remaining[chosen.id] -= 1
 
     results = []
     for c in chargers:

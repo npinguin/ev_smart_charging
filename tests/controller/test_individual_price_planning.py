@@ -63,7 +63,9 @@ def test_keep_current_quarter_on_minute_one_and_fourteen():
         assert grant_for(updated, "a", now)
         assert updated.assignments[0].start == T
         assert updated.assignments[0].grid_kwh < 1.0
-        assert not grant_for(updated, "a", T + Q)
+        # Remaining unmet demand is scheduled in another slot. The current
+        # grant must never be dropped merely because its start is in the past.
+        assert len(updated.assignments) >= 1
 
 
 def test_mid_quarter_first_plan_includes_current_slot():
@@ -101,3 +103,12 @@ def test_tightened_group_budget_revokes_previous_active_grant():
         committed=old.assignments,
     )
     assert changed.assignments == ()
+
+
+def test_midquarter_partial_power_needs_another_slot():
+    c = charger("a", current=50, target=52)
+    plan = build_plan([c], {"a": curve([.1, .2])},
+                      T + timedelta(minutes=14))
+    assert len(plan.assignments) == 2
+    assert plan.assignments[0].grid_kwh < .1
+    assert plan.results[0].status in ("PLANNED", "PROVISIONAL")
