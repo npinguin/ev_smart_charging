@@ -2,7 +2,7 @@
 
 **Current authority:** [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). This is a release **gate checklist**, not a second version/status source.
 
-**Feature snapshot reviewed:** \`d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d\` — 2026-10-23. Refresh when implementation moves.
+**Feature snapshot reviewed:** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` — 2026-10-23. Refresh when implementation moves.
 
 | Gate | Objective evidence required | Verified at snapshot? |
 |---|---|---|
