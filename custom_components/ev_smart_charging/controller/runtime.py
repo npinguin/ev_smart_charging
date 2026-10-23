@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from copy import deepcopy
+from itertools import combinations
 from datetime import datetime, timedelta
 from math import isfinite
 
@@ -38,6 +40,7 @@ PEAK_RESTART_MARGIN_KW = 0.5
 # At most one pending executor refresh; no event can spawn an unbounded task list.
 EVENT_REFRESH_DEBOUNCE_SECONDS = 0.2
 EVENT_REFRESH_COOLDOWN_SECONDS = 1.0
+CONTROLLER_POLL_SECONDS = 5
 
 
 def controller_entry(hass):
@@ -196,6 +199,9 @@ class ChargeSupervisor:
         # EVSC's own state updates. Coalesce, bound and tear down all refreshes.
         self._refresh_task = None
         self._refresh_dirty = False
+        self._replan_requested = False
+        self._plan_fingerprint = None
+        self._observation_fingerprint = None
         self._stopped = False
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
@@ -1035,22 +1041,29 @@ class ChargeSupervisor:
             }
         }
 
-    async def async_refresh(self, _now=None):
-        """Serialize peak events, planned grants, and native Start/Stop."""
+    async def async_refresh(self, _now=None, *, replan=True):
+        """Same lifecycle for Local observation and 1..N group execution.
+
+        Reconcile measured kWh / native readback without rebuilding the plan.
+        """
+        if self._stopped:
+            return
         async with self._refresh_lock:
-            self._watch_source_changes()
-            if self.participants and not safety.COORDINATED_ACTUATION_ENABLED:
-                # A previous session may have persisted a participant. Do not
-                # produce an automatic Start *or Stop* while in quarantine.
-                self.gate.update_plan(None)
-                self.plan = None
-                self.reason = "COORDINATED_SAFETY_HOLD"
-            else:
-                self.rebuild()
+            if self._stopped:
+                return
+            if replan:
+                if self.participants and not safety.COORDINATED_ACTUATION_ENABLED:
+                    self.gate.update_plan(None)
+                    self.plan = None
+                    self.reason = "COORDINATED_SAFETY_HOLD"
+                else:
+                    self.rebuild()
             cost_changed = self._record_actual_costs()
             for key in (
                 self.participants if safety.COORDINATED_ACTUATION_ENABLED else ()
             ):
+                if self._stopped:
+                    return
                 obj = self.chargers().get(key)
                 if obj is not None:
                     try:
@@ -1059,14 +1072,17 @@ class ChargeSupervisor:
                         _LOGGER.exception(
                             "Could not synchronize supervised charger %s", key
                         )
+            if self._stopped:
+                return
             if cost_changed and self._cost_store is not None:
-                # Persist after native protective START/STOP decisions.
                 try:
                     await self._cost_store.async_save(self._stored_costs())
                 except Exception:
                     _LOGGER.exception("Cannot persist EVSC actual-cost ledger")
                     for ledger in self._actual_cost_ledgers.values():
                         ledger.complete = False
+            if self._stopped:
+                return
             for callback in tuple(self._subscribers):
                 callback()
 
@@ -1096,27 +1112,126 @@ class ChargeSupervisor:
                     watched.add(candidate)
         return frozenset(watched)
 
-    def _watch_source_changes(self):
-        sources = self._source_entity_ids()
-        if sources == self._watched_sources:
-            return
-        if self._unsub_sources is not None:
-            self._unsub_sources()
-            self._unsub_sources = None
-        self._watched_sources = sources
-        if sources:
-            self._unsub_sources = async_track_state_change_event(
-                self.hass,
-                sorted(sources),
-                self._source_changed,
+    def _sample_state(self, entity_id, *, include_attributes=False):
+        """Read cached HA state; never poll charger/OEM network APIs."""
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None:
+            return None
+        return (
+            state.state,
+            deepcopy(state.attributes) if include_attributes else None,
+        )
+
+    def _peak_plan_fingerprint(self):
+        """Ignore meter jitter unless feasible full-rate charger sets change."""
+        opts = self.config_entry.options
+        if not opts.get("peak_shaving_enabled") or not self.participants:
+            return None
+        chargers = self.chargers()
+        headroom, valid = self._peak_headroom(chargers)
+        if not valid:
+            return ("meter_unavailable",)
+        powers = [
+            _number(self._source_config(key, chargers[key]).get("power_kw"))
+            for key in sorted(self.participants)
+            if key in chargers
+        ]
+        powers = [power for power in powers if power is not None and power > 0]
+        if len(powers) <= 6:
+            thresholds = sorted({
+                round(sum(group), 4)
+                for count in range(1, len(powers) + 1)
+                for group in combinations(powers, count)
+            })
+            feasible = tuple(headroom + 1e-9 >= limit for limit in thresholds)
+        else:
+            feasible = (int(headroom * 2),)
+        recovery_due = (
+            self._peak_latched
+            and self._peak_recovery_since is not None
+            and dt.utcnow() - self._peak_recovery_since >= PEAK_RECOVERY_STABLE
+        )
+        return (self.peak_status == "not_achievable", feasible, recovery_due)
+
+    def _planning_inputs(self):
+        """Local-style triggers: prices, SoC, ready-by, options and quarter."""
+        sources = []
+        for key, obj in sorted(self.chargers().items()):
+            cfg = self._source_config(key, obj)
+            input_ids = (
+                obj.price_entity_id,
+                obj.ev_soc_entity_id,
+                obj.ev_target_soc_entity_id,
+                cfg.get("capacity_sensor"),
+                cfg.get("current_battery_sensor"),
+                cfg.get("target_battery_sensor"),
+                cfg.get("effective_price_sensor"),
             )
+            switch_state = self._sample_state(obj.charger_switch.entity_id)
+            sources.append((
+                key,
+                obj.switch_active,
+                obj.switch_ev_connected,
+                obj.ev_soc,
+                obj.ev_target_soc,
+                obj.absolute_ready_by,
+                obj.ready_quarter_local,
+                obj.charging_pct_per_hour,
+                repr(dict(obj.config_entry.options)),
+                tuple(
+                    (entity, self._sample_state(entity, include_attributes=True))
+                    for entity in input_ids
+                ),
+                switch_state is not None and switch_state[0] in ("on", "off"),
+            ))
+        return (
+            int(dt.utcnow().timestamp() // QUARTER.total_seconds()),
+            repr(dict(self.config_entry.options)),
+            tuple(sources),
+            self._peak_plan_fingerprint(),
+        )
+
+    def _observation_inputs(self):
+        """Raw charger power, energy and readback never directly replan."""
+        results = []
+        for key, obj in sorted(self.chargers().items()):
+            cfg = self._source_config(key, obj)
+            ids = (
+                obj.charging_state_entity_id,
+                obj.charger_switch.entity_id,
+                cfg.get("power_sensor"),
+                cfg.get("energy_sensor"),
+            )
+            results.append(
+                (key, tuple((entity, self._sample_state(entity)) for entity in ids))
+            )
+        return tuple(results)
 
     @callback
-    def _request_refresh(self):
-        """Never queue one task per event; keep at most one pending runner."""
+    def _poll_controller(self, _now=None):
+        """At most one coalesced refresh per five-second HA state sample."""
+        if self._stopped:
+            return
+        planning = self._planning_inputs()
+        observed = self._observation_inputs()
+        changed = planning != self._plan_fingerprint
+        observation_changed = observed != self._observation_fingerprint
+        self._plan_fingerprint = planning
+        self._observation_fingerprint = observed
+        if changed:
+            self._request_refresh()
+        elif observation_changed or (
+            self.participants and safety.COORDINATED_ACTUATION_ENABLED
+        ):
+            self._request_refresh(replan=False)
+
+    @callback
+    def _request_refresh(self, *, replan=True):
+        """Single runner for planning and execution/readback."""
         if self._stopped:
             return
         self._refresh_dirty = True
+        self._replan_requested |= replan
         if self._refresh_task is None or self._refresh_task.done():
             self._refresh_task = self.hass.async_create_task(
                 self._drain_source_refreshes()
@@ -1128,8 +1243,13 @@ class ChargeSupervisor:
             await asyncio.sleep(EVENT_REFRESH_DEBOUNCE_SECONDS)
             while self._refresh_dirty and not self._stopped:
                 self._refresh_dirty = False
+                replan = self._replan_requested
+                self._replan_requested = False
                 try:
-                    await self.async_refresh()
+                    if replan:
+                        await self.async_refresh()
+                    else:
+                        await self.async_refresh(replan=False)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -1174,19 +1294,20 @@ class ChargeSupervisor:
         except Exception:
             _LOGGER.exception("Cannot restore EVSC cost evidence")
             self._actual_cost_ledgers = {}
+        # No HA source subscriptions; native readbacks cannot cause replans.
         self._unsub = async_track_time_interval(
-            self.hass, self.async_refresh, timedelta(minutes=1)
+            self.hass, self._poll_controller, timedelta(seconds=CONTROLLER_POLL_SECONDS)
         )
-        sensor_id = self.config_entry.options.get("site_power_sensor")
-        if self.config_entry.options.get("peak_shaving_enabled") and sensor_id:
-            self._unsub_peak = async_track_state_change_event(
-                self.hass, [sensor_id], self._peak_meter_changed
-            )
         await self.async_refresh()
+        self._plan_fingerprint = self._planning_inputs()
+        self._observation_fingerprint = self._observation_inputs()
 
     def async_stop(self):
         self._stopped = True
         self._refresh_dirty = False
+        self._replan_requested = False
+        self._plan_fingerprint = None
+        self._observation_fingerprint = None
         if self._refresh_task is not None and not self._refresh_task.done():
             self._refresh_task.cancel()
         if self._unsub:
