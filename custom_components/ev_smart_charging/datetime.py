@@ -21,6 +21,7 @@ class EVSmartChargingAbsoluteReadyBy(EVSmartChargingEntity, DateTimeEntity, Rest
     """One-time calendar deadline. Clear button restores recurring local EVSC time."""
 
     _entity_key = "absolute_ready_by"
+    _attr_should_poll = False
     _attr_icon = "mdi:calendar-clock"
     _attr_name = "Absolute Ready by"
     _attr_native_value: datetime | None = None

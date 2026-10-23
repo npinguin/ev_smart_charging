@@ -123,6 +123,8 @@ class EVSmartChargingSelectReadyQuarter(EVSmartChargingSelect):
 class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
     """Per-charger operator mode backed only by controller membership."""
 
+    _attr_should_poll = False
+
     _entity_key = "control_mode"
     _attr_name = "Control mode"
     _attr_icon = "mdi:source-branch"
