@@ -210,7 +210,9 @@ class ChargeSupervisor:
                 if st is not None and st.state in ("on", "off")
                 else None
             )
-        return collect(coordinators, physical)
+        return collect(
+            coordinators, physical, participants=self.participants, plan=self.plan
+        )
 
     def _source_config(self, key, obj):
         """New source bindings belong to EVSC; old controller fields are fallback."""
