@@ -27,7 +27,6 @@ from custom_components.ev_smart_charging.sensor import (
 
 from .const import MOCK_CONFIG_ALL
 
-
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
 # for a given test. We can also leverage fixtures and mocks that are available in
 # Home Assistant using the pytest_homeassistant_custom_component plugin.

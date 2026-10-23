@@ -3,6 +3,7 @@
 Persisted participant membership is read before controller setup: no supervised
 charger silently becomes Local during startup or controller failure.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +11,10 @@ import logging
 from datetime import timedelta
 from math import isfinite
 
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.util import dt
 
 from ..const import DOMAIN
@@ -25,8 +29,14 @@ CONTROLLER_TYPE = "charge_controller"
 
 
 def controller_entry(hass):
-    return next((entry for entry in hass.config_entries.async_entries(DOMAIN)
-                 if entry.data.get(MARKER) == CONTROLLER_TYPE), None)
+    return next(
+        (
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get(MARKER) == CONTROLLER_TYPE
+        ),
+        None,
+    )
 
 
 def is_supervised(hass, charger_id):
@@ -86,7 +96,8 @@ def set_control_mode(hass, charger_id, mode):
     if entry is None:
         raise ValueError("EVSC Charge Controller is not configured")
     charger_ids = {
-        e.entry_id for e in hass.config_entries.async_entries(DOMAIN)
+        e.entry_id
+        for e in hass.config_entries.async_entries(DOMAIN)
         if e.data.get(MARKER) != CONTROLLER_TYPE
     }
     if charger_id not in charger_ids:
@@ -99,10 +110,12 @@ def set_control_mode(hass, charger_id, mode):
         participants.discard(charger_id)
         paused.discard(charger_id)
     hass.config_entries.async_update_entry(
-        entry, options={
-            **entry.options, "participants": sorted(participants),
+        entry,
+        options={
+            **entry.options,
+            "participants": sorted(participants),
             "paused_chargers": sorted(paused),
-        }
+        },
     )
 
 
@@ -127,7 +140,9 @@ def physical_grant(hass, charger_id, reason):
         return False
     entry = controller_entry(hass)
     controller = hass.data.get(DOMAIN, {}).get(entry.entry_id) if entry else None
-    return isinstance(controller, ChargeSupervisor) and controller.allowed(charger_id, reason)
+    return isinstance(controller, ChargeSupervisor) and controller.allowed(
+        charger_id, reason
+    )
 
 
 class ChargeSupervisor:
@@ -153,9 +168,12 @@ class ChargeSupervisor:
         return set(self.config_entry.options.get("participants", []))
 
     def chargers(self):
-        return {key: obj for key, obj in self.hass.data.get(DOMAIN, {}).items()
-                if key != self.config_entry.entry_id and
-                getattr(getattr(obj, "config_entry", None), "entry_id", None) == key}
+        return {
+            key: obj
+            for key, obj in self.hass.data.get(DOMAIN, {}).items()
+            if key != self.config_entry.entry_id
+            and getattr(getattr(obj, "config_entry", None), "entry_id", None) == key
+        }
 
     def snapshot(self):
         coordinators = list(self.chargers().values())
@@ -163,7 +181,11 @@ class ChargeSupervisor:
         for c in coordinators:
             state_id = getattr(c, "charging_state_entity_id", "")
             st = self.hass.states.get(state_id) if state_id else None
-            physical.append(st.state == "on" if st is not None and st.state in ("on", "off") else None)
+            physical.append(
+                st.state == "on"
+                if st is not None and st.state in ("on", "off")
+                else None
+            )
         return collect(coordinators, physical)
 
     def _source_config(self, key, obj):
@@ -173,17 +195,21 @@ class ChargeSupervisor:
         return {
             "capacity_kwh": own.get("evsc_capacity_kwh") or legacy.get("capacity_kwh"),
             "power_kw": own.get("evsc_expected_power_kw") or legacy.get("power_kw"),
-            "power_sensor": own.get("evsc_actual_power_entity") or legacy.get("power_sensor"),
-            "energy_sensor": own.get("evsc_actual_energy_entity") or legacy.get("energy_sensor"),
+            "power_sensor": own.get("evsc_actual_power_entity")
+            or legacy.get("power_sensor"),
+            "energy_sensor": own.get("evsc_actual_energy_entity")
+            or legacy.get("energy_sensor"),
         }
 
     def _charger(self, key, obj):
         attrs = self._source_config(key, obj)
         ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
         return Charger(
-            id=key, mode="coordinated" if key in self.participants else "local",
+            id=key,
+            mode="coordinated" if key in self.participants else "local",
             connected=obj.switch_ev_connected,
-            current_soc=_number(obj.ev_soc), target_soc=_number(obj.ev_target_soc),
+            current_soc=_number(obj.ev_soc),
+            target_soc=_number(obj.ev_target_soc),
             usable_capacity_kwh=_number(attrs.get("capacity_kwh")) or None,
             charge_power_kw=_number(attrs.get("power_kw")) or None,
             ready_by=ready,
@@ -200,9 +226,17 @@ class ChargeSupervisor:
             known.append(_meter(self.hass, cfg.get("power_sensor"), "power"))
             energy.append(_meter(self.hass, cfg.get("energy_sensor"), "energy"))
         return {
-            "actual_power_kw": round(sum(v for v in known if v is not None), 3) if known and all(v is not None for v in known) else None,
+            "actual_power_kw": (
+                round(sum(v for v in known if v is not None), 3)
+                if known and all(v is not None for v in known)
+                else None
+            ),
             "actual_power_coverage": sum(v is not None for v in known),
-            "session_energy_kwh": round(sum(v for v in energy if v is not None), 3) if energy and all(v is not None for v in energy) else None,
+            "session_energy_kwh": (
+                round(sum(v for v in energy if v is not None), 3)
+                if energy and all(v is not None for v in energy)
+                else None
+            ),
             "session_energy_coverage": sum(v is not None for v in energy),
         }
 
@@ -219,12 +253,12 @@ class ChargeSupervisor:
             source = self.hass.states.get(source_id) if source_id else None
             unit = (
                 source.attributes.get("unit_of_measurement")
-                if source is not None else None
+                if source is not None
+                else None
             )
-            if (
-                not obj.config_entry.options.get("evsc_price_validated", False)
-                or unit not in ("EUR/kWh", "€/kWh")
-            ):
+            if not obj.config_entry.options.get(
+                "evsc_price_validated", False
+            ) or unit not in ("EUR/kWh", "€/kWh"):
                 prices[key] = []
                 continue
             raw = getattr(obj, "raw_two_days", None)
@@ -309,7 +343,8 @@ class ChargeSupervisor:
             if obj.charger_switch.entity_id
         ]
         duplicate_targets = {
-            target for _, target in all_targets
+            target
+            for _, target in all_targets
             if sum(other == target for _, other in all_targets) > 1
         }
         if any(obj.charger_switch.entity_id in duplicate_targets for obj in selected):
@@ -339,13 +374,16 @@ class ChargeSupervisor:
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
             previous = self.plan.assignments if self.plan is not None else ()
             self.plan = build_plan(
-                members, prices, dt.utcnow(), policy,
-                committed=previous, live_peak_headroom_kw=peak_limit,
+                members,
+                prices,
+                dt.utcnow(),
+                policy,
+                committed=previous,
+                live_peak_headroom_kw=peak_limit,
             )
             self.gate.update_plan(self.plan)
             self.reason = (
-                "COORDINATED_PLAN"
-                if any(prices.values()) else "PRICE_NOT_VALIDATED"
+                "COORDINATED_PLAN" if any(prices.values()) else "PRICE_NOT_VALIDATED"
             )
         except (ValueError, TypeError, OverflowError) as exc:
             _LOGGER.warning("EVSC joint planner rejected source inputs: %s", exc)
@@ -379,7 +417,9 @@ class ChargeSupervisor:
         plan = self.plan
         status = "idle" if not self.participants else "blocked"
         if plan is not None:
-            result_states = {r.status for r in plan.results if r.charger_id in self.participants}
+            result_states = {
+                r.status for r in plan.results if r.charger_id in self.participants
+            }
             if "INFEASIBLE" in result_states:
                 status = "infeasible"
             elif "PENDING_PRICES" in result_states or "UNKNOWN" in result_states:
@@ -388,78 +428,73 @@ class ChargeSupervisor:
                 status = "provisional"
             elif result_states <= {"COMPLETE", "PLANNED"}:
                 status = "valid"
-        if (
-            status == "valid"
-            and self.config_entry.options.get("peak_shaving_enabled", False)
+        if status == "valid" and self.config_entry.options.get(
+            "peak_shaving_enabled", False
         ):
             # Future household load is not known from today's site meter.
             status = "provisional"
         local_plan = any(
-            key not in self.participants
-            and obj.scheduler.get_charging_is_planned()
+            key not in self.participants and obj.scheduler.get_charging_is_planned()
             for key, obj in self.chargers().items()
         )
         totals_available = plan is not None and not local_plan
-        energy = (
-            plan.total_planned_grid_kwh if totals_available else None
-        )
+        energy = plan.total_planned_grid_kwh if totals_available else None
         cost = plan.expected_cost_eur if totals_available else None
         required = None
         if totals_available and all(
-            r.requested_battery_kwh is not None
-            for r in plan.results
+            r.requested_battery_kwh is not None for r in plan.results
         ):
             member_by_id = {
-                c.id: c for c in (
-                    self._charger(key, obj)
-                    for key, obj in self.chargers().items()
+                c.id: c
+                for c in (
+                    self._charger(key, obj) for key, obj in self.chargers().items()
                 )
             }
-            required = round(sum(
-                r.requested_battery_kwh / member_by_id[r.charger_id].efficiency
-                for r in plan.results
-            ), 4)
+            required = round(
+                sum(
+                    r.requested_battery_kwh / member_by_id[r.charger_id].efficiency
+                    for r in plan.results
+                ),
+                4,
+            )
         start = None
         end = None
         today_energy = None
         tomorrow_energy = None
         today_cost = None
         tomorrow_cost = None
-        if totals_available and all(
-            a.grid_kwh is not None for a in plan.assignments
-        ):
+        if totals_available and all(a.grid_kwh is not None for a in plan.assignments):
             now_local = dt.as_local(dt.utcnow()).date()
             from datetime import timedelta as _delta
+
             today = [
-                a for a in plan.assignments
-                if dt.as_local(a.start).date() == now_local
+                a for a in plan.assignments if dt.as_local(a.start).date() == now_local
             ]
             tomorrow = [
-                a for a in plan.assignments
+                a
+                for a in plan.assignments
                 if dt.as_local(a.start).date() == now_local + _delta(days=1)
             ]
             today_energy = round(sum(a.grid_kwh for a in today), 4)
             tomorrow_energy = round(sum(a.grid_kwh for a in tomorrow), 4)
-            today_cost = round(sum(
-                a.grid_kwh * a.price_eur_per_kwh for a in today
-            ), 4)
-            tomorrow_cost = round(sum(
-                a.grid_kwh * a.price_eur_per_kwh for a in tomorrow
-            ), 4)
-        horizons = [
-            self.price_horizons.get(key) for key in self.participants
-        ]
+            today_cost = round(sum(a.grid_kwh * a.price_eur_per_kwh for a in today), 4)
+            tomorrow_cost = round(
+                sum(a.grid_kwh * a.price_eur_per_kwh for a in tomorrow), 4
+            )
+        horizons = [self.price_horizons.get(key) for key in self.participants]
         common_horizon = (
-            min(horizons) if horizons and all(h is not None for h in horizons)
-            else None
+            min(horizons) if horizons and all(h is not None for h in horizons) else None
         )
         return {
             "planning_status": status,
             "price_horizon_end": common_horizon,
             "required_energy": required,
             "planned_energy": energy,
-            "unplanned_energy": round(max(0, required - energy), 4)
-                if required is not None and energy is not None else None,
+            "unplanned_energy": (
+                round(max(0, required - energy), 4)
+                if required is not None and energy is not None
+                else None
+            ),
             "planned_today": today_energy,
             "planned_tomorrow": tomorrow_energy,
             "indicative_cost": cost,
@@ -475,40 +510,47 @@ class ChargeSupervisor:
         per_charger = {key: [] for key in self.chargers()}
         if plan is not None:
             for slot in plan.assignments:
-                per_charger[slot.charger_id].append({
-                    "start": slot.start.isoformat(),
-                    "end": slot.end.isoformat(),
-                    "price_eur_per_kwh": slot.price_eur_per_kwh,
-                    "estimated_ac_kwh": slot.grid_kwh,
-                    "estimated_cost_eur": round(
-                        slot.grid_kwh * slot.price_eur_per_kwh, 4
-                    ) if slot.grid_kwh is not None else None,
-                })
-        results = {
-            r.charger_id: r for r in plan.results
-        } if plan is not None else {}
+                per_charger[slot.charger_id].append(
+                    {
+                        "start": slot.start.isoformat(),
+                        "end": slot.end.isoformat(),
+                        "price_eur_per_kwh": slot.price_eur_per_kwh,
+                        "estimated_ac_kwh": slot.grid_kwh,
+                        "estimated_cost_eur": (
+                            round(slot.grid_kwh * slot.price_eur_per_kwh, 4)
+                            if slot.grid_kwh is not None
+                            else None
+                        ),
+                    }
+                )
+        results = {r.charger_id: r for r in plan.results} if plan is not None else {}
         chargers = []
         for key, obj in sorted(self.chargers().items()):
             result = results.get(key)
-            chargers.append({
-                "evsc_entry_id": key,
-                "mode": "coordinated" if key in self.participants else "local",
-                "price_source_entity": getattr(obj, "price_entity_id", None),
-                "price_horizon_end": (
-                    self.price_horizons[key].isoformat()
-                    if self.price_horizons.get(key) is not None else None
-                ),
-                "planning_status": result.status if result else "LOCAL",
-                "planning_reason": result.reason if result else None,
-                "required_battery_kwh": result.requested_battery_kwh if result else None,
-                "remaining_battery_kwh": result.remaining_battery_kwh if result else None,
-                "slots": per_charger[key],
-            })
+            chargers.append(
+                {
+                    "evsc_entry_id": key,
+                    "mode": "coordinated" if key in self.participants else "local",
+                    "price_source_entity": getattr(obj, "price_entity_id", None),
+                    "price_horizon_end": (
+                        self.price_horizons[key].isoformat()
+                        if self.price_horizons.get(key) is not None
+                        else None
+                    ),
+                    "planning_status": result.status if result else "LOCAL",
+                    "planning_reason": result.reason if result else None,
+                    "required_battery_kwh": (
+                        result.requested_battery_kwh if result else None
+                    ),
+                    "remaining_battery_kwh": (
+                        result.remaining_battery_kwh if result else None
+                    ),
+                    "slots": per_charger[key],
+                }
+            )
         return {
             "schema_version": "1.0",
-            "generated_at": (
-                plan.created_at.isoformat() if plan is not None else None
-            ),
+            "generated_at": (plan.created_at.isoformat() if plan is not None else None),
             "status": self.reason,
             "summary": {
                 key: value.isoformat() if hasattr(value, "isoformat") else value

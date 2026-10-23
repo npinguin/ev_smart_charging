@@ -23,6 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     _LOGGER.debug("EVSmartCharging.sensor.py")
     if entry.data.get("__evsc_entry_type") == "charge_controller":
         from .controller.sensors import controller_sensors
+
         async_add_devices(controller_sensors(hass.data[DOMAIN][entry.entry_id]))
         return
 
@@ -50,9 +51,7 @@ class EVSmartChargingSensorCharging(EVSmartChargingSensor):
 
     _entity_key = ENTITY_KEY_CHARGING_SENSOR
 
-    _unrecorded_attributes = frozenset(
-        ["raw_two_days", "charging_schedule"]
-    )
+    _unrecorded_attributes = frozenset(["raw_two_days", "charging_schedule"])
 
     def __init__(self, entry):
         _LOGGER.debug("EVSmartChargingSensor.__init__()")

@@ -1,4 +1,5 @@
 """Source-level invariants for the physical writer admission boundary."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "ev_smart_charging"
@@ -7,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "ev_smart_cha
 def test_physically_writing_coordinator_is_the_only_native_start_owner():
     coordinator = (ROOT / "coordinator.py").read_text()
     runtime = (ROOT / "controller" / "runtime.py").read_text()
-    assert "physical_grant(self.hass, self.config_entry.entry_id, reason)" in coordinator
+    assert (
+        "physical_grant(self.hass, self.config_entry.entry_id, reason)" in coordinator
+    )
     assert 'await self.turn_on_charging(reason="retry")' in coordinator
     assert 'await self.turn_on_charging(reason="automatic")' in coordinator
     assert "services.async_call" not in runtime

@@ -145,7 +145,5 @@ class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
         await SelectEntity.async_added_to_hass(self)
 
     async def async_select_option(self, option):
-        set_control_mode(
-            self.coordinator.hass, self.config_entry.entry_id, option
-        )
+        set_control_mode(self.coordinator.hass, self.config_entry.entry_id, option)
         self.async_write_ha_state()

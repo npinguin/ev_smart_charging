@@ -1,4 +1,5 @@
 """Manual STOP must never be undone by the supervised periodic retry."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "ev_smart_charging"
@@ -19,4 +20,4 @@ def test_controller_options_allow_explicit_resume():
     # Manual pause is controlled by the individual EVSC Resume action,
     # not by an editable group Options multi-select.
     assert '"paused_chargers"' in flow
-    assert 'def resume_supervised' in runtime
+    assert "def resume_supervised" in runtime

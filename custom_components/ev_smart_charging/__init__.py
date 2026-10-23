@@ -6,6 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
 from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+
 try:
     from homeassistant.core import SupportsResponse
 except ImportError:
@@ -59,9 +60,7 @@ async def _ensure_controller(hass: HomeAssistant) -> None:
 
 def _register_charge_plan_service(hass: HomeAssistant) -> None:
     """Expose the read-only controller response when EVSC first loads."""
-    if SupportsResponse is None or hass.services.has_service(
-        DOMAIN, "get_charge_plan"
-    ):
+    if SupportsResponse is None or hass.services.has_service(DOMAIN, "get_charge_plan"):
         return
 
     async def get_charge_plan(_call):
@@ -118,9 +117,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data[DOMAIN][entry.entry_id] = ChargeSupervisor(hass, entry)
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
-                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+                await hass.config_entries.async_forward_entry_setups(
+                    entry, [Platform.SENSOR]
+                )
             else:
-                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+                await hass.config_entries.async_forward_entry_setup(
+                    entry, Platform.SENSOR
+                )
             entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             await hass.data[DOMAIN][entry.entry_id].async_start()
         except Exception:
@@ -172,7 +175,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     device_registry.async_update_device(
                         device.id, name_by_user=entry.title
                     )
-
 
     # Home Assistant owns real config-entry transitions. Legacy callers that
     # invoke async_setup_entry directly on an already-LOADED mock entry must
