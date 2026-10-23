@@ -204,3 +204,45 @@ def test_committed_slot_can_be_revoked_when_budget_no_longer_allows_power():
         Policy(group_power_budget_kw=2), committed=p.assignments,
     )
     assert not grant_for(limited, "a", T+timedelta(minutes=1))
+
+
+def test_instantaneous_peak_headroom_only_restricts_current_quarter():
+    """A low house headroom now cannot be projected into tomorrow's prices."""
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    p = build_plan(
+        [c], {"a": slots(4)}, T,
+        live_peak_headroom_kw=3.5,
+    )
+    assert not grant_for(p, "a", T)
+    assert any(a.start > T for a in p.assignments)
+    assert p.expected_cost_eur is not None
+
+
+def test_live_peak_zero_retains_future_provisional_slots():
+    """A full pause now must not delete known future prices or user goals."""
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    p = build_plan([c], {"a": slots(4)}, T, live_peak_headroom_kw=0)
+    assert not grant_for(p, "a", T)
+    assert p.assignments and all(a.start > T for a in p.assignments)
+
+
+def test_live_peak_cannot_preserve_now_invalid_committed_grant():
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    prices = {"a": slots(4)}
+    original = build_plan([c], prices, T)
+    assert grant_for(original, "a", T)
+    peak_reduced = build_plan(
+        [c], prices, T + timedelta(minutes=1),
+        committed=original.assignments, live_peak_headroom_kw=3.5,
+    )
+    assert not grant_for(peak_reduced, "a", T + timedelta(minutes=1))
+    assert any(a.start >= T + timedelta(minutes=15) for a in peak_reduced.assignments)
+
+
+def test_static_group_budget_remains_valid_for_future_quarters():
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    p = build_plan(
+        [c], {"a": slots(4)}, T,
+        Policy(group_power_budget_kw=3.5),
+    )
+    assert not p.assignments

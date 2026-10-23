@@ -327,22 +327,20 @@ class ChargeSupervisor:
                 self.plan = None
                 self.reason = "PEAK_METER_UNAVAILABLE"
                 return
-            limits = [x for x in (budget, peak_limit) if x is not None and x > 0]
-            # A known peak headroom of exactly zero must stop all chargers.
-            # Policy limits must be positive: no grant is issued in that case.
-            if peak_limit is not None and peak_limit <= 0:
-                self.plan = None
-                self.reason = "PEAK_PAUSED"
-                self.peak_status = "paused"
-                return
+            # Static EV group budget applies to future slots. Measured site
+            # headroom can veto only the *current* quarter; later demand is
+            # unknown until a real site forecast is available.
             policy = Policy(
                 max_parallel=int(opts.get("max_parallel", 1)),
-                group_power_budget_kw=min(limits) if limits else None,
+                group_power_budget_kw=budget if budget and budget > 0 else None,
             )
+            if peak_limit is not None and peak_limit <= 0:
+                self.peak_status = "paused"
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
             previous = self.plan.assignments if self.plan is not None else ()
             self.plan = build_plan(
-                members, prices, dt.utcnow(), policy, committed=previous
+                members, prices, dt.utcnow(), policy,
+                committed=previous, live_peak_headroom_kw=peak_limit,
             )
             self.gate.update_plan(self.plan)
             self.reason = (
@@ -390,6 +388,12 @@ class ChargeSupervisor:
                 status = "provisional"
             elif result_states <= {"COMPLETE", "PLANNED"}:
                 status = "valid"
+        if (
+            status == "valid"
+            and self.config_entry.options.get("peak_shaving_enabled", False)
+        ):
+            # Future household load is not known from today's site meter.
+            status = "provisional"
         local_plan = any(
             key not in self.participants
             and obj.scheduler.get_charging_is_planned()

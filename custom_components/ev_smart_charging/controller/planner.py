@@ -186,6 +186,7 @@ def build_plan(
     now: datetime,
     policy: Policy = Policy(),
     committed: tuple[Assignment, ...] = (),
+    live_peak_headroom_kw: float | None = None,
 ) -> GroupPlan:
     """Schedule each EVSC using its own valid quarter prices.
 
@@ -193,6 +194,10 @@ def build_plan(
     The algorithm is deterministic, but is not a proof of global cost optimality.
     """
     t = utc(now)
+    if live_peak_headroom_kw is not None and (
+        not isfinite(live_peak_headroom_kw) or live_peak_headroom_kw < 0
+    ):
+        raise ValueError("Invalid current peak headroom")
     ids = [c.id for c in chargers]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate charger IDs")
@@ -231,6 +236,16 @@ def build_plan(
     ):
         warnings.append("LOCAL_LOAD_UNMEASURED_CAPACITY_NOT_GUARANTEED")
     remaining_kw = {start: policy.effective_budget for start in all_starts}
+    # Dynamic headroom is a *live* observation, never a forecast.
+    # Apply it only to the quarter currently being executed.
+    if live_peak_headroom_kw is not None:
+        for start in all_starts:
+            if start <= t < start + timedelta(minutes=15):
+                prior = remaining_kw[start]
+                remaining_kw[start] = (
+                    min(prior, live_peak_headroom_kw)
+                    if prior is not None else live_peak_headroom_kw
+                )
     used = {start: 0 for start in all_starts}
     assignments = []
     results = []
@@ -279,7 +294,12 @@ def build_plan(
         if needed_quarters is None or c.ready_by is None:
             results.append(ChargerResult(c.id, required, None, required, "UNKNOWN", "Missing charging duration/deadline"))
             continue
-        if policy.effective_budget is not None and c.charge_power_kw is None:
+        if (
+            c.charge_power_kw is None and (
+                policy.effective_budget is not None
+                or live_peak_headroom_kw is not None
+            )
+        ):
             results.append(ChargerResult(c.id, required, None, required, "UNKNOWN", "Unknown full-rate power for group kW limit"))
             continue
         if utc(c.ready_by) <= t:
@@ -301,8 +321,13 @@ def build_plan(
                 a.start == utc(p.start) for a in current_grants
             )
             and used[utc(p.start)] < policy.max_parallel
-            and (remaining_kw[utc(p.start)] is None
-                 or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
+            and (
+                remaining_kw[utc(p.start)] is None
+                or (
+                    c.charge_power_kw is not None
+                    and remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw
+                )
+            )
         ]
         eligible.sort(key=lambda p: (p.eur_per_kwh, utc(p.start)))
         count = min(len(eligible), outstanding)
