@@ -32,7 +32,14 @@ def local_plan_facts(coordinator, power_kw, prices, now):
     entries = []
     try:
         for item in raw:
-            if item["value"] is None or item["value"] == 0:
+            if item["value"] is None:
+                continue
+            # This original chart value is an ON/OFF marker, not a tariff
+            # or measured kWh. Unknown/non-finite values fail closed.
+            level = float(item["value"])
+            if not isfinite(level):
+                raise ValueError("Invalid Local schedule level")
+            if level == 0:
                 continue
             start, end = utc(item["start"]), utc(item["end"])
             if end - start != QUARTER:
