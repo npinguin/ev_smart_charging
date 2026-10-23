@@ -1,5 +1,17 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Release exception — v2.6.0-rc.4 guarded HACS prerelease (2026-10-24)
+
+User explicitly requested a next HACS release after the software-only simplification of the 1..N coordinated controller. **Narrow exception** to the P0 "no new prerelease" hold: publish only **`v2.6.0-rc.4` as a Local-capable, coordinated-actuation-disabled prerelease** after all nine **exact release SHA** software CI jobs succeed. This is *not* permission to perform further physical Coordinated testing, clear P0 incident #5, deploy to the affected Home Assistant without backup, merge PR #3 or publish stable.
+
+- Hard switch **`COORDINATED_ACTUATION_ENABLED = False`** must be verified in the source tree by the publishing job and remain without config/UI override; a new Local -> Coordinated selection is rejected before Options change. Persisted Coordinated participants are non-actuating during startup. Original Local execution remains native.
+- Source-native HACS uses integration folder `custom_components/ev_smart_charging/`, independent from an optional manual ZIP asset. Manifest and code version must both be `2.6.0-rc.4`.
+- Operator must independently verify that HA is recovered and physical EVSE native control works before installing any test build; mandatory full backup/rollback and preserve four original Local config entries, Options and unique IDs.
+- Exact-head release workflow repeats HACS + Hassfest + Black + legacy Local + controller tests + Python 3.11–3.14 test/90% local coverage gates. Separate GitHub tag/release may be created only after those checks pass; no force/overwrite and no main merge.
+- Release status and issue status are separate: **published software candidate != field-certified coordinated charging**. Do not enable physical Coordinated actuation until field evidence, incident RCA and acceptance have been completed.
+
+---
+
 ## P0 SIMPLIFICATION PASS — 1..N engine, Local-style execution (2026-10-24)
 
 **Engineering branch only; unmerged, no prerelease and physical Coordinated still disabled.** This section supersedes the historical event-driven architecture description below. The hard switch in `controller/safety.py` remains `COORDINATED_ACTUATION_ENABLED = False`.
