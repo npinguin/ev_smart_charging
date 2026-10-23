@@ -746,8 +746,13 @@ class EVSmartChargingCoordinator:
                 if get_parameter(self.config_entry, CONF_EV_CONTROLLED):
                     self.after_ev_connected = True
         else:
-            # Make sure the charger is turned off, but only if smart charging is active.
-            if self.switch_active is True:
+            # Do not issue an automatic native OFF during the P0 Coordinated
+            # safety hold (including HA RestoreEntity startup callbacks).
+            # Explicit operator physical STOP remains available separately.
+            if self.switch_active is True and not (
+                is_supervised(self.hass, self.config_entry.entry_id)
+                and not safety.COORDINATED_ACTUATION_ENABLED
+            ):
                 await self.turn_off_charging()
         await self.update_configuration()
 
