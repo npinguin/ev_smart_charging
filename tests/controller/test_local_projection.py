@@ -97,9 +97,7 @@ def test_empty_valid_local_schedule_is_a_real_zero_not_missing():
 
 def test_invalid_local_graph_value_never_becomes_renewable_energy_or_cost():
     bad = local([0, "unavailable"])
-    result = local_plan_facts(
-        bad, 4, rates([0.1, 0.1]), T
-    )
+    result = local_plan_facts(bad, 4, rates([0.1, 0.1]), T)
     assert result["quality"] == "local_schedule_invalid"
     assert result["planned_grid_kwh"] is None
     assert result["estimated_cost_eur"] is None
