@@ -21,8 +21,14 @@ class States:
         return self.values.get(entity_id)
 
 
-def state(value, unit):
-    return SimpleNamespace(state=str(value), attributes={"unit_of_measurement": unit})
+def state(value, unit, *, age_minutes=0):
+    observed = datetime.now(timezone.utc) - timedelta(minutes=age_minutes)
+    return SimpleNamespace(
+        state=str(value),
+        attributes={"unit_of_measurement": unit},
+        last_updated=observed,
+        last_reported=observed,
+    )
 
 
 def supervisor(*, peak=False):
@@ -113,3 +119,47 @@ def test_invalid_price_unit_is_not_silently_treated_as_eur():
     controller, charger = supervisor()
     controller.hass.states.values["sensor.price_a"] = state(0.2, "SEK/kWh")
     assert controller._prices([charger]) == {"a": []}
+
+
+def test_peak_stale_site_meter_fails_closed():
+    controller, charger = supervisor(peak=True)
+    controller.hass.states.values["sensor.site"] = state(5000, "W", age_minutes=6)
+    headroom, valid = controller._peak_headroom({"a": charger})
+    assert not valid
+    assert headroom is None
+    assert controller.available_ev_power_kw is None
+    assert controller.peak_status == "meter_unavailable"
+
+
+def test_peak_stale_ev_meter_fails_closed():
+    controller, charger = supervisor(peak=True)
+    controller.hass.states.values["sensor.ev"] = state(3000, "W", age_minutes=6)
+    headroom, valid = controller._peak_headroom({"a": charger})
+    assert not valid
+    assert headroom is None
+    assert controller.peak_status == "meter_unavailable"
+
+
+def test_peak_missing_report_timestamp_fails_closed():
+    controller, charger = supervisor(peak=True)
+    controller.hass.states.values["sensor.site"] = SimpleNamespace(
+        state="5000", attributes={"unit_of_measurement": "W"}
+    )
+    assert controller._peak_headroom({"a": charger}) == (None, False)
+
+
+def test_site_target_not_achievable_with_uncontrolled_house_load():
+    controller, charger = supervisor(peak=True)
+    # The EV is drawing 3 kW; the house alone draws 6.5 kW, above 6 kW.
+    controller.hass.states.values["sensor.site"] = state(9500, "W")
+    headroom, valid = controller._peak_headroom({"a": charger})
+    assert valid
+    assert headroom == 0
+    assert controller.peak_status == "not_achievable"
+
+
+def test_peak_disabled_does_not_require_new_meter_configuration():
+    controller, charger = supervisor(peak=False)
+    controller.hass.states.values.clear()
+    assert controller._peak_headroom({"a": charger}) == (None, True)
+    assert controller.peak_status == "disabled"
