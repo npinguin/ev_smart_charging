@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  # The called Python matrix uses GitHub OIDC for best-effort Codecov reporting.
+  id-token: write
 
 jobs:
   full_ci_gate:
