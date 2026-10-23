@@ -352,7 +352,5 @@ def test_peak_poll_replans_only_when_feasible_group_set_changes():
     assert controller._peak_plan_fingerprint() != first
 
     # Missing site measurements cause a fail-closed replan.
-    controller.hass.states.values["sensor.site"] = state(
-        1000, "W", age_minutes=6
-    )
+    controller.hass.states.values["sensor.site"] = state(1000, "W", age_minutes=6)
     assert controller._peak_plan_fingerprint() == ("meter_unavailable",)
