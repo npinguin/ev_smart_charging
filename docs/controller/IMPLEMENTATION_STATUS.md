@@ -1,5 +1,23 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Release sequencing decision — 2026-10-23: FEATURE COMPLETE BEFORE FIRST FIELD TEST
+
+**Owner requirement: DO NOT RELEASE A PARTIAL CONTROLLER.** Do not package, tag, promote, or ask the operator to test a new release before all agreed Phase 1 / individual EVSC / controller capabilities are implemented and the software-only acceptance gates pass. The **first field acceptance** is an in-place **drop-in upgrade of the existing four-charger Home Assistant installation with ZERO user configuration changes**, not a new-config wizard. Controlled tests and CI during development do not count as that field acceptance.
+
+**Drop-in contract:** replace the complete existing EVSC custom component only; preserve every v8 charger config-entry ID/version, existing data and options, existing native EVSE/vehicle/price bindings, original entity unique IDs and Local charging behavior. No YAML change, manual EVSC Options edit, entity rename, source remapping or charger re-pairing. The controller may create its ONE internal config entry/device automatically with empty participants, but **must remain observational and send no new charging command** while the original four chargers stay Local. New optional measurements must stay optional. A pre-upgrade backup, old-entity snapshot and a tested rollback path are mandatory.
+
+**Feature-complete implementation gates before field acceptance:** (1) correct 0/1/4 entry lifecycle, idempotent bootstrap and stable identity; (2) original Local and Stop preserved; (3) Coordinated admission, effective grants, manual Stop/Resume, power/connection readback and exclusive native writer; (4) valid per-EVSC costs/prices, scheduling against differing prices and complete/partial forecasts; (5) 15-minute slot/deadline/calendar/DST, group totals and plan response; (6) enforced Phase 1 binary peak policy with fresh meters, hysteresis/cooldown, unachievable/missing-source state and no native throttling; (7) financial actual/indicative values only with correct time-aligned meter/price provenance; (8) complete HA entity/options contract; (9) CI including Black, HACS, Codecov and all relevant Python/HA versions. Phase 2 current throttling is **not** part of this acceptance.
+
+**Code work from this checkpoint (NOT feature complete):**
+- `712b6f4`: new four-v8-entry HA-managed drop-in fixture verifies untouched original data/options/version, all four stay Local, exactly one passive controller. This has NOT yet passed a physical installation.
+- `2bab23a`, `fecf8ed`: enforced site-peak values and participant power require fresh timestamped native reports (five-minute maximum); on unknown/stale source, fail closed. Distinguish `not_achievable` when uncontrollable site import exceeds target. Regression fixtures for stale/absent timestamps and Local exemption.
+- `1acd9ad`, `01e6970`: valid longer per-EVSC EUR/kWh tariff intervals split into UTC 15-minute allocation slices; reject overlapping or unaligned prices **only for that charger** rather than corrupt the other tariff stream. Do not claim finer source publication precision.
+- `938d3d5`: formatting cleanup for these changes. New CI evidence must be checked before claiming PASS.
+
+**Still unimplemented or unproven:** broader price normalization/provenance and genuine globally optimal joint cost, actual energy/cost over time, complete individual normalized sensor contract, documented peak hysteresis/cooldown, full schedule/financial aggregation and 0/4-native HA/equipment acceptance. This is active engineering, **not a release candidate**. Keep PR #3 DRAFT, original main/RC1/feature intact; never suppress missing CI/physical evidence.
+
+---
+
 ## Follow-up checkpoint — 2026-10-23 — isolated P0 Local lifecycle fix
 
 **Status: release still BLOCKED; neither main nor RC1 nor feature/charge-controller has been modified by this checkpoint.**
