@@ -1,0 +1,90 @@
+"""Read-only normalized individual EVSC facts; never another physical writer.
+
+These are source-dependent views attached to the original EVSC device.
+Missing source evidence stays unknown and does not change the legacy Local
+configuration or %/hour scheduler.
+"""
+
+from .runtime import _meter, _number, ChargeSupervisor
+from ..const import DOMAIN
+
+
+def _controller_for(hass):
+    return next(
+        (
+            value
+            for value in hass.data.get(DOMAIN, {}).values()
+            if isinstance(value, ChargeSupervisor)
+        ),
+        None,
+    )
+
+
+def individual_facts(coordinator):
+    """Return bounded scalar state and explicit measurement provenance."""
+    entry = coordinator.config_entry
+    controller = _controller_for(coordinator.hass)
+    legacy = (
+        controller.config_entry.options.get("chargers", {}).get(entry.entry_id, {})
+        if controller is not None
+        else {}
+    )
+    options = entry.options
+    power_entity = options.get("evsc_actual_power_entity") or legacy.get("power_sensor")
+    capacity = _number(
+        options.get("evsc_capacity_kwh") or legacy.get("capacity_kwh")
+    )
+    expected_kw = _number(
+        options.get("evsc_expected_power_kw") or legacy.get("power_kw")
+    )
+    soc = _number(coordinator.ev_soc)
+    target = _number(coordinator.ev_target_soc)
+    current = (
+        round(capacity * soc / 100, 4)
+        if capacity is not None and capacity > 0
+        and soc is not None and 0 <= soc <= 100
+        else None
+    )
+    goal = (
+        round(capacity * target / 100, 4)
+        if capacity is not None and capacity > 0
+        and target is not None and 0 <= target <= 100
+        else None
+    )
+    required = (
+        round(max(0, goal - current) / 0.90, 4)
+        if goal is not None and current is not None
+        else None
+    )
+    # Indicative plan cost is only meaningful for validated, currently
+    # coordinated grants. A legacy Local schedule is NOT a controller plan.
+    indicative = None
+    if controller is not None and controller.plan is not None:
+        if entry.entry_id in controller.participants:
+            rows = [
+                slot
+                for slot in controller.plan.assignments
+                if slot.charger_id == entry.entry_id
+            ]
+            if rows and all(row.grid_kwh is not None for row in rows):
+                indicative = round(
+                    sum(row.grid_kwh * row.price_eur_per_kwh for row in rows), 4
+                )
+    return {
+        "current_charging_power": _meter(
+            coordinator.hass, power_entity, "power"
+        ),
+        "battery_capacity": capacity if capacity is not None and capacity > 0 else None,
+        "battery_energy_current": current,
+        "battery_energy_target": goal,
+        "charging_required": required,
+        "indicative_charging_cost": indicative,
+        # An instantaneous cumulative kWh reading is NOT time-aligned energy
+        # and cannot justify a historical actual EUR value.
+        "actual_charging_cost": None,
+        "power_source_entity": power_entity or None,
+        "energy_source_entity": options.get("evsc_actual_energy_entity") or None,
+        "price_source_entity": getattr(coordinator, "price_entity_id", None),
+        "expected_charging_power_kw": expected_kw,
+        "cost_quality": "validated_plan" if indicative is not None else "unavailable",
+    }
