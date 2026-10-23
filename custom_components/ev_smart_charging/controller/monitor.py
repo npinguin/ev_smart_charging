@@ -23,7 +23,9 @@ class ControllerSnapshot:
         return self.scheduled_quarters / 4
 
 
-def collect(coordinators, physical_readbacks=None) -> ControllerSnapshot:
+def collect(
+    coordinators, physical_readbacks=None, *, participants=(), plan=None
+) -> ControllerSnapshot:
     """Aggregate only real EVSC coordinators, never manager entries."""
     chargers = list(coordinators)
     # Readbacks must be exact native on/off evidence from the configured source.
@@ -40,7 +42,22 @@ def collect(coordinators, physical_readbacks=None) -> ControllerSnapshot:
     )
     planned = 0
     quarters = 0
+    supervised = set(participants)
     for coordinator in chargers:
+        entry_id = getattr(getattr(coordinator, "config_entry", None), "entry_id", None)
+        if entry_id in supervised:
+            # Only the effective controller plan counts for Coordinated.
+            # The original Local schedule is still cached on the coordinator
+            # and must never be added a second time.
+            grants = (
+                [a for a in plan.assignments if a.charger_id == entry_id]
+                if plan is not None
+                else []
+            )
+            if grants:
+                planned += 1
+                quarters += len(grants)
+            continue
         scheduler = getattr(coordinator, "scheduler", None)
         if scheduler is None:
             continue
