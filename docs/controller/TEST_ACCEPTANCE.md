@@ -2,7 +2,9 @@
 
 **Current authority:** [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). This is a release **gate checklist**, not a second version/status source.
 
-**Feature snapshot reviewed:** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` — 2026-10-23. Refresh when implementation moves.
+**Latest release-hardening checkpoint:** `c4bbef9dc4d530e98db15da4b5e891d247aadc3e`, 2026-10-23 — controller tests pass, upstream baseline Local cases pass, feature Local smoke fails, full CI red. Detailed evidence: [implementation status](IMPLEMENTATION_STATUS.md#release-hardening-checkpoint--2026-10-23).
+
+**Original feature snapshot reviewed:** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` — 2026-10-23. Refresh when implementation moves.
 
 | Gate | Objective evidence required | Verified at snapshot? |
 |---|---|---|

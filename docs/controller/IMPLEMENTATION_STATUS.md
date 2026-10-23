@@ -2,8 +2,41 @@
 
 **Status:** WORK IN PROGRESS — **NO RELEASE / NO PHYSICAL PRODUCTION APPROVAL**  
 **Reviewed:** 2026-10-23 (Europe/Brussels)  
-**Feature source baseline at review:** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` on `feature/charge-controller`  
+**Original source review baseline (historical):** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` on `feature/charge-controller`  
 **Change policy:** This file is the **one current engineering handover/status**. Do not start another architecture, rewrite, V3 framework, or parallel status file. Update this file on each handoff; preserve previous states in Git history.
+
+## Release-hardening checkpoint — 2026-10-23
+
+**Implementation HEAD before this documentation update:** `c4bbef9dc4d530e98db15da4b5e891d247aadc3e`. This supersedes the initial `d5ced29f...` *source review snapshot* above. Continue from this exact HEAD or first compare a newer branch head. Never revert to RC1 or merge contract source over runtime.
+
+**Changes made after initial audit/handover:**
+
+- `f0f2c17d`: added an independent Python 3.11 controller behavioral test job and changed Black to a non-mutating `black --check`; **full CI is still red**.
+- `cb0697d7`: added a test of selected Local EVSC failures on **pristine upstream main**, with exactly the same Python/HA dependency set.
+- `7d89d311`: corrected a major Phase 1 peak scheduling issue. **Observed site-import headroom is applied to the active quarter only**, not projected as tomorrow's house-load forecast. The static group kW budget still applies to future allocations. Added four targeted price/peak planning regressions.
+- `eaab5263`: added a separate Local smoke on the featurebranch for identical upstream comparison.
+- `c4bbef9d`: disabled periodic HA polling for the newly introduced event-driven absolute Ready-by datetime and per-EVSC control-mode select. This does **not** by itself resolve Local failures.
+
+**CI evidence (fully observed, not assumptions):**
+
+| Gate | Evidence | Outcome |
+|---|---|---|
+| Pure controller behavioral tests (Python 3.11) | [Push run 39966017726](https://github.com/npinguin/ev_smart_charging/actions/runs/39966017726) | **PASS** |
+| Two selected upstream Local baseline cases (Python 3.11, same dependencies) | [Push run 39965205830](https://github.com/npinguin/ev_smart_charging/actions/runs/39965205830) | **PASS** |
+| Same selected Local cases on feature HEAD before non-polling adjustment | [Push run 39965822947](https://github.com/npinguin/ev_smart_charging/actions/runs/39965822947) | **FAIL** — initial schedule/price assertion and lingering HA timers |
+| Same feature Local smoke after non-polling adjustment | [Push run 39966017726](https://github.com/npinguin/ev_smart_charging/actions/runs/39966017726) | **FAIL** — still a blocker |
+| Full upstream-derived suite on feature | Same runs above | **FAIL** — Python 3.11 failed; other Python versions cancelled |
+| HACS repository check | [Push run 39966017726](https://github.com/npinguin/ev_smart_charging/actions/runs/39966017726) | **FAIL** — repository Issues disabled; no valid GitHub topics |
+| Black formatter strict check | Same run | **FAIL** — 33 files need formatting, including original upstream files; **do not bulk-reformat upstream until the functional fix is clear** |
+| Native Advanced Home / HA runtime / physical readback | No verified evidence | **NOT TESTED** |
+
+**Critical Local regression triage:** HA logs show `test_coordinator_keep_on_schedule` has `coordinator.tomorrow_valid == False` after updating the mock price source; teardown has dangling HA timers; in `test_setup_unload_and_reload_entry`, Home Assistant logs `Config entry has already been setup!` for multiple platforms and duplicate original entity IDs. Because the pristine upstream tests passed in the same environment, **investigate the additional singleton/bootstrap forwarding and new datetime platform lifecycle** rather than changing the original EVSC Local algorithm or relaxing the tests. The observed duplicate IDs in the synthetic test are **not** proof of duplicate IDs on a real installation, but they block upgrade qualification.
+
+**Next single action:** isolate the Local setup timing and duplicate forwarding under the current HA test fixture, prove the root cause with the feature Local smoke, fix the smallest lifecycle path, then rerun controller, Local smoke and full suite. Do not add another framework or refactor the charging algorithm on speculation. Only after Local regression green, work on physical admission, peak freshness/hysteresis, price-unit/meter cost validation and Advanced Home acceptance.
+
+**Release outcome: BLOCKED.** Do not mark RC2/V3 stable or issue a new tag. The branch is a testable source-in-progress, not a qualified deployable package.
+
+---
 
 ## 1. Exact source of truth and branch protection
 
