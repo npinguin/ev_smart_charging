@@ -343,7 +343,13 @@ class ChargeSupervisor:
             # Financial group allocation must compare genuinely comparable
             # effective energy costs. A spot-index price is not automatically
             # the customer's final EUR/kWh rate.
-            source_id = getattr(obj, "price_entity_id", None)
+            source_id = (
+                obj.config_entry.options.get("evsc_effective_price_entity")
+                or getattr(obj, "price_entity_id", None)
+            )
+            separate_effective_source = bool(
+                obj.config_entry.options.get("evsc_effective_price_entity")
+            )
             source = self.hass.states.get(source_id) if source_id else None
             unit = (
                 source.attributes.get("unit_of_measurement")
@@ -356,34 +362,54 @@ class ChargeSupervisor:
                 prices[key] = []
                 continue
             raw = getattr(obj, "raw_two_days", None)
-            if raw is not None:
-                try:
-                    for item in raw.get_raw():
-                        value = _number(item["value"])
-                        if value is None:
-                            raise ValueError("Invalid effective energy rate")
-                        start, end = utc(item["start"]), utc(item["end"])
-                        # Normalize a valid longer tariff interval to 15-minute
-                        # allocation slices without claiming the source itself
-                        # published 15-minute price precision.
-                        if (
-                            end <= start
-                            or start.minute % 15
-                            or start.second
-                            or start.microsecond
-                            or (end - start) % QUARTER
-                        ):
-                            raise ValueError("Unaligned effective tariff interval")
-                        while start < end:
-                            following = start + QUARTER
-                            slots.append(PriceSlot(start, following, value))
-                            start = following
-                    slots.sort(key=lambda slot: slot.start)
-                    if any(a.end > b.start for a, b in zip(slots, slots[1:])):
-                        raise ValueError("Conflicting overlapping tariff intervals")
-                except (KeyError, ValueError, TypeError, OverflowError):
-                    _LOGGER.warning("Invalid EVSC price intervals for %s", key)
-                    slots = []
+            try:
+                if separate_effective_source:
+                    # A dedicated effective tariff provider must publish
+                    # explicit future intervals. The legacy spot curve MUST
+                    # NOT silently replace an invalid selected tariff.
+                    if source is None or source.attributes.get(
+                        "currency", "EUR"
+                    ) != "EUR":
+                        raise ValueError("Effective tariff currency unsupported")
+                    stream = [
+                        {
+                            "start": slot["start"],
+                            "end": slot["end"],
+                            "value": slot["effective_eur_per_kwh"],
+                        }
+                        for slot in source.attributes.get("price_slots", ())
+                    ]
+                else:
+                    stream = raw.get_raw() if raw is not None else []
+                for item in stream:
+                    value = _number(item["value"])
+                    if value is None:
+                        raise ValueError("Invalid effective energy rate")
+                    start = item["start"]
+                    end = item["end"]
+                    if isinstance(start, str):
+                        start = datetime.fromisoformat(start)
+                    if isinstance(end, str):
+                        end = datetime.fromisoformat(end)
+                    start, end = utc(start), utc(end)
+                    if (
+                        end <= start
+                        or start.minute % 15
+                        or start.second
+                        or start.microsecond
+                        or (end - start) % QUARTER
+                    ):
+                        raise ValueError("Unaligned effective tariff interval")
+                    while start < end:
+                        following = start + QUARTER
+                        slots.append(PriceSlot(start, following, value))
+                        start = following
+                slots.sort(key=lambda slot: slot.start)
+                if any(a.end > b.start for a, b in zip(slots, slots[1:])):
+                    raise ValueError("Conflicting overlapping tariff intervals")
+            except (KeyError, ValueError, TypeError, OverflowError, AttributeError):
+                _LOGGER.warning("Invalid EVSC price intervals for %s", key)
+                slots = []
             prices[key] = slots
         now = dt.utcnow()
         self.price_curves = prices
@@ -875,7 +901,10 @@ class ChargeSupervisor:
                 {
                     "evsc_entry_id": key,
                     "mode": "coordinated" if key in self.participants else "local",
-                    "price_source_entity": getattr(obj, "price_entity_id", None),
+                    "price_source_entity": (
+                        obj.config_entry.options.get("evsc_effective_price_entity")
+                        or getattr(obj, "price_entity_id", None)
+                    ),
                     "price_horizon_end": (
                         self.price_horizons[key].isoformat()
                         if self.price_horizons.get(key) is not None
