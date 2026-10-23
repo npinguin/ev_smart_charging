@@ -142,6 +142,7 @@ class ChargeSupervisor:
         self.reason = "LOCAL_MONITORING"
         self._unsub = None
         self._unsub_peak = None
+        self._subscribers = set()
         self._refresh_lock = asyncio.Lock()
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
@@ -359,6 +360,11 @@ class ChargeSupervisor:
             return False
         return _charger_switch_readback(self.hass, coordinator)
 
+    def subscribe(self, callback):
+        """One shared controller refresh; HA sensors do not each poll."""
+        self._subscribers.add(callback)
+        return lambda: self._subscribers.discard(callback)
+
     async def async_refresh(self, _now=None):
         """Serialize peak events, planned grants, and native Start/Stop."""
         async with self._refresh_lock:
@@ -372,6 +378,8 @@ class ChargeSupervisor:
                         _LOGGER.exception(
                             "Could not synchronize supervised charger %s", key
                         )
+            for callback in tuple(self._subscribers):
+                callback()
 
     def _peak_meter_changed(self, _event):
         # Immediate re-evaluation on live site meter updates. Native EVSC

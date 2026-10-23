@@ -1,34 +1,9 @@
 """Persistent controller device with passive, bounded HA sensor projections."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.helpers.event import async_track_time_interval
 
 from ..const import DOMAIN, NAME
-from ..coordinator import EVSmartChargingCoordinator
-from .monitor import collect
-
-
-class ControllerMonitor:
-    """Collect only existing EVSC charger coordinators, no extra subscriptions."""
-
-    def __init__(self, hass):
-        self.hass = hass
-
-    def snapshot(self):
-        coordinators = [
-            c for c in self.hass.data.get(DOMAIN, {}).values()
-            if isinstance(c, EVSmartChargingCoordinator)
-        ]
-        readbacks = []
-        for coordinator in coordinators:
-            source = getattr(coordinator, "charging_state_entity_id", None)
-            state = self.hass.states.get(source) if source else None
-            if state is not None and state.state in ("on", "off"):
-                readbacks.append(state.state == "on")
-            else:
-                readbacks.append(None)
-        return collect(coordinators, readbacks)
 
 
 class ControllerSensor(SensorEntity):
@@ -37,7 +12,7 @@ class ControllerSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, manager: ControllerMonitor, key: str, name: str, icon: str):
+    def __init__(self, manager, key: str, name: str, icon: str):
         self.manager = manager
         self.key = key
         self._attr_name = name
@@ -124,12 +99,9 @@ class ControllerSensor(SensorEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        self.async_on_remove(async_track_time_interval(
-            self.hass, self._refresh, timedelta(minutes=1)
-        ))
-
-    def _refresh(self, now):
-        self.async_write_ha_state()
+        self.async_on_remove(
+            self.manager.subscribe(self.async_write_ha_state)
+        )
 
 
 def controller_sensors(manager):
