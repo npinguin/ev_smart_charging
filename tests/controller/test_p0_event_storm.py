@@ -150,9 +150,7 @@ async def test_native_coordinator_cannot_write_when_persisted_supervised():
         options={"participants": ["peblar"]},
     )
     fake_hass = SimpleNamespace(
-        config_entries=SimpleNamespace(
-            async_entries=lambda _domain: [controller_entry]
-        )
+        config_entries=SimpleNamespace(async_entries=lambda _domain: [controller_entry])
     )
     assert is_supervised(fake_hass, "peblar")
     native = object.__new__(EVSmartChargingCoordinator)
