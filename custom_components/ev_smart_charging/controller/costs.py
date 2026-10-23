@@ -8,7 +8,7 @@ headline completeness to unavailable, never a fake EUR 0.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from math import isfinite
 
 from homeassistant.util import dt
@@ -106,6 +106,57 @@ class ActualCostLedger:
         self.known_energy += delta
         self.known_cost += delta * rate
         self.intervals += 1
+
+    def to_storage(self):
+        """Persist the verified provenance of every accumulated interval."""
+        return {
+            "day": self.day.isoformat() if self.day is not None else None,
+            "last_time": (
+                self.last_time.isoformat() if self.last_time is not None else None
+            ),
+            "last_kwh": self.last_kwh,
+            "source": self.source,
+            "known_cost": self.known_cost,
+            "known_energy": self.known_energy,
+            "complete": self.complete,
+            "intervals": self.intervals,
+        }
+
+    @classmethod
+    def from_storage(cls, value):
+        """Reject corrupt or cross-day history instead of publishing false EUR."""
+        ledger = cls()
+        if not isinstance(value, dict):
+            return ledger
+        try:
+            day = date.fromisoformat(value["day"])
+            stamp = utc(datetime.fromisoformat(value["last_time"]))
+            reading = float(value["last_kwh"])
+            cost = float(value["known_cost"])
+            energy = float(value["known_energy"])
+            intervals = int(value["intervals"])
+            source = value["source"]
+            if (
+                not source
+                or not isinstance(source, str)
+                or not all(isfinite(v) for v in (reading, cost, energy))
+                or reading < 0
+                or energy < 0
+                or intervals < 0
+                or dt.as_local(stamp).date() != day
+            ):
+                return ledger
+            ledger.day = day
+            ledger.last_time = stamp
+            ledger.last_kwh = reading
+            ledger.source = source
+            ledger.known_cost = cost
+            ledger.known_energy = energy
+            ledger.intervals = intervals
+            ledger.complete = value.get("complete") is True
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return cls()
+        return ledger
 
     @property
     def actual_cost_today(self):
