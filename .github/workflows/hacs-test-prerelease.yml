@@ -22,7 +22,10 @@ jobs:
   publish_test_prerelease:
     name: Publish isolated HACS test prerelease
     needs: full_ci_gate
-    if: ${{ github.repository == 'npinguin/ev_smart_charging' && github.ref == 'refs/heads/fix/local-bootstrap-lifecycle' }}
+    # P0: first real Coordinated switch hung Home Assistant. Hardware test
+    # prereleases are disabled until incident #5 and real rollback are closed.
+    # An explicitly reviewed release workflow revision must lift this hold.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
