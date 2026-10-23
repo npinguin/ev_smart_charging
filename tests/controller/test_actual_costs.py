@@ -89,16 +89,12 @@ def test_persisted_complete_meter_cost_survives_restart_with_same_source():
     before = ActualCostLedger()
     rates = interval(start)
     before.observe(start, 10.0, "sensor.native_kwh", rates)
-    before.observe(
-        start + timedelta(minutes=5), 11.0, "sensor.native_kwh", rates
-    )
+    before.observe(start + timedelta(minutes=5), 11.0, "sensor.native_kwh", rates)
     saved = before.to_storage()
     after = ActualCostLedger.from_storage(saved)
     assert after.actual_cost_today == 0.2
     assert after.source == "sensor.native_kwh"
-    after.observe(
-        start + timedelta(minutes=10), 12.0, "sensor.native_kwh", rates
-    )
+    after.observe(start + timedelta(minutes=10), 12.0, "sensor.native_kwh", rates)
     assert after.actual_cost_today == 0.4
     assert after.summary()["known_energy_kwh"] == 2.0
 
