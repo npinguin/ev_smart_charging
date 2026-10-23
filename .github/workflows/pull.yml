@@ -30,6 +30,26 @@ jobs:
       - run: python3 -m pip install black
       - run: black --check .
 
+  upstream_baseline_triage:
+    runs-on: "ubuntu-latest"
+    name: Upstream baseline compatibility (3.11)
+    steps:
+      - uses: "actions/checkout@v7"
+        with:
+          fetch-depth: 0
+      - uses: "actions/setup-python@v7"
+        with:
+          python-version: "3.11"
+      - name: Install same test dependencies as feature
+        run: python3 -m pip install -r requirements_test311.txt
+      - name: Check original upstream baseline with same HA dependencies
+        run: |
+          git checkout cb6cc76972ecf3e7098f26d273a9ebade9c7f062
+          pytest -q -n 0 --timeout=45 --asyncio-mode=auto \
+            -p no:sugar \
+            tests/coordinator/test_coordinator_keep_on2.py::test_coordinator_keep_on_schedule \
+            tests/test_init.py::test_setup_unload_and_reload_entry
+
   controller_tests:
     runs-on: "ubuntu-latest"
     name: Controller behavioral regression (3.11)
