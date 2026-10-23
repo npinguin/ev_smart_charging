@@ -5,7 +5,7 @@ A plan is *intent*, not EVSE execution or a safety guarantee.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from math import ceil, isfinite
 from typing import Literal, Mapping
@@ -50,6 +50,7 @@ class Charger:
     efficiency: float = 0.90
     actual_power_kw: float | None = None
     session_energy_kwh: float | None = None
+    charging_speed_pct_h: float | None = None
 
     def __post_init__(self):
         if not self.id.strip() or self.mode not in ("local", "coordinated"):
@@ -67,6 +68,10 @@ class Charger:
             not isfinite(self.charge_power_kw) or self.charge_power_kw <= 0
         ):
             raise ValueError("Invalid charge power")
+        if self.charging_speed_pct_h is not None and (
+            not isfinite(self.charging_speed_pct_h) or self.charging_speed_pct_h <= 0
+        ):
+            raise ValueError("Invalid charging speed")
         if not 0 < self.efficiency <= 1:
             raise ValueError("Invalid efficiency")
         if self.actual_power_kw is not None and (
@@ -77,6 +82,21 @@ class Charger:
             not isfinite(self.session_energy_kwh) or self.session_energy_kwh < 0
         ):
             raise ValueError("Invalid metered energy")
+
+    @property
+    def required_quarters(self) -> int | None:
+        """Time-based scheduling works without battery capacity or power."""
+        if self.current_soc is None or self.target_soc is None:
+            return None
+        delta = max(0.0, self.target_soc - self.current_soc)
+        if delta == 0:
+            return 0
+        if self.charging_speed_pct_h is not None:
+            return ceil((delta / self.charging_speed_pct_h) * 4 - 1e-9)
+        energy = self.required_battery_kwh
+        if energy is not None and self.charge_power_kw is not None:
+            return ceil(energy / (self.charge_power_kw * .25 * self.efficiency) - 1e-9)
+        return None
 
     @property
     def required_battery_kwh(self) -> float | None:
@@ -95,15 +115,15 @@ class Assignment:
     start: datetime
     end: datetime
     price_eur_per_kwh: float
-    grid_kwh: float
-    delivered_battery_kwh: float
+    grid_kwh: float | None
+    delivered_battery_kwh: float | None
 
 
 @dataclass(frozen=True)
 class ChargerResult:
     charger_id: str
     requested_battery_kwh: float | None
-    planned_battery_kwh: float
+    planned_battery_kwh: float | None
     remaining_battery_kwh: float | None
     status: str
     reason: str
@@ -116,8 +136,8 @@ class GroupPlan:
     results: tuple[ChargerResult, ...]
     coverage: Coverage
     priced_until: datetime | None
-    total_planned_grid_kwh: float
-    expected_cost_eur: float
+    total_planned_grid_kwh: float | None
+    expected_cost_eur: float | None
     warnings: tuple[str, ...]
 
 
@@ -165,6 +185,7 @@ def build_plan(
     prices: list[PriceSlot] | Mapping[str, list[PriceSlot]],
     now: datetime,
     policy: Policy = Policy(),
+    committed: tuple[Assignment, ...] = (),
 ) -> GroupPlan:
     """Schedule each EVSC using its own valid quarter prices.
 
@@ -213,6 +234,35 @@ def build_plan(
     used = {start: 0 for start in all_starts}
     assignments = []
     results = []
+    # Preserve the current effective grant. Replanning at 10:01 is not a
+    # new permission to reallocate the active 10:00–10:15 quarter.
+    known = {c.id: c for c in chargers}
+    for old in committed:
+        c = known.get(old.charger_id)
+        if (
+            c is None or c.mode != "coordinated"
+            or not (utc(old.start) <= t < utc(old.end))
+            or c.connected is not True
+        ):
+            continue
+        prices_for_charger = {
+            utc(p.start): p for p in by_charger.get(c.id, ())
+        }
+        current = prices_for_charger.get(utc(old.start))
+        if current is None or utc(current.end) != utc(old.end):
+            continue
+        start = utc(old.start)
+        if used[start] >= policy.max_parallel:
+            continue
+        if remaining_kw[start] is not None and (
+            c.charge_power_kw is None
+            or remaining_kw[start] + 1e-9 < c.charge_power_kw
+        ):
+            continue
+        used[start] += 1
+        if remaining_kw[start] is not None:
+            remaining_kw[start] -= c.charge_power_kw
+        assignments.append(replace(old, price_eur_per_kwh=current.eur_per_kwh))
     ordered = sorted(chargers, key=lambda c: (
         utc(c.ready_by) if c.ready_by else datetime.max.replace(tzinfo=timezone.utc),
         -c.priority, c.id,
@@ -225,24 +275,38 @@ def build_plan(
         if c.connected is not True:
             results.append(ChargerResult(c.id, required, 0., required, "BLOCKED", "Physical connection not confirmed"))
             continue
-        if required is None or c.charge_power_kw is None or c.ready_by is None:
-            results.append(ChargerResult(c.id, required, 0., required, "UNKNOWN", "Missing vehicle/charger facts"))
+        needed_quarters = c.required_quarters()
+        if needed_quarters is None or c.ready_by is None:
+            results.append(ChargerResult(c.id, required, None, required, "UNKNOWN", "Missing charging duration/deadline"))
+            continue
+        if policy.effective_budget is not None and c.charge_power_kw is None:
+            results.append(ChargerResult(c.id, required, None, required, "UNKNOWN", "Unknown full-rate power for group kW limit"))
             continue
         if utc(c.ready_by) <= t:
             results.append(ChargerResult(c.id, required, 0., required, "EXPIRED", "Deadline elapsed"))
             continue
-        if required == 0:
+        if needed_quarters == 0:
             results.append(ChargerResult(c.id, 0., 0., 0., "COMPLETE", "Target already met"))
             continue
+        # Active assignments are fixed; only future slots are optimized.
+        current_grants = [
+            a for a in assignments if a.charger_id == c.id
+        ]
+        outstanding = max(0, needed_quarters - len(current_grants))
         eligible = [
             p for p in by_charger[c.id]
-            if utc(p.end) <= utc(c.ready_by)
+            if utc(p.start) >= t
+            and utc(p.end) <= utc(c.ready_by)
             and used[utc(p.start)] < policy.max_parallel
-            and (remaining_kw[utc(p.start)] is None or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
+            and (remaining_kw[utc(p.start)] is None
+                 or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
         ]
         eligible.sort(key=lambda p: (p.eur_per_kwh, utc(p.start)))
-        battery_per_slot = c.charge_power_kw * .25 * c.efficiency
-        count = min(len(eligible), ceil((required - 1e-9) / battery_per_slot))
+        count = min(len(eligible), outstanding)
+        battery_per_slot = (
+            c.charge_power_kw * .25 * c.efficiency
+            if c.charge_power_kw is not None else None
+        )
         for p in eligible[:count]:
             start = utc(p.start)
             used[start] += 1
@@ -250,10 +314,19 @@ def build_plan(
                 remaining_kw[start] -= c.charge_power_kw
             assignments.append(Assignment(
                 c.id, start, utc(p.end), p.eur_per_kwh,
-                c.charge_power_kw * .25, battery_per_slot,
+                c.charge_power_kw * .25 if c.charge_power_kw is not None else None,
+                battery_per_slot,
             ))
-        planned = min(required, count * battery_per_slot)
-        short = max(0., required - planned)
+        assigned = count + len(current_grants)
+        planned = (
+            min(required, assigned * battery_per_slot)
+            if required is not None and battery_per_slot is not None else None
+        )
+        short_quarters = max(0, needed_quarters - assigned)
+        short = (
+            max(0., required - planned)
+            if required is not None and planned is not None else None
+        )
         source_slots = by_charger[c.id]
         source_end = max((utc(p.end) for p in source_slots), default=None)
         source_contiguous = bool(source_slots) and all(
@@ -265,7 +338,7 @@ def build_plan(
             and source_end >= utc(c.ready_by)
             and source_contiguous
         )
-        if short <= 1e-6:
+        if short_quarters == 0:
             status = "PLANNED" if complete_horizon else "PROVISIONAL"
             reason = "Demand scheduled" if complete_horizon else "Incomplete future price coverage"
         elif complete_horizon:
@@ -273,11 +346,78 @@ def build_plan(
         else:
             status, reason = "PENDING_PRICES", "Price coverage incomplete"
         results.append(ChargerResult(c.id, required, round(planned, 4), round(short, 4), status, reason))
+    # Bounded local swap improvement: greedy deadline-first allocation is
+    # not always the cheapest across independently priced charger streams.
+    # Never move an active quarter. This is not a global-optimality claim.
+    by_id = {c.id: c for c in chargers}
+    price_lookup = {
+        key: {utc(p.start): p.eur_per_kwh for p in value}
+        for key, value in by_charger.items()
+    }
+    for _ in range(3):
+        changed = False
+        for ia, first in enumerate(assignments):
+            if utc(first.start) < t or first.grid_kwh is None:
+                continue
+            for ib in range(ia + 1, len(assignments)):
+                second = assignments[ib]
+                if (
+                    first.charger_id == second.charger_id
+                    or utc(second.start) < t
+                    or first.start == second.start
+                    or second.grid_kwh is None
+                ):
+                    continue
+                c1, c2 = by_id[first.charger_id], by_id[second.charger_id]
+                if (
+                    utc(second.end) > utc(c1.ready_by)
+                    or utc(first.end) > utc(c2.ready_by)
+                    or utc(second.start) not in price_lookup[c1.id]
+                    or utc(first.start) not in price_lookup[c2.id]
+                    or any(
+                        a.charger_id == first.charger_id and a.start == second.start
+                        or a.charger_id == second.charger_id and a.start == first.start
+                        for k, a in enumerate(assignments) if k not in (ia, ib)
+                    )
+                ):
+                    continue
+                # A swap preserves concurrency. For a kW budget, allow only
+                # equal-power exchanges; more complex reallocations are deferred.
+                if policy.effective_budget is not None and (
+                    c1.charge_power_kw != c2.charge_power_kw
+                ):
+                    continue
+                old_cost = (
+                    first.grid_kwh * first.price_eur_per_kwh
+                    + second.grid_kwh * second.price_eur_per_kwh
+                )
+                new_cost = (
+                    first.grid_kwh * price_lookup[c1.id][utc(second.start)]
+                    + second.grid_kwh * price_lookup[c2.id][utc(first.start)]
+                )
+                if new_cost + 1e-9 >= old_cost:
+                    continue
+                assignments[ia] = replace(
+                    first, start=second.start, end=second.end,
+                    price_eur_per_kwh=price_lookup[c1.id][utc(second.start)],
+                )
+                assignments[ib] = replace(
+                    second, start=first.start, end=first.end,
+                    price_eur_per_kwh=price_lookup[c2.id][utc(first.start)],
+                )
+                changed = True
+                break
+            if changed:
+                break
+        if not changed:
+            break
     assignments.sort(key=lambda a: (a.start, a.charger_id))
     return GroupPlan(
         t, tuple(assignments), tuple(results), coverage, priced_until,
-        round(sum(a.grid_kwh for a in assignments), 4),
-        round(sum(a.grid_kwh * a.price_eur_per_kwh for a in assignments), 4),
+        round(sum(a.grid_kwh for a in assignments), 4)
+        if all(a.grid_kwh is not None for a in assignments) else None,
+        round(sum(a.grid_kwh * a.price_eur_per_kwh for a in assignments), 4)
+        if all(a.grid_kwh is not None for a in assignments) else None,
         tuple(warnings),
     )
 

@@ -118,8 +118,8 @@ def test_admission_requires_confirmation_to_go_local():
 
 
 def test_independent_price_curves_allow_different_rates():
-    a = charger("a", deadline=T+timedelta(minutes=30))
-    b = charger("b", deadline=T+timedelta(minutes=30))
+    a = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(minutes=30))
+    b = Charger("b", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(minutes=30))
     prices = {
         "a": [PriceSlot(T, T+timedelta(minutes=15), .10),
               PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .50)],
@@ -127,7 +127,7 @@ def test_independent_price_curves_allow_different_rates():
               PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .05)],
     }
     plan = build_plan([a, b], prices, T, Policy(max_parallel=2))
-    assert len(plan.assignments) == 4
+    assert len(plan.assignments) == 2
     assert next(p for p in plan.assignments if p.charger_id == "a").price_eur_per_kwh in (.10, .50)
     assert next(p for p in plan.assignments if p.charger_id == "b").price_eur_per_kwh in (.05, .40)
 
@@ -149,3 +149,58 @@ def test_price_horizons_independent():
     plan = build_plan([a, b], price_map, T, Policy(max_parallel=2))
     assert plan.priced_until == T+timedelta(hours=2)
     assert len([x for x in plan.assignments if x.charger_id == "b"]) > 0
+
+
+def test_peak_budget_preserves_committed_current_quarter():
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(hours=1))
+    source = {"a": slots(4)}
+    first = build_plan([c], source, T)
+    second = build_plan([c], source, T+timedelta(minutes=1), committed=first.assignments)
+    assert grant_for(second, "a", T+timedelta(minutes=1))
+    assert second.assignments[0].start == T
+
+
+def test_time_only_with_existing_evsc_percentage_speed():
+    c = Charger(
+        "a", "coordinated", True, 50, 60, None, None,
+        T+timedelta(hours=2), charging_speed_pct_h=10,
+    )
+    plan = build_plan([c], {"a": slots(8)}, T)
+    assert len(plan.assignments) == 4
+    assert plan.total_planned_grid_kwh is None
+    assert plan.expected_cost_eur is None
+    assert plan.results[0].status == "PLANNED"
+
+
+def test_time_only_rejected_under_explicit_kw_budget_without_rate():
+    c = Charger(
+        "a", "coordinated", True, 50, 60, None, None,
+        T+timedelta(hours=2), charging_speed_pct_h=10,
+    )
+    p = build_plan([c], {"a": slots(8)}, T, Policy(group_power_budget_kw=4))
+    assert not p.assignments
+    assert p.results[0].status == "UNKNOWN"
+
+
+def test_price_cost_of_delay_swap():
+    a = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(minutes=30))
+    b = Charger("b", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(minutes=30))
+    a_slots = [PriceSlot(T, T+timedelta(minutes=15), .10),
+               PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .11)]
+    b_slots = [PriceSlot(T, T+timedelta(minutes=15), .20),
+               PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .50)]
+    p = build_plan([a, b], {"a": a_slots, "b": b_slots}, T)
+    assert [(x.charger_id, x.start) for x in p.assignments] == [
+        ("b", T), ("a", T+timedelta(minutes=15))
+    ]
+
+
+def test_committed_slot_can_be_revoked_when_budget_no_longer_allows_power():
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T+timedelta(hours=1))
+    source = {"a": slots(4)}
+    p = build_plan([c], source, T)
+    limited = build_plan(
+        [c], source, T+timedelta(minutes=1),
+        Policy(group_power_budget_kw=2), committed=p.assignments,
+    )
+    assert not grant_for(limited, "a", T+timedelta(minutes=1))
