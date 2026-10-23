@@ -480,6 +480,84 @@
     "Timeline price interval, identity, quality, local-day/DST and plan revision are explicit.",
     "Plan includes current active slot without discarding it mid-quarter.",
     "An HA entity_id is user-renameable; identity is by unique_id.",
-    "Input capability requirements do not imply mandatory fields for every EVSC instance."
-  ]
+    "Input capability requirements do not imply mandatory fields for every EVSC instance.",
+    "Optional site peak shaving is distinct from planned group charging kW budget; it is not a safety-rated electrical protection.",
+    "The individual EVSC writer alone may apply native charger power limits; peak control never overwrites operator requested power.",
+    "A dynamic power envelope below physical EVSE minimum must pause supervised charging through its original EVSC writer, not command unsupported current.",
+    "If site baseline demand already exceeds peak target, controller must report not_achievable; it cannot guarantee control of other loads."
+  ],
+  "peak_shaving": {
+    "status": "CONTRACT_ONLY_NOT_IMPLEMENTED_IN_RC1",
+    "mode": "disabled_by_default",
+    "policy_modes": [
+      "instantaneous_import_target",
+      "quarter_hour_average_target"
+    ],
+    "policy_owner": "charge_controller_config_entry_only",
+    "site_grid_import_source": "optional_controller_source_binding_separate_from_individual_evsc_source_bindings",
+    "power_owner": "existing_individual_evsc_physical_writer_only",
+    "scope": "opted_in_coordinated_chargers_only",
+    "relationship_to_group_power_budget": "separate_constraint_more_restrictive_valid_envelope_governs",
+    "non_ev_baseline": "derive from fresh whole-site net import minus measured controllable EV load; avoid double-count",
+    "limits": "operator_requested_limit_remains_unchanged; effective_limit_is_ephemeral",
+    "minimum_controllable_power": "physical EVSE-provided, no universal guess",
+    "controllable_charger": "reduce_native_limit_via_individual_evsc_writer_then_confirm_readback",
+    "binary_charger": "pause_via_individual_evsc_writer_when_headroom_below_required_power",
+    "uncontrollable_baseload_exceeds_target": "pause_coordinated_charging_report_not_achievable",
+    "meter_failure": "no_new_supervised_on; protective_stop_active_controllable_evsc_where_required",
+    "measured_power_below_requested": "report_and_replan_achievable_rate_without_raising_requested_setpoint",
+    "resume": "only_with_new_valid_schedule_and_headroom; honor_manual_stop_latch_and_hysteresis",
+    "future_entities": [
+      {
+        "platform": "switch",
+        "key": "peak_shaving_enabled",
+        "entity_category": "config",
+        "default": false,
+        "conditional": true
+      },
+      {
+        "platform": "number",
+        "key": "peak_target",
+        "unit": "kW",
+        "entity_category": "config",
+        "conditional": true
+      },
+      {
+        "platform": "sensor",
+        "key": "peak_control_status",
+        "kind": "enum",
+        "entity_category": "diagnostic",
+        "options": [
+          "disabled",
+          "active",
+          "constrained",
+          "paused",
+          "meter_unavailable",
+          "power_control_unavailable",
+          "not_achievable"
+        ],
+        "conditional": true
+      },
+      {
+        "platform": "sensor",
+        "key": "available_ev_power",
+        "kind": "power",
+        "unit": "kW",
+        "conditional": true
+      }
+    ],
+    "release_gates": [
+      "live_reduction_while_charging",
+      "below_minimum_fallback_to_stop",
+      "binary_only_fallback",
+      "native_write_readback",
+      "site_meter_freshness_and_topology",
+      "phase_constraints_when_claimed",
+      "15_min_average_not_hard_safety",
+      "constrained_ready_by_replan",
+      "low_measured_power_no_unwanted_increase",
+      "safe_resume_after_headroom",
+      "no_Local_regression"
+    ]
+  }
 }

@@ -220,7 +220,73 @@ Every charger lists **its own** source, interval prices, horizon, ready-by, requ
 | DST / irregular interval widths | Always use UTC instants; local day 23h/25h when applicable; actual price source interval length preserved |
 | Controller or native source outage | Coordinated ownership persists and automatic native ON fail-closes; existing EVSC protective STOP remains available |
 
-## 8. Backward compatibility and release gates
+
+## 8. Optional dynamic peak shaving and changing power limits
+
+**Contract status:** optional future capability, **not implemented in RC1**. Peak shaving is a **live load-management constraint**, different from the existing static Coordinated group kW *planning* budget. Enabling peak shaving must require a trustworthy site/import measurement and verified individual EVSC execution capabilities. It must never silently alter original Local charger behavior.
+
+### Two distinct peak policies — do not conflate them
+
+| Policy | Input | Meaning | Control response |
+|---|---|---|---|
+| **Group charging power budget** | \`group_power_budget_kw\` | Maximum **combined planned power** for selected Coordinated EVSC chargers | Change/reallocate Coordinated grants, and adjust/pause active selected chargers when the new budget is below their current allocations |
+| **Site peak shaving** | \`peak_shaving.enabled\`, \`peak_shaving.target_kw\`, site grid-import meter, policy/window | Target for the building's **measured grid-import demand**, including non-EVSE loads and PV/storage effects | Compute available EV charging headroom continuously, then constrain Coordinated EVSC chargers via their own writers |
+
+An instantaneous import ceiling and a **15-minute average demand target** (capacity tariff) have different compliance semantics. The site policy must explicitly declare \`instantaneous_import_target\` or \`quarter_hour_average_target\`, and use measured/integrated demand for the latter. An economic 15-minute target is **not an electrical safety protection**; never imply circuit, cable, breaker or phase guarantees from a software target.
+
+### What happens if the operator reduces the target during charging?
+
+1. Persist the newly requested peak/group target, and invalidate the old power allocation/grants before issuing fresh permission to increase charging.
+2. Read **fresh** site grid-import measurement (if using site peak shaving), current native EVSE power/readback, and independently configured participant maximum/minimum supported rates. Account for already active charging, uncontrolled **Local** chargers and other house loads. If the whole-home grid meter already includes EV charging, **do not subtract the same EV load twice**:
+   \`non_controlled_net_import_kw ≈ measured_site_import_kw - measured_controllable_ev_kw\`;
+   \`available_controllable_ev_kw = max(0, target_kw - non_controlled_net_import_kw - reserve_margin_kw)\`.
+   This approximation must be disabled when measurement topology or source coverage is unknown; a per-phase envelope requires valid phase-specific metering/limits.
+3. Reallocate allowable total **effective** charging power across Coordinated participants according to safety constraints, charging deadlines, available price curves per EVSC and optional priority.
+4. For each participating charger, compute \`effective_power_limit = min(operator_requested_limit, verified_native_maximum, allocated_headroom)\`. Never overwrite the operator's **requested/preferred** charging-power input because of temporary peak shaving.
+5. If the existing EVSC writer has a verified native adjustable-power capability and the new limit is **at/above the supported minimum**, apply the reduced native setpoint through that **individual EVSC writer only**, then check physical feedback. A native EVSE setpoint expressed in amperes requires the real phase/voltage control contract. Requested limit, command acknowledgement and **actual measured** power remain separate.
+6. If the charger has **Start/Stop only**, or available headroom is below its supported minimum controllable charging power, request **pause/Stop via that existing EVSC writer** instead of fabricating a subminimum current setpoint. The charger stays Coordinated; user requested power/Ready-by remain unchanged.
+7. Replan remaining duration, estimated kWh and indicative cost using **achievable power**, charger-specific prices and actual SoC/energy progress. Mark \`ready_by_at_risk\` or \`infeasible\` when demand cannot fit within the constrained horizon. Power reduction never silently shifts the requested deadline.
+8. When headroom returns, resume at a **bounded rate** (hysteresis/cooldown) up to the original operator-requested limit, only if a valid fresh Coordinated grant still exists. Manual Stop latch and operator Local/Coordinated choices always take precedence over automatic resumption.
+
+**Fail-closed for enabled Coordinated peak shaving:** on missing/stale site meter, native-power capability uncertainty, source mismatch, failed setpoint write, inconsistent readback or controller restart, do not issue new automatic ON grants. A currently supervised EVSE must be brought to a safe state through the existing EVSC protective Stop path according to verified EVSE capabilities; report \`meter_unavailable\`, \`power_control_unavailable\`, \`setpoint_unconfirmed\` or \`not_achievable\` instead of pretending the demand target is enforced. Other Local/native/externally controlled loads are not silently stopped.
+
+**Excess non-EV baseline:** if measured non-controlled demand already exceeds target, set allowable Coordinated EV charging to zero and stop/pause participating chargers; report **\`not_achievable\`** rather than falsely claiming building peak control. No software EV scheduling can remove an already established 15-minute historical maximum.
+
+### What if actual charging power is LOWER than the requested setpoint?
+
+This is a different condition from reducing the allowed power. The native EVSE/vehicle may naturally draw less than requested due to vehicle onboard charge limit, phase count, thermal limits, PV conditions or an external controller. Do **not** increase the user's requested power or compensate by arbitrarily commanding more power. Use sustained **actual measured AC kW** and delivered kWh/SoC to revise achievable charging rate, time remaining and cost; report \`below_requested\` and any deadline risk. Avoid interpreting a zero or unavailable meter as a valid zero delivered-energy observation.
+
+### Power/peak control ownership and timing
+
+- The Charge Controller **owns aggregate headroom, allocation policy and versioned per-EVSC power envelopes**, not native EVSE actuator entities.
+- The **individual EVSC** owns the requested/preferred limit if configured through EVSC, its native setpoint binding, min/max capability validation, the one physical writer, acknowledgement and physical readback; only it executes Start/Stop/power commands.
+- The **native EVSE** remains owner of its physical requested-power/current state and measured charging power. External commands can conflict; untracked writers invalidate a guarantee of applied limits.
+- **No new controller source bindings** for each charger; controller only resolves the **site meter** and peak policy. Per-charger native sources remain in each EVSC Options.
+- Re-evaluate on peak-target changes, site-meter updates, native readback changes, quarter boundaries, participant/priority updates and new prices. Define and test control-loop latency, rate limits, minimum stable run time and restoration hysteresis. Full future 15-minute optimization does not excuse ignoring a currently exceeded constraint.
+
+### Minimal additional controller HA surface (only when peak shaving is implemented)
+
+| Key | HA type | Owner / intent |
+|---|---|---|
+| \`peak_shaving_enabled\` | switch, config | Controller owned, **off by default**, opt-in to site demand control |
+| \`peak_target\` | number, kW, config | Controller's economic site demand target; **not** a safety-rated electrical limit |
+| \`peak_control_status\` | sensor, enum diagnostic | \`disabled|active|constrained|paused|meter_unavailable|power_control_unavailable|not_achievable\` |
+| \`available_ev_power\` | sensor, kW | Verified remaining headroom for **Coordinated** chargers; unavailable if meter/topology incomplete |
+
+The peak policy also requires an optional controller-level **site import power source** and selected policy window. This is not a duplicate per-charger source binding. All these are **conditional/future**, not part of mandatory EVSC setup or the RC1 controller. Group budget and peak target are distinct inputs; the more restrictive valid live constraint governs Coordinated allocation.
+
+### Peak-related release scenarios
+
+- 7.2 kW operator request, 3.5 kW headroom: EVSE with validated adjustable power applies no more than 3.5 kW; Start/Stop-only EVSE pauses.
+- Headroom less than EVSE minimum: pause/Stop, never request an unsupported lower charging current.
+- Peak target lowered during an active charging quarter: act within validated control-loop latency, preserve planned deadline and replan at a lower actual feasible rate.
+- Peak target raised: optionally resume/increase up to **original** user request, subject to price schedule, cooldown, manual pause, EVSE limits and available headroom.
+- Actual measured kW lower than effective requested kW: observe and recalculate ETA/feasibility; never silently raise power to make the estimate true.
+- Site non-EV load exceeds target: stop Coordinated load, report not achievable, do not claim a guaranteed site cap.
+- Meter missing, wrong sign/unit, stale, untrusted phase scope, native command failure or restart: fail closed for active Coordinated peak mode, preserve original Local behavior.
+- All cases verified by native EVSE state **and** actual meter power, not EVSC's desired state.
+
+## 9. Backward compatibility and release gates
 
 - Same original HACS package and `ev_smart_charging` domain; original charger config entries remain v8.
 - All previous EVSC entry IDs, Options, existing entity unique IDs and **Local** behavior remain intact.
