@@ -295,7 +295,7 @@ def build_plan(
         outstanding = max(0, needed_quarters - len(current_grants))
         eligible = [
             p for p in by_charger[c.id]
-            if utc(p.start) >= t
+            if utc(p.end) > t
             and utc(p.end) <= utc(c.ready_by)
             and used[utc(p.start)] < policy.max_parallel
             and (remaining_kw[utc(p.start)] is None
@@ -303,24 +303,36 @@ def build_plan(
         ]
         eligible.sort(key=lambda p: (p.eur_per_kwh, utc(p.start)))
         count = min(len(eligible), outstanding)
-        battery_per_slot = (
-            c.charge_power_kw * .25 * c.efficiency
-            if c.charge_power_kw is not None else None
-        )
         for p in eligible[:count]:
             start = utc(p.start)
             used[start] += 1
             if remaining_kw[start] is not None:
                 remaining_kw[start] -= c.charge_power_kw
+            # A newly admitted 10:01–10:15 quarter has only 14 minutes
+            # remaining; its 15-minute energy must not be fabricated.
+            available_hours = (
+                utc(p.end) - max(start, t)
+            ).total_seconds() / 3600
+            grid_kwh = (
+                c.charge_power_kw * available_hours
+                if c.charge_power_kw is not None else None
+            )
             assignments.append(Assignment(
                 c.id, start, utc(p.end), p.eur_per_kwh,
-                c.charge_power_kw * .25 if c.charge_power_kw is not None else None,
-                battery_per_slot,
+                grid_kwh,
+                grid_kwh * c.efficiency if grid_kwh is not None else None,
             ))
         assigned = count + len(current_grants)
+        own_assignments = [
+            a for a in assignments if a.charger_id == c.id
+        ]
+        battery_known = (
+            required is not None
+            and all(a.delivered_battery_kwh is not None for a in own_assignments)
+        )
         planned = (
-            min(required, assigned * battery_per_slot)
-            if required is not None and battery_per_slot is not None else None
+            min(required, sum(a.delivered_battery_kwh for a in own_assignments))
+            if battery_known else None
         )
         short_quarters = max(0, needed_quarters - assigned)
         short = (
@@ -338,6 +350,10 @@ def build_plan(
             and source_end >= utc(c.ready_by)
             and source_contiguous
         )
+        if short is not None and short > 1e-5:
+            # Partial first-quarter energy can leave a shortfall even when
+            # the nominal number of allocated quarters matches demand.
+            short_quarters = max(1, short_quarters)
         if short_quarters == 0:
             status = "PLANNED" if complete_horizon else "PROVISIONAL"
             reason = "Demand scheduled" if complete_horizon else "Incomplete future price coverage"
@@ -345,7 +361,12 @@ def build_plan(
             status, reason = "INFEASIBLE", "Deadline cannot be met with capacity and price slots"
         else:
             status, reason = "PENDING_PRICES", "Price coverage incomplete"
-        results.append(ChargerResult(c.id, required, round(planned, 4), round(short, 4), status, reason))
+        results.append(ChargerResult(
+            c.id, required,
+            round(planned, 4) if planned is not None else None,
+            round(short, 4) if short is not None else None,
+            status, reason,
+        ))
     # Bounded local swap improvement: greedy deadline-first allocation is
     # not always the cheapest across independently priced charger streams.
     # Never move an active quarter. This is not a global-optimality claim.
