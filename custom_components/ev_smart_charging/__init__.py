@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
 from homeassistant.helpers.device_registry import DeviceRegistry, DeviceEntry
@@ -38,6 +38,32 @@ CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
 
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+
+async def async_setup(hass: HomeAssistant, _config) -> bool:
+    """Bootstrap the singleton after HA startup, not during EVSC entry setup.
+
+    Reentering config-entry setup while forwarding charger platforms can
+    cause the same source entry to be loaded twice (and breaks upstream).
+    """
+    async def ensure_controller():
+        if not any(
+            entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
+            for entry in hass.config_entries.async_entries(DOMAIN)
+        ):
+            await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT},
+                data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
+            )
+
+    if hass.is_running:
+        hass.async_create_task(ensure_controller())
+    else:
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _event: hass.async_create_task(ensure_controller()),
+        )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -107,17 +133,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         device.id, name_by_user=entry.title
                     )
 
-    # A controller is an independent internal config entry. Its stable HA device
-    # identity does not depend on the first or last charger config entry.
-    if not any(
-        candidate.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
-        for candidate in hass.config_entries.async_entries(DOMAIN)
-    ):
-        hass.async_create_task(hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_IMPORT},
-            data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
-        ))
 
     return True
 
