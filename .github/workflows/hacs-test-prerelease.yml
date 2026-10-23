@@ -27,7 +27,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.2
+      VERSION: 2.6.0-rc.3
     steps:
       - uses: actions/checkout@v7
 
@@ -44,13 +44,13 @@ jobs:
           const = Path("custom_components/ev_smart_charging/const.py").read_text()
           assert manifest["version"] == version, "Mismatch: manifest version"
           assert f'VERSION = "{version}"' in const, "Mismatch: const.py version"
-          assert hacs["zip_release"] is True, "HACS must use a release zip"
-          assert hacs["filename"] == "ev_smart_charging.zip", "HACS filename mismatch"
+          assert not hacs.get("zip_release", False), "HACS must install from source tree"
+          assert "filename" not in hacs, "HACS must not require a release asset"
           assert Path("custom_components/ev_smart_charging/services.yaml").exists()
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
-      - name: Package integration in HACS expected ZIP layout
+      - name: Package optional manual recovery ZIP (HACS uses source tree)
         run: |
           mkdir -p "$RUNNER_TEMP/hacs-dist"
           (
@@ -79,4 +79,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — HA field-test ONLY" \
-            --notes "TEST PRERELEASE ONLY. Validated software Gate A. First field upgrade must preserve all four existing EVSC Local entries, Options, entity/device IDs and native source bindings. Backup and rollback required. Initial controller has zero coordinated participants and must issue no charger commands. NOT physically validated, not a stable release, not production approved. Source: $GITHUB_SHA. PR #3."
+            --notes "TEST PRERELEASE ONLY. HACS SOURCE INSTALL: repository tree custom_components/ev_smart_charging/; attached ZIP is only a manual fallback, not required by HACS. Validated software Gate A. First field upgrade must preserve all four existing EVSC Local entries, Options, entity/device IDs and native source bindings. Backup and rollback required. Initial controller has zero coordinated participants and must issue no charger commands. NOT physically validated, not a stable release, not production approved. Source: $GITHUB_SHA. PR #3."
