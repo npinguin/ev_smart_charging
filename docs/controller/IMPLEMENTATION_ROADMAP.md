@@ -37,3 +37,7 @@ Protective STOP is always allowed.
 Avoid new mandatory EVSC config/options or Home-specific IDs. Contributions should
 remain reviewable and upstream-friendly. Do not tag a stable or feature-complete
 release before all required acceptance evidence exists.
+
+## Current integration notes
+
+Controller options now list participating EVSC config entries, maximum parallel slots, and configured charging power/capacity per EVSC entry. All supervised native ON calls, including retry, pass the persisted participant gate. Actual controller load and upgrade still require target-HA proof. A duplicate physical target (same native switch across config entries) blocks coordination. Cost accounting is explicitly unavailable until units/metering are verified.

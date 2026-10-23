@@ -55,6 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
             else:
                 await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             await hass.data[DOMAIN][entry.entry_id].async_start()
         except Exception:
             hass.data[DOMAIN].pop(entry.entry_id, None)

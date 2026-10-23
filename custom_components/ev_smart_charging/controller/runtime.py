@@ -158,6 +158,20 @@ class ChargeSupervisor:
             self.reason, self.plan = "WAITING_FOR_CHARGERS", None
             return
         selected = [objs[k] for k in sorted(self.participants)]
+        # A target shared by two EVSC entries would create two native writers,
+        # even if one entry were Local. Coordination cannot make that safe.
+        all_targets = [
+            (id, obj.charger_switch.entity_id)
+            for id, obj in objs.items()
+            if obj.charger_switch.entity_id
+        ]
+        duplicate_targets = {
+            target for _, target in all_targets
+            if sum(other == target for _, other in all_targets) > 1
+        }
+        if any(obj.charger_switch.entity_id in duplicate_targets for obj in selected):
+            self.reason, self.plan = "DUPLICATE_PHYSICAL_WRITER", None
+            return
         if not all(_charger_switch_readback(self.hass, obj) for obj in selected):
             self.reason, self.plan = "NATIVE_CONTROL_UNAVAILABLE", None
             return

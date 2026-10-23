@@ -80,8 +80,8 @@ class ControllerSensor(SensorEntity):
                 "session_energy_coverage": self.manager.meters()["session_energy_coverage"],
                 "price_coverage": self.manager.plan.coverage if self.manager.plan else None,
                 "planned_grid_kwh": self.manager.plan.total_planned_grid_kwh if self.manager.plan else None,
-                "source_price_cost_estimate": self.manager.plan.expected_cost_eur if self.manager.plan else None,
-                "cost_unit_warning": "Price units must be verified for each source before interpreting estimates as EUR.",
+                "cost_eur": None,
+                "cost_reason": "Not calculated until the price source unit and metering coverage are verified.",
             }
         return None
 
