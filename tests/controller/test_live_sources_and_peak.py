@@ -276,3 +276,64 @@ def test_dynamic_watch_source_set_tracks_new_native_source_binding():
     assert "sensor.new_meter" not in controller._source_entity_ids()
     charger.config_entry.options["evsc_actual_energy_entity"] = "sensor.new_meter"
     assert "sensor.new_meter" in controller._source_entity_ids()
+
+
+def test_optional_true_effective_tariff_source_overrides_legacy_spot_curve():
+    controller, charger = supervisor()
+    charger.config_entry.options["evsc_effective_price_entity"] = "sensor.effective"
+    controller.hass.states.values["sensor.effective"] = SimpleNamespace(
+        state="0.1",
+        attributes={
+            "unit_of_measurement": "EUR/kWh",
+            "currency": "EUR",
+            "price_slots": [
+                {
+                    "start": T.isoformat(),
+                    "end": (T + timedelta(hours=1)).isoformat(),
+                    "effective_eur_per_kwh": 0.17,
+                }
+            ],
+        },
+    )
+    prices = controller._prices([charger])["a"]
+    assert len(prices) == 4
+    assert all(slot.eur_per_kwh == 0.17 for slot in prices)
+
+
+def test_invalid_selected_effective_tariff_never_falls_back_to_legacy_spot():
+    controller, charger = supervisor()
+    charger.config_entry.options["evsc_effective_price_entity"] = "sensor.effective"
+    controller.hass.states.values["sensor.effective"] = SimpleNamespace(
+        state="0.1",
+        attributes={
+            "unit_of_measurement": "EUR/kWh",
+            "currency": "USD",
+            "price_slots": [
+                {
+                    "start": T.isoformat(),
+                    "end": (T + timedelta(minutes=15)).isoformat(),
+                    "effective_eur_per_kwh": 0.15,
+                }
+            ],
+        },
+    )
+    assert controller._prices([charger]) == {"a": []}
+
+
+def test_reactive_sources_include_native_battery_and_effective_price():
+    controller, charger = supervisor()
+    charger.config_entry.options.update(
+        {
+            "evsc_capacity_entity": "sensor.usable_kwh",
+            "evsc_current_energy_entity": "sensor.vehicle_stored_kwh",
+            "evsc_target_energy_entity": "sensor.vehicle_target_kwh",
+            "evsc_effective_price_entity": "sensor.tariff_effective",
+        }
+    )
+    watched = controller._source_entity_ids()
+    assert {
+        "sensor.usable_kwh",
+        "sensor.vehicle_stored_kwh",
+        "sensor.vehicle_target_kwh",
+        "sensor.tariff_effective",
+    }.issubset(watched)
