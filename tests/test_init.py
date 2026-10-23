@@ -32,7 +32,7 @@ from .const import (
 
 
 # pylint: disable=unused-argument
-# async def test_setup_unload_and_reload_entry(hass, bypass_validate_input_and_control):
+async def test_setup_unload_and_reload_entry(hass, bypass_validate_input_and_control):
     """Test real HA-managed lifecycle, not direct mock-state setup/reload."""
     config_entry = MockConfigEntry(
         domain=DOMAIN, data=MOCK_CONFIG_ALL, entry_id="test", version=8
