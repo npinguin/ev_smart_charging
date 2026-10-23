@@ -712,6 +712,62 @@ class ChargeSupervisor:
                     "remaining_battery_kwh": (
                         result.remaining_battery_kwh if result else None
                     ),
+                    "planned_ac_kwh": (
+                        round(
+                            sum(
+                                slot["estimated_ac_kwh"]
+                                for slot in per_charger[key]
+                            ),
+                            4,
+                        )
+                        if per_charger[key]
+                        and all(
+                            slot["estimated_ac_kwh"] is not None
+                            for slot in per_charger[key]
+                        )
+                        else None
+                    ),
+                    "indicative_cost_eur": (
+                        round(
+                            sum(
+                                slot["estimated_cost_eur"]
+                                for slot in per_charger[key]
+                            ),
+                            4,
+                        )
+                        if per_charger[key]
+                        and all(
+                            slot["estimated_cost_eur"] is not None
+                            for slot in per_charger[key]
+                        )
+                        else None
+                    ),
+                    "actual_cost": (
+                        self._actual_cost_ledgers[key].summary()
+                        if key in self._actual_cost_ledgers
+                        else {
+                            "actual_cost_today": None,
+                            "complete": False,
+                            "reason": "meter_intervals_unavailable",
+                        }
+                    ),
+                    "peak_pause_reason": (
+                        "peak"
+                        if key in self.participants
+                        and self.peak_status == "paused"
+                        else (
+                            "manual"
+                            if key in self.config_entry.options.get(
+                                "paused_chargers", ()
+                            )
+                            else None
+                        )
+                    ),
+                    "price_quality": (
+                        "validated_future_intervals"
+                        if self.price_horizons.get(key) is not None
+                        else "unavailable"
+                    ),
                     "slots": per_charger[key],
                 }
             )
