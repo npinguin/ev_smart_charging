@@ -251,7 +251,10 @@ def test_initial_peak_admission_does_not_require_an_unrelated_cooldown():
     controller, charger = supervisor(peak=True)
     controller.hass.states.values["sensor.ev"] = state(0, "W")
     controller.peak_status = "active"
-    assert controller._apply_peak_recovery(
-        8.0, {"a": charger}, controller.config_entry.options
-    ) == 8
+    assert (
+        controller._apply_peak_recovery(
+            8.0, {"a": charger}, controller.config_entry.options
+        )
+        == 8
+    )
     assert not controller._peak_latched

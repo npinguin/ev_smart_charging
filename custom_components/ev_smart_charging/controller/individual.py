@@ -31,9 +31,7 @@ def individual_facts(coordinator):
     )
     options = entry.options
     power_entity = options.get("evsc_actual_power_entity") or legacy.get("power_sensor")
-    capacity = _number(
-        options.get("evsc_capacity_kwh") or legacy.get("capacity_kwh")
-    )
+    capacity = _number(options.get("evsc_capacity_kwh") or legacy.get("capacity_kwh"))
     expected_kw = _number(
         options.get("evsc_expected_power_kw") or legacy.get("power_kw")
     )
@@ -41,14 +39,15 @@ def individual_facts(coordinator):
     target = _number(coordinator.ev_target_soc)
     current = (
         round(capacity * soc / 100, 4)
-        if capacity is not None and capacity > 0
-        and soc is not None and 0 <= soc <= 100
+        if capacity is not None and capacity > 0 and soc is not None and 0 <= soc <= 100
         else None
     )
     goal = (
         round(capacity * target / 100, 4)
-        if capacity is not None and capacity > 0
-        and target is not None and 0 <= target <= 100
+        if capacity is not None
+        and capacity > 0
+        and target is not None
+        and 0 <= target <= 100
         else None
     )
     required = (
@@ -71,9 +70,7 @@ def individual_facts(coordinator):
                     sum(row.grid_kwh * row.price_eur_per_kwh for row in rows), 4
                 )
     return {
-        "current_charging_power": _meter(
-            coordinator.hass, power_entity, "power"
-        ),
+        "current_charging_power": _meter(coordinator.hass, power_entity, "power"),
         "battery_capacity": capacity if capacity is not None and capacity > 0 else None,
         "battery_energy_current": current,
         "battery_energy_target": goal,

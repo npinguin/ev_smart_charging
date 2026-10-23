@@ -411,12 +411,8 @@ class ChargeSupervisor:
             for key, power in observed.items()
             if power is not None and power > 0.05
         ]
-        overload = (
-            self.peak_status == "not_achievable"
-            or any(
-                demand is not None and headroom + 1e-9 < demand
-                for demand in running_demand
-            )
+        overload = self.peak_status == "not_achievable" or any(
+            demand is not None and headroom + 1e-9 < demand for demand in running_demand
         )
         if overload:
             self._peak_latched = True

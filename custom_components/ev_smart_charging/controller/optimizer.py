@@ -141,9 +141,7 @@ def optimize_future(
             continue
         car = by_id[key]
         price = next(
-            slot.eur_per_kwh
-            for slot in price_map[key]
-            if utc(slot.start) == start
+            slot.eur_per_kwh for slot in price_map[key] if utc(slot.start) == start
         )
         grid_kwh = car.charge_power_kw * 0.25
         allocated.append(

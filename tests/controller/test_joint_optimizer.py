@@ -76,16 +76,18 @@ def test_joint_optimizer_handles_negative_valid_tariffs():
 
 def test_peak_current_quarter_assignment_is_not_optimized_away():
     now = T + timedelta(minutes=1)
-    old = Assignment(
-        "a", T, T + timedelta(minutes=15), 10, 1.0, 0.9
-    )
+    old = Assignment("a", T, T + timedelta(minutes=15), 10, 1.0, 0.9)
     refined = optimize_future(
         [car("a"), car("b")],
         {"a": curve([10, 1, 2]), "b": curve([10, 1, 8])},
         [
             old,
-            Assignment("a", T + timedelta(minutes=15), T + timedelta(minutes=30), 1, 1.0, 0.9),
-            Assignment("b", T + timedelta(minutes=30), T + timedelta(minutes=45), 8, 1.0, 0.9),
+            Assignment(
+                "a", T + timedelta(minutes=15), T + timedelta(minutes=30), 1, 1.0, 0.9
+            ),
+            Assignment(
+                "b", T + timedelta(minutes=30), T + timedelta(minutes=45), 8, 1.0, 0.9
+            ),
         ],
         now,
         Policy(max_parallel=1),
@@ -97,13 +99,20 @@ def test_peak_current_quarter_assignment_is_not_optimized_away():
 def test_heterogeneous_kw_budget_does_not_get_unsafe_flow_claim():
     now = T + timedelta(minutes=1)
     original = [
-        Assignment("a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9),
-        Assignment("b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62),
+        Assignment(
+            "a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9
+        ),
+        Assignment(
+            "b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62
+        ),
     ]
-    assert optimize_future(
-        [car("a", power=4), car("b", power=7.2)],
-        {"a": curve([9, 2, 1]), "b": curve([9, 3, 2])},
-        original,
-        now,
-        Policy(max_parallel=2, group_power_budget_kw=8),
-    ) == original
+    assert (
+        optimize_future(
+            [car("a", power=4), car("b", power=7.2)],
+            {"a": curve([9, 2, 1]), "b": curve([9, 3, 2])},
+            original,
+            now,
+            Policy(max_parallel=2, group_power_budget_kw=8),
+        )
+        == original
+    )

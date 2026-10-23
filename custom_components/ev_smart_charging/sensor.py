@@ -34,7 +34,9 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     sensors.append(EVSmartChargingSensorCharging(entry))
     sensors.append(EVSmartChargingSensorStatus(entry))
     sensors.extend(
-        EVSmartChargingIndividualFact(entry, coordinator, key, label, device_class, unit)
+        EVSmartChargingIndividualFact(
+            entry, coordinator, key, label, device_class, unit
+        )
         for key, label, device_class, unit in INDIVIDUAL_FACT_SENSORS
     )
     async_add_devices(sensors)
@@ -221,7 +223,12 @@ class EVSmartChargingSensorStatus(EVSmartChargingSensor):
 INDIVIDUAL_FACT_SENSORS = (
     ("current_charging_power", "Current charging power", SensorDeviceClass.POWER, "kW"),
     ("battery_capacity", "Usable battery capacity", SensorDeviceClass.ENERGY, "kWh"),
-    ("battery_energy_current", "Current battery energy", SensorDeviceClass.ENERGY, "kWh"),
+    (
+        "battery_energy_current",
+        "Current battery energy",
+        SensorDeviceClass.ENERGY,
+        "kWh",
+    ),
     ("battery_energy_target", "Target battery energy", SensorDeviceClass.ENERGY, "kWh"),
     ("charging_required", "Charging required", SensorDeviceClass.ENERGY, "kWh"),
     (
@@ -267,9 +274,11 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
         if self._entity_key in ("indicative_charging_cost", "actual_charging_cost"):
             return {
                 "price_source_entity": facts["price_source_entity"],
-                "quality": facts["cost_quality"]
-                if self._entity_key == "indicative_charging_cost"
-                else "unavailable_without_historical_meter_intervals",
+                "quality": (
+                    facts["cost_quality"]
+                    if self._entity_key == "indicative_charging_cost"
+                    else "unavailable_without_historical_meter_intervals"
+                ),
             }
         return None
 
