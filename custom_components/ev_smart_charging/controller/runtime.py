@@ -417,7 +417,11 @@ class ChargeSupervisor:
                 max_parallel=int(opts.get("max_parallel", 1)),
                 group_power_budget_kw=budget if budget and budget > 0 else None,
             )
-            if peak_limit is not None and peak_limit <= 0 and self.peak_status == "constrained":
+            if (
+                peak_limit is not None
+                and peak_limit <= 0
+                and self.peak_status == "constrained"
+            ):
                 self.peak_status = "paused"
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
             previous = self.plan.assignments if self.plan is not None else ()
