@@ -337,3 +337,22 @@ def test_reactive_sources_include_native_battery_and_effective_price():
         "sensor.vehicle_target_kwh",
         "sensor.tariff_effective",
     }.issubset(watched)
+
+
+def test_peak_poll_replans_only_when_feasible_group_set_changes():
+    """A five-second sample should ignore normal watt-level telemetry noise."""
+    controller, _charger = supervisor(peak=True)
+    first = controller._peak_plan_fingerprint()
+    # 4.0 -> 3.9 kW headroom; the 7.2 kW charger remains ineligible.
+    controller.hass.states.values["sensor.site"] = state(5100, "W")
+    assert controller._peak_plan_fingerprint() == first
+
+    # Physical headroom eventually exceeds the full EVSE demand.
+    controller.hass.states.values["sensor.site"] = state(1000, "W")
+    assert controller._peak_plan_fingerprint() != first
+
+    # Missing site measurements cause a fail-closed replan.
+    controller.hass.states.values["sensor.site"] = state(
+        1000, "W", age_minutes=6
+    )
+    assert controller._peak_plan_fingerprint() == ("meter_unavailable",)
