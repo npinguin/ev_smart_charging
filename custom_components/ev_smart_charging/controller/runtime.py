@@ -727,6 +727,31 @@ class ChargeSupervisor:
             "indicative_cost_today": today_cost,
             "indicative_cost_tomorrow": tomorrow_cost,
             "actual_cost_today": self.actual_cost_summary()["actual_cost_today"],
+            "local_planned_grid_kwh_known_subtotal": round(
+                sum(
+                    facts["planned_grid_kwh"] for facts in local.values()
+                    if facts["planned_grid_kwh"] is not None
+                ), 4
+            ) if local else 0.0,
+            "local_indicative_cost_known_subtotal": round(
+                sum(
+                    facts["estimated_cost_eur"] for facts in local.values()
+                    if facts["estimated_cost_eur"] is not None
+                ), 4
+            ) if local else 0.0,
+            "local_energy_coverage": sum(
+                facts["planned_grid_kwh"] is not None for facts in local.values()
+            ),
+            "local_cost_coverage": sum(
+                facts["estimated_cost_eur"] is not None for facts in local.values()
+            ),
+            "local_total": len(local),
+            "coordinated_planned_grid_kwh": (
+                plan.total_planned_grid_kwh if plan is not None else None
+            ),
+            "coordinated_indicative_cost": (
+                plan.expected_cost_eur if plan is not None else None
+            ),
             "peak_control_status": self.peak_status,
             "available_ev_power": self.available_ev_power_kw,
         }
@@ -821,6 +846,15 @@ class ChargeSupervisor:
                         "validated_future_intervals"
                         if self.price_horizons.get(key) is not None
                         else "unavailable"
+                    ),
+                    "local_plan": (
+                        local_plan_facts(
+                            obj,
+                            _number(self._source_config(key, obj).get("power_kw")),
+                            self.price_curves.get(key, ()),
+                            dt.utcnow(),
+                        )
+                        if key not in self.participants else None
                     ),
                     "slots": per_charger[key],
                 }
