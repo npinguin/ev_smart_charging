@@ -176,6 +176,8 @@ class ChargeSupervisor:
         self.reason = "LOCAL_MONITORING"
         self._unsub = None
         self._unsub_peak = None
+        self._unsub_sources = None
+        self._watched_sources = frozenset()
         self._subscribers = set()
         self._refresh_lock = asyncio.Lock()
         self.peak_status = "disabled"
@@ -906,6 +908,7 @@ class ChargeSupervisor:
     async def async_refresh(self, _now=None):
         """Serialize peak events, planned grants, and native Start/Stop."""
         async with self._refresh_lock:
+            self._watch_source_changes()
             self.rebuild()
             cost_changed = self._record_actual_costs()
             for key in self.participants:
@@ -927,6 +930,47 @@ class ChargeSupervisor:
                         ledger.complete = False
             for callback in tuple(self._subscribers):
                 callback()
+
+    def _source_entity_ids(self):
+        """Only native/source readings; no controller-owned feedback loops."""
+        watched = set()
+        for key, obj in self.chargers().items():
+            cfg = self._source_config(key, obj)
+            for candidate in (
+                getattr(obj, "price_entity_id", None),
+                getattr(obj, "ev_soc_entity_id", None),
+                getattr(obj, "ev_target_soc_entity_id", None),
+                getattr(obj, "charging_state_entity_id", None),
+                getattr(getattr(obj, "charger_switch", None), "entity_id", None),
+                cfg.get("power_sensor"),
+                cfg.get("energy_sensor"),
+            ):
+                if (
+                    isinstance(candidate, str)
+                    and "." in candidate
+                    and not candidate.startswith("sensor.evsc_charge_controller_")
+                ):
+                    watched.add(candidate)
+        return frozenset(watched)
+
+    def _watch_source_changes(self):
+        sources = self._source_entity_ids()
+        if sources == self._watched_sources:
+            return
+        if self._unsub_sources is not None:
+            self._unsub_sources()
+            self._unsub_sources = None
+        self._watched_sources = sources
+        if sources:
+            self._unsub_sources = async_track_state_change_event(
+                self.hass,
+                sorted(sources),
+                self._source_changed,
+            )
+
+    def _source_changed(self, _event):
+        """Replan promptly on changed prices, vehicle need and EVSE readback."""
+        self.hass.async_create_task(self.async_refresh())
 
     def _peak_meter_changed(self, _event):
         # Immediate re-evaluation on live site meter updates. Native EVSC
@@ -964,3 +1008,7 @@ class ChargeSupervisor:
         if self._unsub_peak:
             self._unsub_peak()
             self._unsub_peak = None
+        if self._unsub_sources:
+            self._unsub_sources()
+            self._unsub_sources = None
+        self._watched_sources = frozenset()
