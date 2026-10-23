@@ -1,5 +1,13 @@
 # Charge Controller — qualification and acceptance evidence
 
+## HACS field-test candidate — 2026-10-23
+
+After full Gate A success on source commit `e3611a2`, the operator requested a HACS-installable **test** prerelease. A strictly isolated `v2.6.0-rc.2` prerelease is allowed **only after a fresh all-green exact-head full CI gate**; HACS must receive a correctly laid-out `ev_smart_charging.zip` release asset. This is an explicit one-time exception to the earlier prohibition on all tags: **production/stable release, any main/feature merge, and physical acceptance remain blocked**.
+
+First target HA upgrade is still 100% in-place: back up current HA and installed EVSC code, verify four original Local config entries, untouched Options/source bindings/unique IDs and passive zero-participant controller before any coordinated opt-in. A test prerelease is not proof of field acceptance.
+
+---
+
 ## Current Gate A coverage policy — 2026-10-23
 
 **External Codecov upload is optional by operator decision.** Required: all pytest suites PASS on Python 3.11, 3.12, 3.13 and 3.14, each with local Coverage.py **>=90%**, strict Black, original Local regression, controller regression and HACS validation. Codecov OIDC reporting remains best-effort and cannot make an otherwise green test job fail. Latest-HEAD CI evidence is still required before field acceptance.
