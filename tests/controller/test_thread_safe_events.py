@@ -57,7 +57,9 @@ async def test_startup_bootstrap_event_does_not_run_in_executor(hass):
     """Original setup-before-start event remains safe on HA 2026+."""
     from custom_components import ev_smart_charging
 
-    with patch.object(ev_smart_charging, "_ensure_controller", new_callable=AsyncMock) as create:
+    with patch.object(
+        ev_smart_charging, "_ensure_controller", new_callable=AsyncMock
+    ) as create:
         _queue_controller_bootstrap(hass)
         if not hass.is_running:
             hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
