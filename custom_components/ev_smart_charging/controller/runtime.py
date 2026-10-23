@@ -188,6 +188,7 @@ class ChargeSupervisor:
         # into paused_chargers. A restart still requires fresh live admission.
         self._peak_recovery_since = None
         self._peak_latched = False
+        self.peak_price_comparison = None
         self._actual_cost_ledgers = {}
         self._cost_store = None
 
@@ -499,6 +500,7 @@ class ChargeSupervisor:
     def rebuild(self):
         self.gate.update_plan(None)
         self.gate.set_membership(self.participants)
+        self.peak_price_comparison = None
         if not self.participants:
             self.reason, self.plan = "LOCAL_MONITORING", None
             self.peak_status = "disabled"
@@ -564,6 +566,58 @@ class ChargeSupervisor:
                 live_peak_headroom_kw=peak_limit,
             )
             self.gate.update_plan(self.plan)
+            if (
+                opts.get("peak_shaving_enabled", False)
+                and peak_limit is not None
+                and self.plan.expected_cost_eur is not None
+                and self.plan.coverage == "COMPLETE"
+            ):
+                # Comparison-only plan, without live site meter restrictions.
+                # It must never become an executable grant or influence a
+                # physical writer. Do not compare unequal energy allocations.
+                baseline_plan = build_plan(
+                    members, prices, dt.utcnow(), policy,
+                    committed=previous,
+                    live_peak_headroom_kw=None,
+                )
+                if (
+                    baseline_plan.expected_cost_eur is not None
+                    and baseline_plan.total_planned_grid_kwh is not None
+                    and self.plan.total_planned_grid_kwh is not None
+                    and abs(
+                        baseline_plan.total_planned_grid_kwh
+                        - self.plan.total_planned_grid_kwh
+                    ) < 1e-3
+                    and all(
+                        next(
+                            (
+                                result.remaining_battery_kwh
+                                for result in baseline_plan.results
+                                if result.charger_id == key
+                            ),
+                            None,
+                        ) == next(
+                            (
+                                result.remaining_battery_kwh
+                                for result in self.plan.results
+                                if result.charger_id == key
+                            ),
+                            None,
+                        )
+                        for key in self.participants
+                    )
+                ):
+                    self.peak_price_comparison = {
+                        "price_best_without_live_peak_eur":
+                            baseline_plan.expected_cost_eur,
+                        "price_with_live_peak_eur": self.plan.expected_cost_eur,
+                        "estimated_peak_cost_impact_eur": round(
+                            self.plan.expected_cost_eur
+                            - baseline_plan.expected_cost_eur,
+                            4,
+                        ),
+                        "quality": "equal_estimated_energy_only",
+                    }
             self.reason = (
                 "COORDINATED_PLAN" if any(prices.values()) else "PRICE_NOT_VALIDATED"
             )
@@ -890,6 +944,7 @@ class ChargeSupervisor:
                 for key, value in self.planning_summary().items()
             },
             "chargers": chargers,
+            "peak_price_comparison": self.peak_price_comparison,
         }
 
     def subscribe(self, callback):
