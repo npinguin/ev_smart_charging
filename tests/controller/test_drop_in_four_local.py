@@ -28,7 +28,9 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
             entry_id=f"existing_charger_{index}",
             version=8,
             data=deepcopy(MOCK_CONFIG_ALL),
-            options={},
+            # Exercise both original untouched entries and user-edited v8
+            # Options; neither is rewritten or migrated during a drop-in.
+            options=deepcopy(MOCK_CONFIG_ALL) if index % 2 else {},
         )
         for index in range(4)
     ]
