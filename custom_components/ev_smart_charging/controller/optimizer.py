@@ -62,9 +62,15 @@ def optimize_future(
             # every charger fits by itself; actual cost uses each own kWh.
             pass
         else:
-            # A genuinely mixed-power >1-at-once envelope is an integer
-            # knapsack; flow would split native whole-charger demand.
-            return assignments
+            # Mixed full-rate kW with true parallel capacity is a 0/1
+            # knapsack per future quarter. Solve exact fixed-demand
+            # allocations within deterministic complexity bounds.
+            from .mixed_optimizer import optimize_mixed
+
+            solution = optimize_mixed(
+                chargers, price_map, assignments, t, policy
+            )
+            return solution if solution is not None else assignments
     if capacity < 1:
         return assignments
 
