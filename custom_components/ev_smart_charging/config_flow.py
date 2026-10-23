@@ -195,6 +195,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional("evsc_actual_energy_entity", default=get_parameter(
                 self.config_entry, "evsc_actual_energy_entity", "",
             )): cv.string,
+            vol.Optional("evsc_price_validated", default=get_parameter(
+                self.config_entry, "evsc_price_validated", False,
+            )): cv.boolean,
         }
 
         return self.async_show_form(

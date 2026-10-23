@@ -206,8 +206,23 @@ class ChargeSupervisor:
         prices = {}
         for obj in objects:
             key = obj.config_entry.entry_id
-            raw = getattr(obj, "raw_two_days", None)
             slots = []
+            # Financial group allocation must compare genuinely comparable
+            # effective energy costs. A spot-index price is not automatically
+            # the customer's final EUR/kWh rate.
+            source_id = getattr(obj, "price_entity_id", None)
+            source = self.hass.states.get(source_id) if source_id else None
+            unit = (
+                source.attributes.get("unit_of_measurement")
+                if source is not None else None
+            )
+            if (
+                not obj.config_entry.options.get("evsc_price_validated", False)
+                or unit not in ("EUR/kWh", "€/kWh")
+            ):
+                prices[key] = []
+                continue
+            raw = getattr(obj, "raw_two_days", None)
             if raw is not None:
                 try:
                     for item in raw.get_raw():
@@ -311,7 +326,10 @@ class ChargeSupervisor:
             self.plan = build_plan(
                 members, prices, dt.utcnow(), policy, committed=previous
             )
-            self.reason = "COORDINATED_PLAN"
+            self.reason = (
+                "COORDINATED_PLAN"
+                if any(prices.values()) else "PRICE_NOT_VALIDATED"
+            )
         except (ValueError, TypeError, OverflowError) as exc:
             _LOGGER.warning("EVSC joint planner rejected source inputs: %s", exc)
             self.reason, self.plan = "PLANNING_INPUT_INVALID", None
