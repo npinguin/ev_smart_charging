@@ -407,6 +407,36 @@
           "source": "planner",
           "stage": "new",
           "note": "Idempotent replanning, never direct physical command"
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_cost_today",
+          "label": "Indicative charging cost today",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "priced slots today",
+          "stage": "new",
+          "note": "Estimated cost of priced scheduled charging within current HA-local calendar day"
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_cost_tomorrow",
+          "label": "Indicative charging cost tomorrow",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "priced slots tomorrow",
+          "stage": "new",
+          "note": "Estimated cost of priced scheduled charging within next HA-local calendar day"
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_energy_today",
+          "label": "Measured charging energy today",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "native EVSE intervals",
+          "stage": "conditional",
+          "note": "Integrated metered AC energy since HA-local midnight"
         }
       ]
     },
@@ -785,6 +815,46 @@
           "source": "EVSC deadline",
           "stage": "current",
           "note": "Existing RC1 unique_id retained"
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_cost_today",
+          "label": "Indicative charging cost today",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "priced assigned slots today",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_cost_tomorrow",
+          "label": "Indicative charging cost tomorrow",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "priced assigned slots tomorrow",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_charging_cost_today",
+          "label": "Actual charging cost today",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "native meter × actual time based prices",
+          "stage": "conditional",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_energy_today",
+          "label": "Measured charging energy today",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "native EVSE interval data",
+          "stage": "conditional",
+          "note": ""
         }
       ]
     }
