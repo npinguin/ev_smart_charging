@@ -16,7 +16,8 @@ from homeassistant.util import dt
 from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
 from .monitor import collect
-from .planner import Charger, Policy, PriceSlot, build_plan, grant_for
+from .admission import SupervisionGate
+from .planner import Charger, Policy, PriceSlot, build_plan
 
 _LOGGER = logging.getLogger(__name__)
 MARKER = "__evsc_entry_type"
@@ -136,6 +137,8 @@ class ChargeSupervisor:
         self.hass = hass
         self.config_entry = config_entry
         self.plan = None
+        self.gate = SupervisionGate(max_plan_age=timedelta(minutes=5))
+        self.gate.set_membership(config_entry.options.get("participants", ()))
         self.reason = "LOCAL_MONITORING"
         self._unsub = None
         self._unsub_peak = None
@@ -275,6 +278,8 @@ class ChargeSupervisor:
         return headroom, True
 
     def rebuild(self):
+        self.gate.update_plan(None)
+        self.gate.set_membership(self.participants)
         if not self.participants:
             self.reason, self.plan = "LOCAL_MONITORING", None
             return
