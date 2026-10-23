@@ -73,6 +73,13 @@ jobs:
           unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml$'
           unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
 
+      - name: Retain the manually usable ZIP as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: evsc-guarded-rc4-manual-zip
+          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
+          if-no-files-found: error
+
       - name: Create prerelease without changing main or stable versions
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,9 +93,12 @@ jobs:
             echo "::error::Tag $tag already exists"
             exit 1
           fi
-          gh release create "$tag" "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" \
+          # Publish tag once. The existing default-branch publish workflow
+          # attaches the optional ZIP after the release event; never race its
+          # release asset upload. HACS already uses the source tree.
+          gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — Local-only guarded HACS prerelease" \
-            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; attached ZIP is an optional manual recovery asset only. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
+            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
