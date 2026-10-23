@@ -526,6 +526,13 @@ def build_plan(
                 break
         if not changed:
             break
+    # Across independently priced chargers, local pairwise swaps do not
+    # guarantee the lowest combined EUR. Solve the future homogeneous-kW
+    # quarter allocations exactly, without moving active grants. A mixed
+    # full-rate kW knapsack continues to use conservative feasible matching.
+    from .optimizer import optimize_future
+
+    assignments = optimize_future(chargers, by_charger, assignments, t, policy)
     assignments.sort(key=lambda a: (a.start, a.charger_id))
     return GroupPlan(
         t,
