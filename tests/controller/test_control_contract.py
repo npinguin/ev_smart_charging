@@ -33,6 +33,7 @@ def ha():
     hass = SimpleNamespace(
         config_entries=e, data={"ev_smart_charging": {}},
         states=SimpleNamespace(get=lambda _id: None),
+        config=SimpleNamespace(time_zone="Europe/Brussels"),
     )
     return hass, e
 
@@ -141,3 +142,36 @@ def test_unit_normalization_and_effective_markup():
     curves, issues = manager._prices([obj])
     assert not issues
     assert abs(curves["charger_a"][0].eur_per_kwh - .21) < 1e-9
+
+
+def test_read_only_plan_response_does_not_invent_energy_or_prices():
+    from homeassistant.util import dt as dt_util
+
+    hass, entries = ha()
+    now = dt_util.utcnow()
+    manager = ChargeSupervisor(hass, entries.controller)
+    local = SimpleNamespace(
+        config_entry=entries.charger,
+        price_entity_id="sensor.legacy_price",
+        scheduler=SimpleNamespace(
+            schedule=[
+                {"start": now - timedelta(minutes=1),
+                 "end": now + timedelta(minutes=14), "value": 1.0},
+            ],
+            get_charging_number_of_quarters=lambda: 1,
+        ),
+        absolute_ready_by=None,
+        ready_quarter_local=32,
+        switch_ev_connected=True,
+        ev_soc=20,
+        ev_target_soc=80,
+        charging_pct_per_hour=10,
+    )
+    hass.data["ev_smart_charging"]["charger_1"] = local
+    response = manager.plan_response()
+    assert response["schema_version"] == "1.0"
+    assert response["planning_start"] is not None
+    assert response["planning_end"] is not None
+    assert response["controller"]["coordinated_indicative_cost_eur"] is None
+    assert response["chargers"][0]["mode"] == "local"
+    assert response["chargers"][0]["assigned_slots"] == []

@@ -164,6 +164,85 @@ class ChargeSupervisor:
             physical.append(st.state == "on" if st is not None and st.state in ("on", "off") else None)
         return collect(coordinators, physical)
 
+    def plan_response(self):
+        """A bounded, read-only view of the effective plan and its evidence."""
+        start, end = self.effective_schedule_bounds()
+        plan = self.plan
+        result_by_id = {r.charger_id: r for r in plan.results} if plan else {}
+        chargers = []
+        for id, obj in sorted(self.chargers().items()):
+            managed = id in self.participants
+            result = result_by_id.get(id)
+            assigned = [
+                {
+                    "start": a.start.isoformat(),
+                    "end": a.end.isoformat(),
+                    "planned_ac_kwh": a.grid_kwh,
+                    "effective_price_eur_per_kwh": a.price_eur_per_kwh,
+                }
+                for a in (plan.assignments if plan else ())
+                if a.charger_id == id
+            ]
+            charger = {
+                "evsc_entry_id": id,
+                "mode": "coordinated" if managed else "local",
+                "price_source_entity_id": getattr(obj, "price_entity_id", None),
+                "price_issue": self.price_issues.get(id),
+                "plan_status": result.status if result else (
+                    "LOCAL" if not managed else "NO_PLAN"
+                ),
+                "ready_by": (
+                    obj.absolute_ready_by.isoformat()
+                    if getattr(obj, "absolute_ready_by", None) else None
+                ),
+                "source_coverage": {
+                    "actual_power_available": self._charger(
+                        id, obj
+                    ).actual_power_kw is not None,
+                },
+                "assigned_slots": assigned,
+            }
+            if not managed:
+                # Native Local scheduling remains owned by the individual
+                # EVSC. It is never relabelled as a Coordinated grant.
+                scheduler = getattr(obj, "scheduler", None)
+                charger["local_scheduled_quarters"] = (
+                    scheduler.get_charging_number_of_quarters()
+                    if scheduler is not None else None
+                )
+            chargers.append(charger)
+        return {
+            "schema_version": "1.0",
+            "generated_at": dt.utcnow().isoformat(),
+            "timezone": str(self.hass.config.time_zone),
+            "planning_status": self.planning_status(),
+            "planning_start": start.isoformat() if start else None,
+            "planning_end": end.isoformat() if end else None,
+            "price_horizon_end": (
+                plan.priced_until.isoformat() if plan and plan.priced_until else None
+            ),
+            "pricing": "independent_confirmed_effective_EUR_per_kWh",
+            "controller": {
+                "participants": len(self.participants),
+                "max_parallel": int(self.config_entry.options.get("max_parallel", 1)),
+                "coordinated_planned_ac_kwh": (
+                    plan.total_planned_grid_kwh if plan else None
+                ),
+                "coordinated_indicative_cost_eur": (
+                    plan.expected_cost_eur
+                    if (plan is not None and plan.coverage == "COMPLETE"
+                        and all(
+                            r.status in ("PLANNED", "COMPLETE", "LOCAL")
+                            for r in plan.results
+                        ))
+                    else None
+                ),
+                "price_issues": self.price_issues,
+                "plan_is_complete": bool(plan and plan.coverage == "COMPLETE"),
+            },
+            "chargers": chargers,
+        }
+
     def _source_config(self, key, obj):
         """Per-entry optional sources; read legacy controller fields for upgrades.
 
