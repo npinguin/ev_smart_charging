@@ -52,10 +52,15 @@ class ActualCostLedger:
             # A late first meter sample cannot establish full-day history.
             self.complete = False
         if self.source != source:
+            # Two native energy entities can have unrelated counters. Old
+            # partial subtotals are not comparable to the new meter's delta.
             self.source = source
             self.complete = False
             self.last_time = None
             self.last_kwh = None
+            self.known_cost = 0.0
+            self.known_energy = 0.0
+            self.intervals = 0
 
         if self.last_time is None:
             self.last_time = stamp
