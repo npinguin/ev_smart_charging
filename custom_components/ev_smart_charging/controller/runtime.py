@@ -62,6 +62,48 @@ def _charger_switch_readback(hass, coordinator):
     return state is not None and state.state in ("on", "off")
 
 
+def resume_supervised(hass, charger_id):
+    """Explicit operator Resume; never clears a transient peak restriction."""
+    entry = controller_entry(hass)
+    if entry is None:
+        return
+    paused = set(entry.options.get("paused_chargers", ()))
+    if charger_id not in paused:
+        return
+    paused.remove(charger_id)
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "paused_chargers": sorted(paused)}
+    )
+
+
+def set_control_mode(hass, charger_id, mode):
+    """Persist one Local/Coordinated owner on the controller entry."""
+    if mode not in ("local", "coordinated"):
+        raise ValueError("Invalid control mode")
+    entry = controller_entry(hass)
+    if entry is None:
+        raise ValueError("EVSC Charge Controller is not configured")
+    charger_ids = {
+        e.entry_id for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data.get(MARKER) != CONTROLLER_TYPE
+    }
+    if charger_id not in charger_ids:
+        raise ValueError("Unknown EVSC entry")
+    participants = set(entry.options.get("participants", ()))
+    paused = set(entry.options.get("paused_chargers", ()))
+    if mode == "coordinated":
+        participants.add(charger_id)
+    else:
+        participants.discard(charger_id)
+        paused.discard(charger_id)
+    hass.config_entries.async_update_entry(
+        entry, options={
+            **entry.options, "participants": sorted(participants),
+            "paused_chargers": sorted(paused),
+        }
+    )
+
+
 def pause_supervised(hass, charger_id):
     """Persist explicit manual STOP before a delayed EVSC retry can run."""
     entry = controller_entry(hass)
@@ -95,6 +137,8 @@ class ChargeSupervisor:
         self.plan = None
         self.reason = "LOCAL_MONITORING"
         self._unsub = None
+        self.peak_status = "disabled"
+        self.available_ev_power_kw = None
 
     @property
     def participants(self):
@@ -114,8 +158,19 @@ class ChargeSupervisor:
             physical.append(st.state == "on" if st is not None and st.state in ("on", "off") else None)
         return collect(coordinators, physical)
 
+    def _source_config(self, key, obj):
+        """New source bindings belong to EVSC; old controller fields are fallback."""
+        legacy = self.config_entry.options.get("chargers", {}).get(key, {})
+        own = obj.config_entry.options
+        return {
+            "capacity_kwh": own.get("evsc_capacity_kwh") or legacy.get("capacity_kwh"),
+            "power_kw": own.get("evsc_expected_power_kw") or legacy.get("power_kw"),
+            "power_sensor": own.get("evsc_actual_power_entity") or legacy.get("power_sensor"),
+            "energy_sensor": own.get("evsc_actual_energy_entity") or legacy.get("energy_sensor"),
+        }
+
     def _charger(self, key, obj):
-        attrs = self.config_entry.options.get("chargers", {}).get(key, {})
+        attrs = self._source_config(key, obj)
         ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
         return Charger(
             id=key, mode="coordinated" if key in self.participants else "local",
@@ -126,13 +181,14 @@ class ChargeSupervisor:
             ready_by=ready,
             actual_power_kw=_meter(self.hass, attrs.get("power_sensor"), "power"),
             session_energy_kwh=_meter(self.hass, attrs.get("energy_sensor"), "energy"),
+            charging_speed_pct_h=_number(obj.charging_pct_per_hour),
         )
 
     def meters(self):
         known = []
         energy = []
         for key in self.chargers():
-            cfg = self.config_entry.options.get("chargers", {}).get(key, {})
+            cfg = self._source_config(key, self.chargers()[key])
             known.append(_meter(self.hass, cfg.get("power_sensor"), "power"))
             energy.append(_meter(self.hass, cfg.get("energy_sensor"), "energy"))
         return {
@@ -143,24 +199,62 @@ class ChargeSupervisor:
         }
 
     def _prices(self, objects):
-        """Read separate quarter-price streams; different EVSC rates are valid."""
+        """Different rates and missing horizons are independent per EVSC."""
         prices = {}
         for obj in objects:
+            key = obj.config_entry.entry_id
             raw = getattr(obj, "raw_two_days", None)
-            if raw is None:
-                return None, "PRICE_SOURCE_MISSING"
             slots = []
-            try:
-                for item in raw.get_raw():
-                    value = _number(item["value"])
-                    if value is not None:
-                        slots.append(PriceSlot(item["start"], item["end"], value))
-            except (KeyError, ValueError, TypeError):
-                return None, "PRICE_SOURCE_INVALID"
-            if not slots:
-                return None, "PRICE_SLOTS_MISSING"
-            prices[obj.config_entry.entry_id] = slots
-        return prices, None
+            if raw is not None:
+                try:
+                    for item in raw.get_raw():
+                        value = _number(item["value"])
+                        if value is not None:
+                            slots.append(PriceSlot(item["start"], item["end"], value))
+                except (KeyError, ValueError, TypeError):
+                    _LOGGER.warning("Invalid EVSC price intervals for %s", key)
+                    slots = []
+            prices[key] = slots
+        return prices
+
+    def _peak_headroom(self, chargers):
+        """Whole-charger headroom, never a variable EVSE power request."""
+        opts = self.config_entry.options
+        if not opts.get("peak_shaving_enabled", False):
+            self.peak_status = "disabled"
+            self.available_ev_power_kw = None
+            return None, True
+        site = _meter(self.hass, opts.get("site_power_sensor"), "power")
+        target = _number(opts.get("peak_target_kw"))
+        reserve = _number(opts.get("peak_reserve_kw", 0))
+        if site is None or target is None or target <= 0 or reserve is None:
+            self.peak_status = "meter_unavailable"
+            self.available_ev_power_kw = None
+            return None, False
+        # A whole-site import meter includes the EV charging already running.
+        # Every controlled charger's power must be measured to subtract it
+        # once. Unknown metering must fail closed, never be treated as zero.
+        powers = []
+        for key in self.participants:
+            obj = chargers.get(key)
+            if obj is None:
+                self.peak_status = "meter_unavailable"
+                self.available_ev_power_kw = None
+                return None, False
+            cfg = self._source_config(key, obj)
+            power = _meter(self.hass, cfg.get("power_sensor"), "power")
+            if power is None:
+                self.peak_status = "meter_unavailable"
+                self.available_ev_power_kw = None
+                return None, False
+            powers.append(power)
+        # Site meter is net import; export (negative) can be valid. The
+        # meter reader for site import must therefore allow signed readings.
+        baseline = site - sum(powers)
+        headroom = max(0.0, target - baseline - reserve)
+        self.available_ev_power_kw = round(headroom, 3)
+        self.peak_status = "constrained" if headroom < sum(powers) else "active"
+        return headroom, True
 
     def rebuild(self):
         if not self.participants:
@@ -188,19 +282,32 @@ class ChargeSupervisor:
         if not all(_charger_switch_readback(self.hass, obj) for obj in selected):
             self.reason, self.plan = "NATIVE_CONTROL_UNAVAILABLE", None
             return
-        prices, error = self._prices(selected)
-        if error:
-            self.reason, self.plan = error, None
-            return
+        prices = self._prices(selected)
         try:
             opts = self.config_entry.options
             budget = _number(opts.get("power_budget_kw", 0))
+            peak_limit, peak_valid = self._peak_headroom(objs)
+            if not peak_valid:
+                self.plan = None
+                self.reason = "PEAK_METER_UNAVAILABLE"
+                return
+            limits = [x for x in (budget, peak_limit) if x is not None and x > 0]
+            # A known peak headroom of exactly zero must stop all chargers.
+            # Policy limits must be positive: no grant is issued in that case.
+            if peak_limit is not None and peak_limit <= 0:
+                self.plan = None
+                self.reason = "PEAK_PAUSED"
+                self.peak_status = "paused"
+                return
             policy = Policy(
                 max_parallel=int(opts.get("max_parallel", 1)),
-                group_power_budget_kw=budget if budget and budget > 0 else None,
+                group_power_budget_kw=min(limits) if limits else None,
             )
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
-            self.plan = build_plan(members, prices, dt.utcnow(), policy)
+            previous = self.plan.assignments if self.plan is not None else ()
+            self.plan = build_plan(
+                members, prices, dt.utcnow(), policy, committed=previous
+            )
             self.reason = "COORDINATED_PLAN"
         except (ValueError, TypeError, OverflowError) as exc:
             _LOGGER.warning("EVSC joint planner rejected source inputs: %s", exc)
