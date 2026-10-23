@@ -1,5 +1,27 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Engineering completion pass — 2026-10-23 (final code integration still requires CI)
+
+**Scope:** This checkpoint covers *implementation source* on the isolated `fix/local-bootstrap-lifecycle` branch, not approval to deploy, release, or change an existing installation. **The first field test must be a zero-configuration drop-in upgrade on four real EVSC entries** after the code gate closes. `main`, frozen RC1, and `feature/charge-controller` are still protected.
+
+| Code contract | Current implementation / evidence | Release meaning |
+|---|---|---|
+| Existing four Local EVSC entries, no manual source or config changes | `test_drop_in_four_local.py` (HA-managed four-entry fixture), singleton bootstrap, old unique IDs and Options unchanged | Automated mock evidence; real upgrade NOT RUN |
+| Original Local physical writer and protective operator Stop | Unchanged native EVSC service path; controller grants gate ON only after explicit Coordinated opt-in | Only native EVSE field readback can prove physical behavior |
+| 15-minute planning / UTC-DST / dynamic deadlines / current-slot accounting | Joint planner with immutable active permit and prorated remaining-quarter kWh; regression covers partial quarter replan | Software tests only |
+| Four different EVSE powers and true per-EVSC cost curves | Exact bounded min-EUR future allocation for mixed kW and kW-constrained concurrency; min-cost flow for simpler cases; no fabricated tariff equality | Solver bounds use *feasible* fallback, not an unsupported global-optimality claim |
+| Local + Coordinated totals / coverage | Read-only Local schedule normalization, each own optional effective price and kW, consolidated kWh/EUR + partial known subtotals, no cached Local double-count | Unknown source means unavailable headline, not zero |
+| Energy-native alternative sources | Optional capacity, stored current/target kWh and future effective EUR price interval bindings on **individual** EVSC Options; legacy fields untouched; direct/derived resolution | No compulsory edits during drop-in |
+| Actual charge cost | Time-aligned native energy delta × validated per-EVSC EUR source with guarded HA Store restore and meter-binding-change reset | No daily value unless completeness is evidenced; meter/power source validation on target HA still required |
+| Phase 1 peak policy | Native-only binary Stop/Resume, stale site/EVSE meter fail closed, 90-second stable recovery and margin, manual pause persistence, observed peak price impact only for equal energy plans | Not circuit/phase overload protection; variable native throttling belongs to Phase 2 |
+| Reactive runtime / device identity | Lifecycle-managed read-only source watchers, one controller HA device, additive original-entry individual read-only entities, provider device unchanged | Upgrade/rollback and physical four-charger tests not yet run |
+
+**Exact-head CI gate still OPEN.** Every new source change must pass strict Black, original Local smoke, upstream baseline, focused controller and full Python 3.11–3.14 tests. The first hardware test remains **after** this gate. HACS requires GitHub Issues enabled and at least one valid repository topic; Codecov requires its authorized `CODECOV_TOKEN` GitHub Actions secret. These are not Python source failures and cannot legitimately be bypassed by weakening workflow checks.
+
+**Qualification outcome: NOT RELEASE APPROVED.** No tag, no feature/main merge, no demand to change configuration. Source-code coverage and measured physical acceptance are deliberately separate.
+
+---
+
 ## Additional Phase 1 implementation checkpoint — 2026-10-23 — NOT RELEASE APPROVED
 
 **Owner release gate unchanged: full code feature completion precedes first physical test, which is a zero-config drop-in upgrade.** Work remains isolated on draft PR #3. Original `main`, frozen RC1, contract reference and `feature/charge-controller` remain unchanged.
