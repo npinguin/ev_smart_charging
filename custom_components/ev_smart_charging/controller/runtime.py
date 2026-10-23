@@ -465,6 +465,54 @@ class ChargeSupervisor:
             "available_ev_power": self.available_ev_power_kw,
         }
 
+    def plan_payload(self):
+        """One read-only, bounded response for the current quarter plan."""
+        plan = self.plan
+        per_charger = {key: [] for key in self.chargers()}
+        if plan is not None:
+            for slot in plan.assignments:
+                per_charger[slot.charger_id].append({
+                    "start": slot.start.isoformat(),
+                    "end": slot.end.isoformat(),
+                    "price_eur_per_kwh": slot.price_eur_per_kwh,
+                    "estimated_ac_kwh": slot.grid_kwh,
+                    "estimated_cost_eur": round(
+                        slot.grid_kwh * slot.price_eur_per_kwh, 4
+                    ) if slot.grid_kwh is not None else None,
+                })
+        results = {
+            r.charger_id: r for r in plan.results
+        } if plan is not None else {}
+        chargers = []
+        for key, obj in sorted(self.chargers().items()):
+            result = results.get(key)
+            chargers.append({
+                "evsc_entry_id": key,
+                "mode": "coordinated" if key in self.participants else "local",
+                "price_source_entity": getattr(obj, "price_entity_id", None),
+                "price_horizon_end": (
+                    self.price_horizons[key].isoformat()
+                    if self.price_horizons.get(key) is not None else None
+                ),
+                "planning_status": result.status if result else "LOCAL",
+                "planning_reason": result.reason if result else None,
+                "required_battery_kwh": result.requested_battery_kwh if result else None,
+                "remaining_battery_kwh": result.remaining_battery_kwh if result else None,
+                "slots": per_charger[key],
+            })
+        return {
+            "schema_version": "1.0",
+            "generated_at": (
+                plan.created_at.isoformat() if plan is not None else None
+            ),
+            "status": self.reason,
+            "summary": {
+                key: value.isoformat() if hasattr(value, "isoformat") else value
+                for key, value in self.planning_summary().items()
+            },
+            "chargers": chargers,
+        }
+
     def subscribe(self, callback):
         """One shared controller refresh; HA sensors do not each poll."""
         self._subscribers.add(callback)
