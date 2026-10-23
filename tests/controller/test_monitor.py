@@ -55,3 +55,6 @@ def test_no_physical_readback_remains_unknown():
     x = collect([mock_coordinator(True)])
     assert x.physically_charging == 0
     assert x.physical_state_unknown == 1
+
+def mock_coordinator(connected=None, planned=False, quarters=0):
+    return fake(connected, planned, quarters)

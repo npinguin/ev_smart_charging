@@ -79,6 +79,7 @@ from .const import (
     SWITCH,
 )
 from .controller.deadlines import effective_deadline, price_coverage_reaches_deadline
+from .controller.runtime import is_supervised, physical_grant
 from .helpers.coordinator import (
     Scheduler,
     get_charging_value,
@@ -262,7 +263,7 @@ class EVSmartChargingCoordinator:
                 "EV Smart Charging: Charging should be ON but %s is not ON. Retrying start.",
                 self.charging_state_entity_id,
             )
-            await self.turn_on_charging()
+            await self.turn_on_charging(reason="retry")
 
     def unsubscribe_listeners(self):
         """Unsubscribed to listeners"""
@@ -322,6 +323,9 @@ class EVSmartChargingCoordinator:
     ):  # pylint: disable=unused-argument
         """Called every quarter"""
         _LOGGER.debug("EVSmartChargingCoordinator.update_state()")
+        if is_supervised(self.hass, self.config_entry.entry_id):
+            await self._update_coordinated_state()
+            return
         if self._charging_schedule is not None:
             charging_value = get_charging_value(self._charging_schedule)
             _LOGGER.debug("charging_value = %s", charging_value)
@@ -484,10 +488,27 @@ class EVSmartChargingCoordinator:
                 self._charging_schedule = Scheduler.get_empty_schedule()
                 self.sensor.charging_schedule = self._charging_schedule
 
-    async def turn_on_charging(self, state: bool = True):
-        """Turn on charging"""
+    async def _update_coordinated_state(self):
+        """Execute only current group permits; stop if permission is absent."""
+        admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
+        state = self.hass.states.get(self.charger_switch.entity_id) if self.charger_switch.entity_id else None
+        actual_on = state is not None and state.state == STATE_ON
+        internal_on = self.auto_charging_state == STATE_ON
+        if admit and not internal_on:
+            if await self.turn_on_charging(reason="automatic"):
+                self.auto_charging_state = STATE_ON
+        elif not admit and (internal_on or actual_on):
+            self.auto_charging_state = STATE_OFF
+            await self.turn_off_charging()
+
+    async def turn_on_charging(self, state: bool = True, *, reason: str = "manual"):
+        """Existing physical writer; fail closed before any supervised ON."""
 
         if state is True:
+            if not physical_grant(self.hass, self.config_entry.entry_id, reason):
+                _LOGGER.info("Charge Controller denied %s start on %s",
+                             reason, self.config_entry.entry_id)
+                return False
             _LOGGER.debug("Turn on charging")
             self.sensor.set_state(STATE_ON)
             if (
@@ -503,6 +524,7 @@ class EVSmartChargingCoordinator:
                     service=SERVICE_TURN_ON,
                     target={"entity_id": self.charger_switch.entity_id},
                 )
+            return True
         else:
             _LOGGER.debug("Turn off charging")
             self.sensor.set_state(STATE_OFF)

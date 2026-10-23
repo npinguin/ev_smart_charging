@@ -57,7 +57,7 @@ class ControllerSensor(SensorEntity):
     def native_value(self):
         snapshot = self.manager.snapshot()
         return {
-            "status": "monitoring",
+            "status": self.manager.reason,
             "chargers": snapshot.chargers,
             "connected": snapshot.connected,
             "connection_unknown": snapshot.connection_unknown,
@@ -71,11 +71,17 @@ class ControllerSensor(SensorEntity):
     def extra_state_attributes(self):
         if self.key == "status":
             return {
-                "mode": "local",
-                "coordination_enabled": False,
-                "actual_power_kw": None,
-                "session_energy_kwh": None,
-                "note": "Passive monitoring only; actual energy requires EVSE meters",
+                "mode": "coordinated" if self.manager.participants else "local",
+                "coordination_enabled": bool(self.manager.participants),
+                "participants": len(self.manager.participants),
+                "actual_power_kw": self.manager.meters()["actual_power_kw"],
+                "actual_power_coverage": self.manager.meters()["actual_power_coverage"],
+                "session_energy_kwh": self.manager.meters()["session_energy_kwh"],
+                "session_energy_coverage": self.manager.meters()["session_energy_coverage"],
+                "price_coverage": self.manager.plan.coverage if self.manager.plan else None,
+                "planned_grid_kwh": self.manager.plan.total_planned_grid_kwh if self.manager.plan else None,
+                "source_price_cost_estimate": self.manager.plan.expected_cost_eur if self.manager.plan else None,
+                "cost_unit_warning": "Price units must be verified for each source before interpreting estimates as EUR.",
             }
         return None
 

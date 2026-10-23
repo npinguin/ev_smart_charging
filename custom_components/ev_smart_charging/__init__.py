@@ -31,7 +31,7 @@ from .const import (
     STARTUP_MESSAGE,
     PLATFORMS,
 )
-from .controller.sensors import ControllerMonitor
+from .controller.runtime import ChargeSupervisor
 
 CONTROLLER_ENTRY_TYPE = "charge_controller"
 CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
@@ -49,12 +49,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         _LOGGER.debug(STARTUP_MESSAGE)
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
-        hass.data[DOMAIN][entry.entry_id] = ControllerMonitor(hass)
+        hass.data[DOMAIN][entry.entry_id] = ChargeSupervisor(hass, entry)
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
                 await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
             else:
                 await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+            await hass.data[DOMAIN][entry.entry_id].async_start()
         except Exception:
             hass.data[DOMAIN].pop(entry.entry_id, None)
             raise
@@ -128,6 +129,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, Platform.SENSOR
         )
         if unloaded:
+            hass.data[DOMAIN][entry.entry_id].async_stop()
             hass.data[DOMAIN].pop(entry.entry_id, None)
         return unloaded
 
