@@ -366,3 +366,45 @@ def test_partial_current_quarter_allocates_future_quarter_if_target_requires_it(
     assert any(a.start >= T + timedelta(minutes=15) for a in later.assignments)
     assert later.results[0].status in ("PLANNED", "PROVISIONAL")
     assert later.results[0].remaining_battery_kwh == 0
+
+
+def test_native_kwh_planning_works_without_usable_capacity_or_soc():
+    c = Charger(
+        "native_energy",
+        "coordinated",
+        True,
+        None,
+        None,
+        None,
+        7.2,
+        T + timedelta(hours=1),
+        current_battery_kwh=20,
+        target_battery_kwh=23.24,
+    )
+    p = build_plan(
+        [c], {"native_energy": slots(4)}, T,
+        Policy(max_parallel=1),
+    )
+    assert c.required_battery_kwh == 3.24
+    assert c.required_quarters == 2
+    assert len(p.assignments) == 2
+    assert p.results[0].status == "PLANNED"
+
+
+def test_direct_energy_surplus_never_commands_charge():
+    c = Charger(
+        "full",
+        "coordinated",
+        True,
+        None,
+        None,
+        None,
+        7.2,
+        T + timedelta(hours=1),
+        current_battery_kwh=30,
+        target_battery_kwh=28,
+    )
+    p = build_plan([c], {"full": slots(4)}, T)
+    assert c.required_battery_kwh == 0
+    assert not p.assignments
+    assert p.results[0].status == "COMPLETE"
