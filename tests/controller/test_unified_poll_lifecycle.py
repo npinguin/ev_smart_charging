@@ -25,7 +25,9 @@ def _controller(hass):
 
 def _native(entry_id):
     return SimpleNamespace(
-        config_entry=SimpleNamespace(entry_id=entry_id, options={}),
+        config_entry=SimpleNamespace(
+            entry_id=entry_id, options={"evsc_actual_power_entity": "sensor.native_power"}
+        ),
         price_entity_id="sensor.price",
         ev_soc_entity_id="sensor.soc",
         ev_target_soc_entity_id="sensor.target",
@@ -67,6 +69,28 @@ def test_peblar_readback_does_not_replan_but_price_soc_and_quarter_do(hass):
     manager._poll_controller()
     manager._request_refresh.assert_called_once_with()
 
+    manager._request_refresh.reset_mock()
+    manager._poll_controller()
+    manager._request_refresh.assert_not_called()
+
+
+async def test_2000_native_readbacks_only_reconcile_once_per_poll(hass):
+    """HA event volume does not multiply the group planner's work."""
+    manager = _controller(hass)
+    manager.chargers = lambda: {"peblar": _native("peblar")}
+    hass.states.async_set("switch.native", "off")
+    manager._plan_fingerprint = manager._planning_inputs()
+    manager._observation_fingerprint = manager._observation_inputs()
+    manager._request_refresh = MagicMock()
+
+    for index in range(2000):
+        hass.states.async_set("sensor.native_power", str(index % 200))
+        hass.states.async_set("switch.native", "on", force_update=True)
+    await hass.async_block_till_done()
+    manager._request_refresh.assert_not_called()
+
+    manager._poll_controller()
+    manager._request_refresh.assert_called_once_with(replan=False)
     manager._request_refresh.reset_mock()
     manager._poll_controller()
     manager._request_refresh.assert_not_called()
