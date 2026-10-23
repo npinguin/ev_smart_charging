@@ -225,6 +225,10 @@ class ChargeSupervisor:
         own = obj.config_entry.options
         return {
             "capacity_kwh": own.get("evsc_capacity_kwh") or legacy.get("capacity_kwh"),
+            "capacity_sensor": own.get("evsc_capacity_entity"),
+            "current_battery_sensor": own.get("evsc_current_energy_entity"),
+            "target_battery_sensor": own.get("evsc_target_energy_entity"),
+            "effective_price_sensor": own.get("evsc_effective_price_entity"),
             "power_kw": own.get("evsc_expected_power_kw") or legacy.get("power_kw"),
             "power_sensor": own.get("evsc_actual_power_entity")
             or legacy.get("power_sensor"),
@@ -235,18 +239,31 @@ class ChargeSupervisor:
     def _charger(self, key, obj):
         attrs = self._source_config(key, obj)
         ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
+        native_capacity = _meter(
+            self.hass, attrs.get("capacity_sensor"), "energy"
+        )
+        direct_capacity = (
+            native_capacity if native_capacity is not None and native_capacity > 0
+            else _number(attrs.get("capacity_kwh"))
+        )
         return Charger(
             id=key,
             mode="coordinated" if key in self.participants else "local",
             connected=obj.switch_ev_connected,
             current_soc=_number(obj.ev_soc),
             target_soc=_number(obj.ev_target_soc),
-            usable_capacity_kwh=_number(attrs.get("capacity_kwh")) or None,
+            usable_capacity_kwh=direct_capacity or None,
             charge_power_kw=_number(attrs.get("power_kw")) or None,
             ready_by=ready,
             actual_power_kw=_meter(self.hass, attrs.get("power_sensor"), "power"),
             session_energy_kwh=_meter(self.hass, attrs.get("energy_sensor"), "energy"),
             charging_speed_pct_h=_number(obj.charging_pct_per_hour),
+            current_battery_kwh=_meter(
+                self.hass, attrs.get("current_battery_sensor"), "energy"
+            ),
+            target_battery_kwh=_meter(
+                self.hass, attrs.get("target_battery_sensor"), "energy"
+            ),
         )
 
     def meters(self):
@@ -999,6 +1016,10 @@ class ChargeSupervisor:
                 getattr(getattr(obj, "charger_switch", None), "entity_id", None),
                 cfg.get("power_sensor"),
                 cfg.get("energy_sensor"),
+                cfg.get("capacity_sensor"),
+                cfg.get("current_battery_sensor"),
+                cfg.get("target_battery_sensor"),
+                cfg.get("effective_price_sensor"),
             ):
                 if (
                     isinstance(candidate, str)
