@@ -21,6 +21,7 @@ from homeassistant.helpers.storage import Store
 
 from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
+from . import safety
 from .monitor import collect
 from .local_projection import local_plan_facts
 from .costs import ActualCostLedger
@@ -34,6 +35,9 @@ CONTROLLER_TYPE = "charge_controller"
 PEAK_METER_MAX_AGE = timedelta(minutes=5)
 PEAK_RECOVERY_STABLE = timedelta(seconds=90)
 PEAK_RESTART_MARGIN_KW = 0.5
+# At most one pending executor refresh; no event can spawn an unbounded task list.
+EVENT_REFRESH_DEBOUNCE_SECONDS = 0.2
+EVENT_REFRESH_COOLDOWN_SECONDS = 1.0
 
 
 def controller_entry(hass):
@@ -125,6 +129,11 @@ def set_control_mode(hass, charger_id, mode):
     participants = set(entry.options.get("participants", ()))
     paused = set(entry.options.get("paused_chargers", ()))
     if mode == "coordinated":
+        if not safety.COORDINATED_ACTUATION_ENABLED:
+            raise ValueError(
+                "Coordinated control is suspended after a critical HA incident; "
+                "remain in Local until safety revalidation"
+            )
         participants.add(charger_id)
     else:
         participants.discard(charger_id)
@@ -155,6 +164,8 @@ def physical_grant(hass, charger_id, reason):
     # A paused supervised charger must be able to return explicitly to Local.
     if not is_supervised(hass, charger_id):
         return True
+    if not safety.COORDINATED_ACTUATION_ENABLED:
+        return False
     entry = controller_entry(hass)
     if entry is not None and charger_id in entry.options.get("paused_chargers", []):
         return False
@@ -181,6 +192,11 @@ class ChargeSupervisor:
         self._watched_sources = frozenset()
         self._subscribers = set()
         self._refresh_lock = asyncio.Lock()
+        # Source and native readback events are noisy and may be triggered by
+        # EVSC's own state updates. Coalesce, bound and tear down all refreshes.
+        self._refresh_task = None
+        self._refresh_dirty = False
+        self._stopped = False
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
         self.price_horizons = {}
@@ -1023,9 +1039,16 @@ class ChargeSupervisor:
         """Serialize peak events, planned grants, and native Start/Stop."""
         async with self._refresh_lock:
             self._watch_source_changes()
-            self.rebuild()
+            if self.participants and not safety.COORDINATED_ACTUATION_ENABLED:
+                # A previous session may have persisted a participant. Do not
+                # produce an automatic Start *or Stop* while in quarantine.
+                self.gate.update_plan(None)
+                self.plan = None
+                self.reason = "COORDINATED_SAFETY_HOLD"
+            else:
+                self.rebuild()
             cost_changed = self._record_actual_costs()
-            for key in self.participants:
+            for key in self.participants if safety.COORDINATED_ACTUATION_ENABLED else ():
                 obj = self.chargers().get(key)
                 if obj is not None:
                     try:
@@ -1087,17 +1110,55 @@ class ChargeSupervisor:
             )
 
     @callback
-    def _source_changed(self, _event):
-        """Replan on the HA event loop, never in its worker executor."""
-        self.hass.async_create_task(self.async_refresh())
+    def _request_refresh(self):
+        """Never queue one task per event; keep at most one pending runner."""
+        if self._stopped:
+            return
+        self._refresh_dirty = True
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = self.hass.async_create_task(
+                self._drain_source_refreshes()
+            )
+
+    async def _drain_source_refreshes(self):
+        """Debounced, rate-bounded loop; a native readback cannot grow a queue."""
+        try:
+            await asyncio.sleep(EVENT_REFRESH_DEBOUNCE_SECONDS)
+            while self._refresh_dirty and not self._stopped:
+                self._refresh_dirty = False
+                try:
+                    await self.async_refresh()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _LOGGER.exception("EVSC controller event refresh failed")
+                if self._refresh_dirty and not self._stopped:
+                    await asyncio.sleep(EVENT_REFRESH_COOLDOWN_SECONDS)
+        finally:
+            self._refresh_task = None
+
+    @callback
+    def _source_changed(self, event):
+        """Ignore identical published values, schedule only on HA event loop."""
+        data = getattr(event, "data", None)
+        if data:
+            before, after = data.get("old_state"), data.get("new_state")
+            if (
+                before is not None
+                and after is not None
+                and before.state == after.state
+                and before.attributes == after.attributes
+            ):
+                return
+        self._request_refresh()
 
     @callback
     def _peak_meter_changed(self, _event):
-        # Immediate re-evaluation on live site meter updates. Native EVSC
-        # coordinators remain the only physical writers.
-        self.hass.async_create_task(self.async_refresh())
+        # Only a bounded task will process even rapidly changing site import.
+        self._request_refresh()
 
     async def async_start(self):
+        self._stopped = False
         # HA native storage survives normal restart/drop-in upgrade.
         self._cost_store = Store(self.hass, 1, f"{DOMAIN}_actual_costs")
         try:
@@ -1122,6 +1183,10 @@ class ChargeSupervisor:
         await self.async_refresh()
 
     def async_stop(self):
+        self._stopped = True
+        self._refresh_dirty = False
+        if self._refresh_task is not None and not self._refresh_task.done():
+            self._refresh_task.cancel()
         if self._unsub:
             self._unsub()
             self._unsub = None
