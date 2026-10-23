@@ -143,8 +143,8 @@ class ChargeSupervisor:
         }
 
     def _prices(self, objects):
-        """Require matching source and quarter chronology across participants."""
-        reference = None
+        """Read separate quarter-price streams; different EVSC rates are valid."""
+        prices = {}
         for obj in objects:
             raw = getattr(obj, "raw_two_days", None)
             if raw is None:
@@ -159,11 +159,8 @@ class ChargeSupervisor:
                 return None, "PRICE_SOURCE_INVALID"
             if not slots:
                 return None, "PRICE_SLOTS_MISSING"
-            signature = [(p.start, p.end, round(p.eur_per_kwh, 6)) for p in slots]
-            if reference is not None and reference[1] != signature:
-                return None, "PRICE_SOURCE_CONFLICT"
-            reference = (slots, signature)
-        return reference[0] if reference else [], None
+            prices[obj.config_entry.entry_id] = slots
+        return prices, None
 
     def rebuild(self):
         if not self.participants:

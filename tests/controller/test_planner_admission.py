@@ -115,3 +115,37 @@ def test_admission_requires_confirmation_to_go_local():
         gate.set_mode("a", "local")
     gate.set_mode("a", "local", operator_confirmed=True)
     assert gate.start("a", T, "manual").granted
+
+
+def test_independent_price_curves_allow_different_rates():
+    a = charger("a", deadline=T+timedelta(minutes=30))
+    b = charger("b", deadline=T+timedelta(minutes=30))
+    prices = {
+        "a": [PriceSlot(T, T+timedelta(minutes=15), .10),
+              PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .50)],
+        "b": [PriceSlot(T, T+timedelta(minutes=15), .40),
+              PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), .05)],
+    }
+    plan = build_plan([a, b], prices, T, Policy(max_parallel=2))
+    assert len(plan.assignments) == 4
+    assert next(p for p in plan.assignments if p.charger_id == "a").price_eur_per_kwh in (.10, .50)
+    assert next(p for p in plan.assignments if p.charger_id == "b").price_eur_per_kwh in (.05, .40)
+
+
+def test_current_quarter_remains_available_mid_quarter():
+    tiny = Charger("a", "coordinated", True, 50, 51, 40, 4, T+timedelta(hours=1))
+    prices = {"a": [PriceSlot(T, T+timedelta(minutes=15), .01),
+                    PriceSlot(T+timedelta(minutes=15), T+timedelta(minutes=30), 1.0)]}
+    mid = T + timedelta(minutes=1)
+    plan = build_plan([tiny], prices, mid)
+    assert grant_for(plan, "a", mid)
+    assert any(p.start == T for p in plan.assignments)
+
+
+def test_price_horizons_independent():
+    a = charger("a", deadline=T+timedelta(hours=2))
+    b = charger("b", deadline=T+timedelta(hours=2))
+    price_map = {"a": slots(4), "b": slots(8)}
+    plan = build_plan([a, b], price_map, T, Policy(max_parallel=2))
+    assert plan.priced_until == T+timedelta(hours=2)
+    assert len([x for x in plan.assignments if x.charger_id == "b"]) > 0

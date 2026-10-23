@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from math import ceil, isfinite
-from typing import Literal
+from typing import Literal, Mapping
 
 QUARTER = timedelta(minutes=15)
 ControlMode = Literal["local", "coordinated"]
@@ -160,27 +160,57 @@ def aggregate_actual(chargers: list[Charger]) -> dict:
     }
 
 
-def build_plan(chargers: list[Charger], prices: list[PriceSlot], now: datetime, policy: Policy = Policy()) -> GroupPlan:
-    """Schedule by deadline/priority then lowest known price, one common plan."""
+def build_plan(
+    chargers: list[Charger],
+    prices: list[PriceSlot] | Mapping[str, list[PriceSlot]],
+    now: datetime,
+    policy: Policy = Policy(),
+) -> GroupPlan:
+    """Schedule each EVSC using its own valid quarter prices.
+
+    A legacy shared list is still accepted for existing direct planner clients.
+    The algorithm is deterministic, but is not a proof of global cost optimality.
+    """
     t = utc(now)
     ids = [c.id for c in chargers]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate charger IDs")
-    slots = sorted(prices, key=lambda p: utc(p.start))
-    if len({utc(s.start) for s in slots}) != len(slots):
-        raise ValueError("Duplicate price slots")
-    slots = [p for p in slots if utc(p.start) >= t]
-    priced_until = max((utc(p.end) for p in slots), default=None)
-    coverage: Coverage = "UNAVAILABLE" if not slots else "COMPLETE"
-    if slots and any(utc(a.end) != utc(b.start) for a, b in zip(slots, slots[1:])):
-        coverage = "PARTIAL"
+    price_map = (
+        {c.id: prices for c in chargers}
+        if not isinstance(prices, Mapping) else prices
+    )
+    by_charger: dict[str, list[PriceSlot]] = {}
+    for c in chargers:
+        source = sorted(price_map.get(c.id, ()), key=lambda p: utc(p.start))
+        if len({utc(s.start) for s in source}) != len(source):
+            raise ValueError(f"Duplicate price slots for {c.id}")
+        # Keep the active quarter: a replan at 10:01 cannot drop 10:00-10:15.
+        by_charger[c.id] = [p for p in source if utc(p.end) > t]
+    all_starts = sorted({
+        utc(p.start) for slots in by_charger.values() for p in slots
+    })
+    priced_until = max(
+        (utc(p.end) for slots in by_charger.values() for p in slots),
+        default=None,
+    )
+    coverage: Coverage = (
+        "UNAVAILABLE" if not any(by_charger.values()) else "COMPLETE"
+    )
+    for c in chargers:
+        if c.mode != "coordinated":
+            continue
+        slots = by_charger[c.id]
+        if not slots or any(
+            utc(a.end) != utc(b.start) for a, b in zip(slots, slots[1:])
+        ):
+            coverage = "PARTIAL" if priced_until else "UNAVAILABLE"
     warnings = [] if coverage == "COMPLETE" else [f"PRICE_{coverage}"]
     if policy.effective_budget is not None and any(
         c.mode == "local" and c.actual_power_kw is None for c in chargers
     ):
         warnings.append("LOCAL_LOAD_UNMEASURED_CAPACITY_NOT_GUARANTEED")
-    remaining_kw = {utc(p.start): policy.effective_budget for p in slots}
-    used = {utc(p.start): 0 for p in slots}
+    remaining_kw = {start: policy.effective_budget for start in all_starts}
+    used = {start: 0 for start in all_starts}
     assignments = []
     results = []
     ordered = sorted(chargers, key=lambda c: (
@@ -205,7 +235,7 @@ def build_plan(chargers: list[Charger], prices: list[PriceSlot], now: datetime, 
             results.append(ChargerResult(c.id, 0., 0., 0., "COMPLETE", "Target already met"))
             continue
         eligible = [
-            p for p in slots
+            p for p in by_charger[c.id]
             if utc(p.end) <= utc(c.ready_by)
             and used[utc(p.start)] < policy.max_parallel
             and (remaining_kw[utc(p.start)] is None or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
@@ -224,7 +254,17 @@ def build_plan(chargers: list[Charger], prices: list[PriceSlot], now: datetime, 
             ))
         planned = min(required, count * battery_per_slot)
         short = max(0., required - planned)
-        complete_horizon = priced_until is not None and priced_until >= utc(c.ready_by) and coverage == "COMPLETE"
+        source_slots = by_charger[c.id]
+        source_end = max((utc(p.end) for p in source_slots), default=None)
+        source_contiguous = bool(source_slots) and all(
+            utc(a.end) == utc(b.start)
+            for a, b in zip(source_slots, source_slots[1:])
+        )
+        complete_horizon = (
+            source_end is not None
+            and source_end >= utc(c.ready_by)
+            and source_contiguous
+        )
         if short <= 1e-6:
             status = "PLANNED" if complete_horizon else "PROVISIONAL"
             reason = "Demand scheduled" if complete_horizon else "Incomplete future price coverage"
