@@ -19,7 +19,11 @@ def test_original_ha_charger_config_entry_version_and_options_remain():
     assert "VERSION = 8" in flow
     assert 'step_id="init"' in flow
     assert 'vol.Optional("participants"' in flow
-    assert 'self._draft["chargers"][id]' in flow
+    # Per-charger source mappings live in EVSC Options; the controller
+    # retains legacy mappings read-only until explicit user migration.
+    assert '"evsc_actual_power_entity"' in flow
+    assert '"evsc_capacity_kwh"' in flow
+    assert '"chargers"' not in flow.split("class ControllerOptionsFlow", 1)[-1]
 
 
 def test_single_controller_device_identity_across_entries():

@@ -15,4 +15,7 @@ def test_persistent_manual_stop_latch_is_checked_before_writer():
 
 def test_controller_options_allow_explicit_resume():
     flow = (ROOT / "config_flow.py").read_text()
-    assert 'vol.Optional("paused_chargers"' in flow
+    # Manual pause is controlled by the individual EVSC Resume action,
+    # not by an editable group Options multi-select.
+    assert '"paused_chargers"' in flow
+    assert 'def resume_supervised' in runtime
