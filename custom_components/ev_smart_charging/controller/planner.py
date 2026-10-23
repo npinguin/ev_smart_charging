@@ -56,6 +56,8 @@ class Charger:
     actual_power_kw: float | None = None
     session_energy_kwh: float | None = None
     charging_speed_pct_h: float | None = None
+    current_battery_kwh: float | None = None
+    target_battery_kwh: float | None = None
 
     def __post_init__(self):
         if not self.id.strip() or self.mode not in ("local", "coordinated"):
@@ -77,6 +79,13 @@ class Charger:
             not isfinite(self.charging_speed_pct_h) or self.charging_speed_pct_h <= 0
         ):
             raise ValueError("Invalid charging speed")
+        for battery_value in (
+            self.current_battery_kwh, self.target_battery_kwh
+        ):
+            if battery_value is not None and (
+                not isfinite(battery_value) or battery_value < 0
+            ):
+                raise ValueError("Invalid directly observed battery energy")
         if not 0 < self.efficiency <= 1:
             raise ValueError("Invalid efficiency")
         if self.actual_power_kw is not None and (
@@ -90,7 +99,20 @@ class Charger:
 
     @property
     def required_quarters(self) -> int | None:
-        """Time-based scheduling works without battery capacity or power."""
+        """Use direct stored kWh when present; preserve legacy %/hour otherwise."""
+        energy = self.required_battery_kwh
+        direct = (
+            self.current_battery_kwh is not None
+            and self.target_battery_kwh is not None
+        )
+        if direct:
+            if energy == 0:
+                return 0
+            if self.charge_power_kw is not None:
+                return ceil(
+                    energy / (self.charge_power_kw * 0.25 * self.efficiency)
+                    - 1e-9
+                )
         if self.current_soc is None or self.target_soc is None:
             return None
         delta = max(0.0, self.target_soc - self.current_soc)
@@ -98,13 +120,20 @@ class Charger:
             return 0
         if self.charging_speed_pct_h is not None:
             return ceil((delta / self.charging_speed_pct_h) * 4 - 1e-9)
-        energy = self.required_battery_kwh
         if energy is not None and self.charge_power_kw is not None:
-            return ceil(energy / (self.charge_power_kw * 0.25 * self.efficiency) - 1e-9)
+            return ceil(
+                energy / (self.charge_power_kw * 0.25 * self.efficiency)
+                - 1e-9
+            )
         return None
 
     @property
     def required_battery_kwh(self) -> float | None:
+        if (
+            self.current_battery_kwh is not None
+            and self.target_battery_kwh is not None
+        ):
+            return max(0.0, self.target_battery_kwh - self.current_battery_kwh)
         if (
             self.current_soc is None
             or self.target_soc is None
@@ -112,7 +141,8 @@ class Charger:
         ):
             return None
         return max(
-            0.0, (self.target_soc - self.current_soc) * self.usable_capacity_kwh / 100
+            0.0, (self.target_soc - self.current_soc)
+            * self.usable_capacity_kwh / 100
         )
 
 
