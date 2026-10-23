@@ -170,9 +170,7 @@ async def test_same_native_stop_readback_never_spams_switch_service():
     from custom_components.ev_smart_charging import coordinator as coordinator_module
 
     fake_hass = SimpleNamespace(
-        states=SimpleNamespace(
-            get=lambda _entity_id: SimpleNamespace(state="on")
-        )
+        states=SimpleNamespace(get=lambda _entity_id: SimpleNamespace(state="on"))
     )
     native = object.__new__(EVSmartChargingCoordinator)
     native.hass = fake_hass
