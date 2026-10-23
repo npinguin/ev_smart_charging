@@ -69,6 +69,11 @@ def individual_facts(coordinator):
                 indicative = round(
                     sum(row.grid_kwh * row.price_eur_per_kwh for row in rows), 4
                 )
+    ledger = (
+        controller._actual_cost_ledgers.get(entry.entry_id)
+        if controller is not None
+        else None
+    )
     return {
         "current_charging_power": _meter(coordinator.hass, power_entity, "power"),
         "battery_capacity": capacity if capacity is not None and capacity > 0 else None,
@@ -76,12 +81,20 @@ def individual_facts(coordinator):
         "battery_energy_target": goal,
         "charging_required": required,
         "indicative_charging_cost": indicative,
-        # An instantaneous cumulative kWh reading is NOT time-aligned energy
-        # and cannot justify a historical actual EUR value.
-        "actual_charging_cost": None,
+        # Actual historical EUR is only exposed after complete time-aligned
+        # energy-delta and independently validated effective-price coverage.
+        "actual_charging_cost": (
+            ledger.actual_cost_today if ledger is not None else None
+        ),
         "power_source_entity": power_entity or None,
         "energy_source_entity": options.get("evsc_actual_energy_entity") or None,
         "price_source_entity": getattr(coordinator, "price_entity_id", None),
         "expected_charging_power_kw": expected_kw,
         "cost_quality": "validated_plan" if indicative is not None else "unavailable",
+        "actual_cost_quality": (
+            ledger.summary()["reason"] if ledger is not None else "unavailable"
+        ),
+        "known_actual_cost_subtotal_eur": (
+            ledger.summary()["known_subtotal_eur"] if ledger is not None else None
+        ),
     }
