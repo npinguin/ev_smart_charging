@@ -3,12 +3,12 @@
 These tests exercise the *actual* ChargeSupervisor's source resolution and
 live whole-charger peak headroom, not an unused parallel planning model.
 """
+
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from custom_components.ev_smart_charging.controller.runtime import ChargeSupervisor
 from custom_components.ev_smart_charging.controller.planner import PriceSlot
-
 
 T = datetime(2026, 10, 23, 10, tzinfo=timezone.utc)
 
@@ -22,9 +22,7 @@ class States:
 
 
 def state(value, unit):
-    return SimpleNamespace(
-        state=str(value), attributes={"unit_of_measurement": unit}
-    )
+    return SimpleNamespace(state=str(value), attributes={"unit_of_measurement": unit})
 
 
 def supervisor(*, peak=False):
@@ -58,11 +56,13 @@ def supervisor(*, peak=False):
         ),
     )
     hass = SimpleNamespace(
-        states=States({
-            "sensor.ev": state(3000, "W"),
-            "sensor.site": state(5000, "W"),
-            "sensor.price_a": state(0.2, "EUR/kWh"),
-        }),
+        states=States(
+            {
+                "sensor.ev": state(3000, "W"),
+                "sensor.site": state(5000, "W"),
+                "sensor.price_a": state(0.2, "EUR/kWh"),
+            }
+        ),
         data={"ev_smart_charging": {"a": charger}},
     )
     return ChargeSupervisor(hass, controller_entry), charger
@@ -106,9 +106,7 @@ def test_individual_eur_price_curve_retained_when_explicitly_validated():
     controller, charger = supervisor()
     sources = controller._prices([charger])
     assert list(sources) == ["a"]
-    assert sources["a"] == [
-        PriceSlot(T, T + timedelta(minutes=15), 0.2)
-    ]
+    assert sources["a"] == [PriceSlot(T, T + timedelta(minutes=15), 0.2)]
 
 
 def test_invalid_price_unit_is_not_silently_treated_as_eur():

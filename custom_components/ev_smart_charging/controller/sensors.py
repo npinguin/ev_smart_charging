@@ -1,4 +1,5 @@
 """Persistent controller device with passive, bounded HA sensor projections."""
+
 from datetime import datetime, timezone
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -24,8 +25,12 @@ class ControllerSensor(SensorEntity):
             self._attr_device_class = SensorDeviceClass.POWER
             self._attr_native_unit_of_measurement = "kW"
         elif key in (
-            "session_energy_kwh", "required_energy", "planned_energy",
-            "unplanned_energy", "planned_today", "planned_tomorrow",
+            "session_energy_kwh",
+            "required_energy",
+            "planned_energy",
+            "unplanned_energy",
+            "planned_today",
+            "planned_tomorrow",
         ):
             self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_native_unit_of_measurement = "kWh"
@@ -62,8 +67,10 @@ class ControllerSensor(SensorEntity):
                 start = scheduler.get_charging_start_time()
                 end = scheduler.get_charging_stop_time()
                 if (
-                    isinstance(start, datetime) and isinstance(end, datetime)
-                    and start.tzinfo is not None and end.tzinfo is not None
+                    isinstance(start, datetime)
+                    and isinstance(end, datetime)
+                    and start.tzinfo is not None
+                    and end.tzinfo is not None
                     and end > now
                 ):
                     intervals.append((start, end))
@@ -100,13 +107,23 @@ class ControllerSensor(SensorEntity):
                 "mode": "coordinated" if self.manager.participants else "local",
                 "coordination_enabled": bool(self.manager.participants),
                 "participants": len(self.manager.participants),
-                "manually_paused": len(self.manager.config_entry.options.get("paused_chargers", [])),
+                "manually_paused": len(
+                    self.manager.config_entry.options.get("paused_chargers", [])
+                ),
                 "actual_power_kw": self.manager.meters()["actual_power_kw"],
                 "actual_power_coverage": self.manager.meters()["actual_power_coverage"],
                 "session_energy_kwh": self.manager.meters()["session_energy_kwh"],
-                "session_energy_coverage": self.manager.meters()["session_energy_coverage"],
-                "price_coverage": self.manager.plan.coverage if self.manager.plan else None,
-                "planned_grid_kwh": self.manager.plan.total_planned_grid_kwh if self.manager.plan else None,
+                "session_energy_coverage": self.manager.meters()[
+                    "session_energy_coverage"
+                ],
+                "price_coverage": (
+                    self.manager.plan.coverage if self.manager.plan else None
+                ),
+                "planned_grid_kwh": (
+                    self.manager.plan.total_planned_grid_kwh
+                    if self.manager.plan
+                    else None
+                ),
                 "cost_eur": None,
                 "cost_reason": "Not calculated until the price source unit and metering coverage are verified.",
             }
@@ -114,37 +131,103 @@ class ControllerSensor(SensorEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        self.async_on_remove(
-            self.manager.subscribe(self.async_write_ha_state)
-        )
+        self.async_on_remove(self.manager.subscribe(self.async_write_ha_state))
 
 
 def controller_sensors(manager):
     return [
         ControllerSensor(manager, "status", "Status", "mdi:view-dashboard-outline"),
-        ControllerSensor(manager, "planning_start", "Planning start", "mdi:calendar-start"),
+        ControllerSensor(
+            manager, "planning_start", "Planning start", "mdi:calendar-start"
+        ),
         ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
-        ControllerSensor(manager, "planning_status", "Planning status", "mdi:calendar-check"),
-        ControllerSensor(manager, "price_horizon_end", "Price horizon end", "mdi:clock-outline"),
-        ControllerSensor(manager, "required_energy", "Required charging energy", "mdi:battery-outline"),
-        ControllerSensor(manager, "planned_energy", "Planned charging energy", "mdi:battery-charging"),
-        ControllerSensor(manager, "unplanned_energy", "Unplanned charging energy", "mdi:battery-alert"),
-        ControllerSensor(manager, "planned_today", "Planned today", "mdi:calendar-today"),
-        ControllerSensor(manager, "planned_tomorrow", "Planned tomorrow", "mdi:calendar-arrow-right"),
-        ControllerSensor(manager, "indicative_cost", "Indicative charging cost", "mdi:currency-eur"),
-        ControllerSensor(manager, "indicative_cost_today", "Indicative cost today", "mdi:currency-eur"),
-        ControllerSensor(manager, "indicative_cost_tomorrow", "Indicative cost tomorrow", "mdi:currency-eur"),
-        ControllerSensor(manager, "peak_control_status", "Peak control status", "mdi:chart-bell-curve"),
-        ControllerSensor(manager, "available_ev_power", "Available EV power", "mdi:flash-outline"),
+        ControllerSensor(
+            manager, "planning_status", "Planning status", "mdi:calendar-check"
+        ),
+        ControllerSensor(
+            manager, "price_horizon_end", "Price horizon end", "mdi:clock-outline"
+        ),
+        ControllerSensor(
+            manager,
+            "required_energy",
+            "Required charging energy",
+            "mdi:battery-outline",
+        ),
+        ControllerSensor(
+            manager, "planned_energy", "Planned charging energy", "mdi:battery-charging"
+        ),
+        ControllerSensor(
+            manager,
+            "unplanned_energy",
+            "Unplanned charging energy",
+            "mdi:battery-alert",
+        ),
+        ControllerSensor(
+            manager, "planned_today", "Planned today", "mdi:calendar-today"
+        ),
+        ControllerSensor(
+            manager, "planned_tomorrow", "Planned tomorrow", "mdi:calendar-arrow-right"
+        ),
+        ControllerSensor(
+            manager, "indicative_cost", "Indicative charging cost", "mdi:currency-eur"
+        ),
+        ControllerSensor(
+            manager,
+            "indicative_cost_today",
+            "Indicative cost today",
+            "mdi:currency-eur",
+        ),
+        ControllerSensor(
+            manager,
+            "indicative_cost_tomorrow",
+            "Indicative cost tomorrow",
+            "mdi:currency-eur",
+        ),
+        ControllerSensor(
+            manager,
+            "peak_control_status",
+            "Peak control status",
+            "mdi:chart-bell-curve",
+        ),
+        ControllerSensor(
+            manager, "available_ev_power", "Available EV power", "mdi:flash-outline"
+        ),
         ControllerSensor(manager, "chargers", "Chargers", "mdi:ev-station"),
         ControllerSensor(manager, "connected", "Connected chargers", "mdi:connection"),
-        ControllerSensor(manager, "connection_unknown", "Unknown connections", "mdi:help-circle-outline"),
-        ControllerSensor(manager, "planned_chargers", "Chargers with a plan", "mdi:calendar-clock"),
-        ControllerSensor(manager, "scheduled_hours", "Planned charging hours", "mdi:clock-outline"),
-        ControllerSensor(manager, "physically_charging", "Physically charging", "mdi:ev-plug-type2"),
-        ControllerSensor(manager, "physical_state_unknown", "Unverified physical states", "mdi:alert-circle-outline"),
-        ControllerSensor(manager, "actual_power_kw", "Actual charging power", "mdi:flash"),
-        ControllerSensor(manager, "session_energy_kwh", "Measured session energy", "mdi:battery-charging"),
-        ControllerSensor(manager, "power_coverage", "Power meter coverage", "mdi:gauge"),
-        ControllerSensor(manager, "energy_coverage", "Session meter coverage", "mdi:counter"),
+        ControllerSensor(
+            manager,
+            "connection_unknown",
+            "Unknown connections",
+            "mdi:help-circle-outline",
+        ),
+        ControllerSensor(
+            manager, "planned_chargers", "Chargers with a plan", "mdi:calendar-clock"
+        ),
+        ControllerSensor(
+            manager, "scheduled_hours", "Planned charging hours", "mdi:clock-outline"
+        ),
+        ControllerSensor(
+            manager, "physically_charging", "Physically charging", "mdi:ev-plug-type2"
+        ),
+        ControllerSensor(
+            manager,
+            "physical_state_unknown",
+            "Unverified physical states",
+            "mdi:alert-circle-outline",
+        ),
+        ControllerSensor(
+            manager, "actual_power_kw", "Actual charging power", "mdi:flash"
+        ),
+        ControllerSensor(
+            manager,
+            "session_energy_kwh",
+            "Measured session energy",
+            "mdi:battery-charging",
+        ),
+        ControllerSensor(
+            manager, "power_coverage", "Power meter coverage", "mdi:gauge"
+        ),
+        ControllerSensor(
+            manager, "energy_coverage", "Session meter coverage", "mdi:counter"
+        ),
     ]

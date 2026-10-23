@@ -1,4 +1,5 @@
 """No HA dependency: controller aggregation contracts."""
+
 from types import SimpleNamespace
 
 from custom_components.ev_smart_charging.controller.monitor import collect
@@ -17,8 +18,9 @@ class FakeScheduler:
 
 
 def fake(connected=None, planned=False, quarters=0):
-    return SimpleNamespace(switch_ev_connected=connected,
-                           scheduler=FakeScheduler(planned, quarters))
+    return SimpleNamespace(
+        switch_ev_connected=connected, scheduler=FakeScheduler(planned, quarters)
+    )
 
 
 def test_empty():
@@ -44,8 +46,9 @@ def test_missing_scheduler_not_fabricated():
 
 
 def test_physical_readback_is_not_evsc_intent():
-    x = collect([mock_coordinator(True, True, 8), mock_coordinator(True, True, 8)],
-                [True, None])
+    x = collect(
+        [mock_coordinator(True, True, 8), mock_coordinator(True, True, 8)], [True, None]
+    )
     assert x.planned_chargers == 2
     assert x.physically_charging == 1
     assert x.physical_state_unknown == 1
@@ -55,6 +58,7 @@ def test_no_physical_readback_remains_unknown():
     x = collect([mock_coordinator(True)])
     assert x.physically_charging == 0
     assert x.physical_state_unknown == 1
+
 
 def mock_coordinator(connected=None, planned=False, quarters=0):
     return fake(connected, planned, quarters)

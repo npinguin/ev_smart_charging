@@ -3,6 +3,7 @@
 No physical controls, inferred kWh, or synthetic measurements live here.
 Unknown inputs remain unknown; chargers remain independently managed.
 """
+
 from dataclasses import dataclass
 
 
@@ -34,7 +35,9 @@ def collect(coordinators, physical_readbacks=None) -> ControllerSnapshot:
     if any(v not in (True, False, None) for v in physical_readbacks):
         raise ValueError("Physical readback must be true/false/unknown")
     connected = sum(getattr(c, "switch_ev_connected", None) is True for c in chargers)
-    disconnected = sum(getattr(c, "switch_ev_connected", None) is False for c in chargers)
+    disconnected = sum(
+        getattr(c, "switch_ev_connected", None) is False for c in chargers
+    )
     planned = 0
     quarters = 0
     for coordinator in chargers:

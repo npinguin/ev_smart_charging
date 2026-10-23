@@ -183,21 +183,46 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ): cv.boolean,
             # All optional measurements belong to this EVSC entry, not to
             # the Charge Controller or the native EVSE device.
-            vol.Optional("evsc_capacity_kwh", default=get_parameter(
-                self.config_entry, "evsc_capacity_kwh", 0,
-            )): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
-            vol.Optional("evsc_expected_power_kw", default=get_parameter(
-                self.config_entry, "evsc_expected_power_kw", 0,
-            )): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
-            vol.Optional("evsc_actual_power_entity", default=get_parameter(
-                self.config_entry, "evsc_actual_power_entity", "",
-            )): cv.string,
-            vol.Optional("evsc_actual_energy_entity", default=get_parameter(
-                self.config_entry, "evsc_actual_energy_entity", "",
-            )): cv.string,
-            vol.Optional("evsc_price_validated", default=get_parameter(
-                self.config_entry, "evsc_price_validated", False,
-            )): cv.boolean,
+            vol.Optional(
+                "evsc_capacity_kwh",
+                default=get_parameter(
+                    self.config_entry,
+                    "evsc_capacity_kwh",
+                    0,
+                ),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
+            vol.Optional(
+                "evsc_expected_power_kw",
+                default=get_parameter(
+                    self.config_entry,
+                    "evsc_expected_power_kw",
+                    0,
+                ),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+            vol.Optional(
+                "evsc_actual_power_entity",
+                default=get_parameter(
+                    self.config_entry,
+                    "evsc_actual_power_entity",
+                    "",
+                ),
+            ): cv.string,
+            vol.Optional(
+                "evsc_actual_energy_entity",
+                default=get_parameter(
+                    self.config_entry,
+                    "evsc_actual_energy_entity",
+                    "",
+                ),
+            ): cv.string,
+            vol.Optional(
+                "evsc_price_validated",
+                default=get_parameter(
+                    self.config_entry,
+                    "evsc_price_validated",
+                    False,
+                ),
+            ): cv.boolean,
         }
 
         return self.async_show_form(
@@ -228,24 +253,35 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 e for e in user_input.get("participants", ()) if e in known
             ]
             data["paused_chargers"] = [
-                e for e in previous.get("paused_chargers", ())
+                e
+                for e in previous.get("paused_chargers", ())
                 if e in data["participants"]
             ]
             return self.async_create_entry(title="", data=data)
-        schema = vol.Schema({
-            vol.Optional("participants", default=previous.get("participants", [])):
-                cv.multi_select(known),
-            vol.Optional("max_parallel", default=previous.get("max_parallel", 1)):
-                vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
-            vol.Optional("power_budget_kw", default=previous.get("power_budget_kw", 0)):
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
-            vol.Optional("peak_shaving_enabled", default=previous.get("peak_shaving_enabled", False)):
-                cv.boolean,
-            vol.Optional("site_power_sensor", default=previous.get("site_power_sensor", "")):
-                cv.string,
-            vol.Optional("peak_target_kw", default=previous.get("peak_target_kw", 0)):
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
-            vol.Optional("peak_reserve_kw", default=previous.get("peak_reserve_kw", 0)):
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
-        })
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    "participants", default=previous.get("participants", [])
+                ): cv.multi_select(known),
+                vol.Optional(
+                    "max_parallel", default=previous.get("max_parallel", 1)
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
+                vol.Optional(
+                    "power_budget_kw", default=previous.get("power_budget_kw", 0)
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+                vol.Optional(
+                    "peak_shaving_enabled",
+                    default=previous.get("peak_shaving_enabled", False),
+                ): cv.boolean,
+                vol.Optional(
+                    "site_power_sensor", default=previous.get("site_power_sensor", "")
+                ): cv.string,
+                vol.Optional(
+                    "peak_target_kw", default=previous.get("peak_target_kw", 0)
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+                vol.Optional(
+                    "peak_reserve_kw", default=previous.get("peak_reserve_kw", 0)
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
+            }
+        )
         return self.async_show_form(step_id="init", data_schema=schema)

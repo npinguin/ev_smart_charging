@@ -491,7 +491,11 @@ class EVSmartChargingCoordinator:
     async def _update_coordinated_state(self):
         """Execute only current group permits; stop if permission is absent."""
         admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
-        state = self.hass.states.get(self.charger_switch.entity_id) if self.charger_switch.entity_id else None
+        state = (
+            self.hass.states.get(self.charger_switch.entity_id)
+            if self.charger_switch.entity_id
+            else None
+        )
         actual_on = state is not None and state.state == STATE_ON
         internal_on = self.auto_charging_state == STATE_ON
         if admit and not internal_on:
@@ -506,8 +510,11 @@ class EVSmartChargingCoordinator:
 
         if state is True:
             if not physical_grant(self.hass, self.config_entry.entry_id, reason):
-                _LOGGER.info("Charge Controller denied %s start on %s",
-                             reason, self.config_entry.entry_id)
+                _LOGGER.info(
+                    "Charge Controller denied %s start on %s",
+                    reason,
+                    self.config_entry.entry_id,
+                )
                 return False
             _LOGGER.debug("Turn on charging")
             self.sensor.set_state(STATE_ON)
@@ -1070,7 +1077,10 @@ class EVSmartChargingCoordinator:
 
         # To handle non-live SOC
         # # To enable rescheduling after ready_quarter if no live SOC is available
-        if self.absolute_ready_by is None and time_now_quarter_local == self.ready_quarter_local:
+        if (
+            self.absolute_ready_by is None
+            and time_now_quarter_local == self.ready_quarter_local
+        ):
             if self.ready_quarter_first:
                 self.ev_soc_before_last_charging = -1
                 self.ready_quarter_first = False

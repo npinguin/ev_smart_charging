@@ -1,4 +1,5 @@
 """Button platform for EV Smart Charging."""
+
 import logging
 
 from homeassistant.components.button import ButtonEntity
@@ -43,6 +44,7 @@ class EVSmartChargingButton(EVSmartChargingEntity, ButtonEntity):
         _LOGGER.debug("self._attr_unique_id = %s", self._attr_unique_id)
         self.set_entity_id(BUTTON, self._entity_key)
 
+
 class EVSmartChargingButtonStart(EVSmartChargingButton):
     """EV Smart Charging start button class."""
 
@@ -63,7 +65,9 @@ class EVSmartChargingButtonStop(EVSmartChargingButton):
     async def async_press(self) -> None:
         """Manual Stop latches a pause in Coordinated; Local remains unchanged."""
         if is_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id):
-            pause_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id)
+            pause_supervised(
+                self.coordinator.hass, self.coordinator.config_entry.entry_id
+            )
         await self.coordinator.turn_off_charging()
 
 
@@ -90,6 +94,4 @@ class EVSmartChargingButtonResumeCoordinated(EVSmartChargingButton):
     _attr_icon = "mdi:play-circle-outline"
 
     async def async_press(self):
-        resume_supervised(
-            self.coordinator.hass, self.coordinator.config_entry.entry_id
-        )
+        resume_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id)
