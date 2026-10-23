@@ -161,3 +161,34 @@ async def test_native_coordinator_cannot_write_when_persisted_supervised():
     native._update_coordinated_state.assert_not_awaited()
     await EVSmartChargingCoordinator._update_coordinated_state(native)
     native._update_coordinated_state.assert_not_awaited()
+
+
+async def test_same_native_stop_readback_never_spams_switch_service():
+    """Future execution, if separately authorized, still rate-limits STOP."""
+    import asyncio
+
+    from custom_components.ev_smart_charging import coordinator as coordinator_module
+
+    fake_hass = SimpleNamespace(
+        states=SimpleNamespace(
+            get=lambda _entity_id: SimpleNamespace(state="on")
+        )
+    )
+    native = object.__new__(EVSmartChargingCoordinator)
+    native.hass = fake_hass
+    native.config_entry = SimpleNamespace(entry_id="peblar")
+    native.charger_switch = SimpleNamespace(entity_id="switch.peblar")
+    native.auto_charging_state = "on"
+    native._coordinated_command_lock = asyncio.Lock()
+    native._last_coordinated_command = None
+    native._last_coordinated_command_at = 0.0
+    native.turn_off_charging = AsyncMock()
+
+    with (
+        patch.object(safety, "COORDINATED_ACTUATION_ENABLED", True),
+        patch.object(coordinator_module, "physical_grant", return_value=False),
+    ):
+        for _ in range(100):
+            await native._update_coordinated_state()
+
+    native.turn_off_charging.assert_awaited_once()
