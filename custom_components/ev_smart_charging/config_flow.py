@@ -183,6 +183,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ): cv.boolean,
         }
 
+        # Optional evidence stays with the individual EVSC entry. Nothing
+        # here changes the original mandatory price/SoC source fields.
+        for key, validator in {
+            "usable_capacity_kwh": vol.All(
+                vol.Coerce(float), vol.Range(min=0.01, max=1000)
+            ),
+            "expected_power_kw": vol.All(
+                vol.Coerce(float), vol.Range(min=0.1, max=100)
+            ),
+            "actual_power_entity": cv.string,
+            "actual_energy_entity": cv.string,
+        }.items():
+            if key in self.config_entry.options:
+                user_schema[vol.Optional(
+                    key, default=self.config_entry.options[key]
+                )] = validator
+            else:
+                user_schema[vol.Optional(key)] = validator
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(user_schema),
@@ -204,14 +223,11 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         ]
         self._titles = {e.entry_id: e.title for e in all_chargers}
         if user_input is not None:
-            self._draft = dict(self.config_entry.options)
-            self._draft.update(user_input)
-            self._draft.setdefault("chargers", {})
-            self._ids = list(user_input.get("participants", []))
-            self._index = 0
-            if not self._ids:
-                return self.async_create_entry(title="", data=self._draft)
-            return await self.async_step_charger()
+            # Preserve legacy controller-owned charger facts in storage for
+            # upgrade compatibility, but do not edit or require them here.
+            return self.async_create_entry(
+                title="", data={**self.config_entry.options, **user_input}
+            )
         old = self.config_entry.options
         schema = vol.Schema({
             vol.Optional("participants", default=old.get("participants", [])):
@@ -224,28 +240,3 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 cv.multi_select(self._titles),
         })
         return self.async_show_form(step_id="controller", data_schema=schema)
-
-    async def async_step_charger(self, user_input=None):
-        """One focused editor per selected charger, stable IDs in stored data."""
-        id = self._ids[self._index]
-        existing = self._draft.get("chargers", {}).get(id, {})
-        if user_input is not None:
-            self._draft["chargers"][id] = user_input
-            self._index += 1
-            if self._index >= len(self._ids):
-                return self.async_create_entry(title="", data=self._draft)
-            return await self.async_step_charger()
-        schema = vol.Schema({
-            vol.Required("capacity_kwh", default=existing.get("capacity_kwh", 0)):
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
-            vol.Required("power_kw", default=existing.get("power_kw", 0)):
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
-            vol.Optional("power_sensor", default=existing.get("power_sensor", "")):
-                cv.string,
-            vol.Optional("energy_sensor", default=existing.get("energy_sensor", "")):
-                cv.string,
-        })
-        return self.async_show_form(
-            step_id="charger", data_schema=schema,
-            description_placeholders={"charger": self._titles.get(id, id)},
-        )

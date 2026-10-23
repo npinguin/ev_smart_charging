@@ -74,6 +74,54 @@ def pause_supervised(hass, charger_id):
     )
 
 
+
+def set_control_mode(hass, charger_id, mode):
+    """Only operator-selected mode transfers ownership of future planning."""
+    if mode not in ("local", "coordinated"):
+        raise ValueError("Unknown charging control mode")
+    entry = controller_entry(hass)
+    if entry is None:
+        raise ValueError("Charge Controller is not configured")
+    valid = {
+        e.entry_id for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data.get(MARKER) != CONTROLLER_TYPE
+    }
+    if charger_id not in valid:
+        raise ValueError("Unknown EVSC config entry")
+    participants = set(entry.options.get("participants", []))
+    paused = set(entry.options.get("paused_chargers", []))
+    if mode == "coordinated":
+        participants.add(charger_id)
+    else:
+        participants.discard(charger_id)
+        paused.discard(charger_id)
+    if (participants == set(entry.options.get("participants", []))
+            and paused == set(entry.options.get("paused_chargers", []))):
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={
+            **entry.options,
+            "participants": sorted(participants),
+            "paused_chargers": sorted(paused),
+        }
+    )
+
+
+def resume_supervised(hass, charger_id):
+    """Clear Manual Stop; never issue an EVSE ON command from this action."""
+    entry = controller_entry(hass)
+    if entry is None or charger_id not in entry.options.get("participants", []):
+        return False
+    paused = set(entry.options.get("paused_chargers", []))
+    if charger_id not in paused:
+        return False
+    paused.remove(charger_id)
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "paused_chargers": sorted(paused)}
+    )
+    return True
+
+
 def physical_grant(hass, charger_id, reason):
     # A paused supervised charger must be able to return explicitly to Local.
     if not is_supervised(hass, charger_id):
@@ -96,6 +144,7 @@ class ChargeSupervisor:
         self.reason = "LOCAL_MONITORING"
         self.price_issues = {}
         self._unsub = None
+        self._subscribers = set()
 
     @property
     def participants(self):
@@ -122,6 +171,54 @@ class ChargeSupervisor:
         """
         old = self.config_entry.options.get("chargers", {}).get(key, {})
         return {**old, **obj.config_entry.options}
+
+    def subscribe(self, callback):
+        """One supervisor refresh publishes the state of all controller entities."""
+        self._subscribers.add(callback)
+        return lambda: self._subscribers.discard(callback)
+
+    def effective_schedule_bounds(self):
+        """Merge authoritative Coordinated grants with untouched Local schedules."""
+        now = dt.utcnow()
+        windows = []
+        if self.plan is not None:
+            for slot in self.plan.assignments:
+                if slot.charger_id in self.participants and slot.end > now:
+                    windows.append((slot.start, slot.end))
+        for key, obj in self.chargers().items():
+            if key in self.participants:
+                continue
+            scheduler = getattr(obj, "scheduler", None)
+            for slot in (getattr(scheduler, "schedule", None) or []):
+                if not isinstance(slot, dict) or not slot.get("value"):
+                    continue
+                start, end = slot.get("start"), slot.get("end")
+                if (start is not None and end is not None
+                        and start.tzinfo is not None
+                        and end.tzinfo is not None
+                        and end > now):
+                    windows.append((start, end))
+        if not windows:
+            return None, None
+        return min(s for s, _ in windows), max(e for _, e in windows)
+
+    def planning_status(self):
+        if not self.participants:
+            start, _ = self.effective_schedule_bounds()
+            return "valid" if start is not None else "idle"
+        if self.plan is None:
+            return "blocked"
+        statuses = {r.status for r in self.plan.results
+                    if r.charger_id in self.participants}
+        if "INFEASIBLE" in statuses or "EXPIRED" in statuses:
+            return "infeasible"
+        if "PENDING_PRICES" in statuses:
+            return "pending_prices"
+        if "BLOCKED" in statuses or "UNKNOWN" in statuses:
+            return "blocked"
+        if self.price_issues or "PROVISIONAL" in statuses:
+            return "provisional"
+        return "valid" if self.plan.assignments else "idle"
 
     def _charger(self, key, obj):
         attrs = self._source_config(key, obj)
@@ -281,6 +378,8 @@ class ChargeSupervisor:
                     await obj.update_state()
                 except Exception:
                     _LOGGER.exception("Could not synchronize supervised charger %s", key)
+        for callback in tuple(self._subscribers):
+            callback()
 
     async def async_start(self):
         self._unsub = async_track_time_interval(

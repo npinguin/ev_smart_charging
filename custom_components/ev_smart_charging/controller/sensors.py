@@ -1,34 +1,9 @@
 """Persistent controller device with passive, bounded HA sensor projections."""
-from datetime import timedelta
-
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.components.sensor import (
+    SensorDeviceClass, SensorEntity, SensorStateClass,
+)
 
 from ..const import DOMAIN, NAME
-from ..coordinator import EVSmartChargingCoordinator
-from .monitor import collect
-
-
-class ControllerMonitor:
-    """Collect only existing EVSC charger coordinators, no extra subscriptions."""
-
-    def __init__(self, hass):
-        self.hass = hass
-
-    def snapshot(self):
-        coordinators = [
-            c for c in self.hass.data.get(DOMAIN, {}).values()
-            if isinstance(c, EVSmartChargingCoordinator)
-        ]
-        readbacks = []
-        for coordinator in coordinators:
-            source = getattr(coordinator, "charging_state_entity_id", None)
-            state = self.hass.states.get(source) if source else None
-            if state is not None and state.state in ("on", "off"):
-                readbacks.append(state.state == "on")
-            else:
-                readbacks.append(None)
-        return collect(coordinators, readbacks)
 
 
 class ControllerSensor(SensorEntity):
@@ -37,12 +12,21 @@ class ControllerSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, manager: ControllerMonitor, key: str, name: str, icon: str):
+    def __init__(self, manager, key: str, name: str, icon: str):
         self.manager = manager
         self.key = key
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{DOMAIN}_charge_controller_{key}"
+        if key in ("planning_start", "planning_end", "price_horizon_end"):
+            self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        elif key == "actual_power_kw":
+            self._attr_device_class = SensorDeviceClass.POWER
+            self._attr_native_unit_of_measurement = "kW"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif key == "session_energy_kwh":
+            self._attr_device_class = SensorDeviceClass.ENERGY
+            self._attr_native_unit_of_measurement = "kWh"
 
     @property
     def device_info(self):
@@ -69,6 +53,12 @@ class ControllerSensor(SensorEntity):
             "session_energy_kwh": self.manager.meters()["session_energy_kwh"],
             "power_coverage": self.manager.meters()["actual_power_coverage"],
             "energy_coverage": self.manager.meters()["session_energy_coverage"],
+            "planning_start": self.manager.effective_schedule_bounds()[0],
+            "planning_end": self.manager.effective_schedule_bounds()[1],
+            "planning_status": self.manager.planning_status(),
+            "price_horizon_end": (
+                self.manager.plan.priced_until if self.manager.plan else None
+            ),
         }[self.key]
 
     @property
@@ -92,12 +82,9 @@ class ControllerSensor(SensorEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        self.async_on_remove(async_track_time_interval(
-            self.hass, self._refresh, timedelta(minutes=1)
-        ))
-
-    def _refresh(self, now):
-        self.async_write_ha_state()
+        self.async_on_remove(
+            self.manager.subscribe(self.async_write_ha_state)
+        )
 
 
 def controller_sensors(manager):
@@ -114,4 +101,8 @@ def controller_sensors(manager):
         ControllerSensor(manager, "session_energy_kwh", "Measured session energy", "mdi:battery-charging"),
         ControllerSensor(manager, "power_coverage", "Power meter coverage", "mdi:gauge"),
         ControllerSensor(manager, "energy_coverage", "Session meter coverage", "mdi:counter"),
+        ControllerSensor(manager, "planning_start", "Planning start", "mdi:calendar-start"),
+        ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
+        ControllerSensor(manager, "planning_status", "Planning status", "mdi:calendar-check"),
+        ControllerSensor(manager, "price_horizon_end", "Price horizon end", "mdi:clock-end"),
     ]
