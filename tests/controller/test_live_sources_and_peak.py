@@ -211,3 +211,47 @@ def test_invalid_tariff_of_one_evsc_does_not_drop_another_evsc_price_stream():
     prices = controller._prices([first, second])
     assert prices["a"] == []
     assert prices["b"] == [PriceSlot(T, T + timedelta(minutes=15), 0.4)]
+
+
+def test_peak_pause_requires_stable_full_rate_headroom_before_auto_resume():
+    controller, charger = supervisor(peak=True)
+    opts = controller.config_entry.options
+    controller.peak_status = "constrained"
+    # 3 kW actual draw cannot justify a 7.2 kW requested restart.
+    assert controller._apply_peak_recovery(4.0, {"a": charger}, opts) == 0
+    assert controller._peak_latched
+    assert controller.peak_status == "paused"
+
+    controller.hass.states.values["sensor.ev"] = state(0, "W")
+    controller.peak_status = "active"
+    assert controller._apply_peak_recovery(8.0, {"a": charger}, opts) == 0
+    assert controller._peak_latched
+    # Simulate uninterrupted sufficient headroom for the recovery window.
+    controller._peak_recovery_since -= timedelta(seconds=91)
+    assert controller._apply_peak_recovery(8.0, {"a": charger}, opts) == 8
+    assert not controller._peak_latched
+    assert controller._peak_recovery_since is None
+    assert opts.get("paused_chargers") is None
+
+
+def test_peak_recovery_timer_resets_on_headroom_drop():
+    controller, charger = supervisor(peak=True)
+    opts = controller.config_entry.options
+    controller.peak_status = "constrained"
+    assert controller._apply_peak_recovery(4.0, {"a": charger}, opts) == 0
+    controller.hass.states.values["sensor.ev"] = state(0, "W")
+    controller.peak_status = "active"
+    assert controller._apply_peak_recovery(8.0, {"a": charger}, opts) == 0
+    assert controller._peak_recovery_since is not None
+    assert controller._apply_peak_recovery(7.3, {"a": charger}, opts) == 0
+    assert controller._peak_recovery_since is None
+
+
+def test_initial_peak_admission_does_not_require_an_unrelated_cooldown():
+    controller, charger = supervisor(peak=True)
+    controller.hass.states.values["sensor.ev"] = state(0, "W")
+    controller.peak_status = "active"
+    assert controller._apply_peak_recovery(
+        8.0, {"a": charger}, controller.config_entry.options
+    ) == 8
+    assert not controller._peak_latched
