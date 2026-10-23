@@ -163,3 +163,46 @@ def test_peak_disabled_does_not_require_new_meter_configuration():
     controller.hass.states.values.clear()
     assert controller._peak_headroom({"a": charger}) == (None, True)
     assert controller.peak_status == "disabled"
+
+
+def test_hourly_validated_tariff_is_split_into_utc_quarters_without_new_options():
+    controller, charger = supervisor()
+    charger.raw_two_days.get_raw = lambda: [
+        {"start": T, "end": T + timedelta(hours=1), "value": 0.2}
+    ]
+    slots = controller._prices([charger])["a"]
+    assert len(slots) == 4
+    assert [slot.start for slot in slots] == [
+        T + timedelta(minutes=15 * index) for index in range(4)
+    ]
+    assert all(slot.eur_per_kwh == 0.2 for slot in slots)
+
+
+def test_overlapping_same_charger_price_intervals_are_unavailable_not_duplicated():
+    controller, charger = supervisor()
+    charger.raw_two_days.get_raw = lambda: [
+        {"start": T, "end": T + timedelta(minutes=30), "value": 0.2},
+        {"start": T + timedelta(minutes=15),
+         "end": T + timedelta(minutes=45), "value": 0.3},
+    ]
+    assert controller._prices([charger]) == {"a": []}
+
+
+def test_invalid_tariff_of_one_evsc_does_not_drop_another_evsc_price_stream():
+    controller, first = supervisor()
+    first.raw_two_days.get_raw = lambda: [
+        {"start": T, "end": T + timedelta(minutes=22), "value": 0.2}
+    ]
+    second = SimpleNamespace(
+        config_entry=SimpleNamespace(
+            entry_id="b", options={"evsc_price_validated": True}
+        ),
+        price_entity_id="sensor.price_b",
+        raw_two_days=SimpleNamespace(
+            get_raw=lambda: [{"start": T, "end": T + timedelta(minutes=15), "value": 0.4}]
+        ),
+    )
+    controller.hass.states.values["sensor.price_b"] = state(0.4, "EUR/kWh")
+    prices = controller._prices([first, second])
+    assert prices["a"] == []
+    assert prices["b"] == [PriceSlot(T, T + timedelta(minutes=15), 0.4)]
