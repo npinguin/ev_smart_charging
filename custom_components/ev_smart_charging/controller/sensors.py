@@ -18,8 +18,20 @@ class ControllerSensor(SensorEntity):
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{DOMAIN}_charge_controller_{key}"
-        if key in ("planning_start", "planning_end"):
+        if key in ("planning_start", "planning_end", "price_horizon_end"):
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        elif key in ("actual_power_kw", "available_ev_power"):
+            self._attr_device_class = SensorDeviceClass.POWER
+            self._attr_native_unit_of_measurement = "kW"
+        elif key in (
+            "session_energy_kwh", "required_energy", "planned_energy",
+            "unplanned_energy", "planned_today", "planned_tomorrow",
+        ):
+            self._attr_device_class = SensorDeviceClass.ENERGY
+            self._attr_native_unit_of_measurement = "kWh"
+        elif key.startswith("indicative_cost"):
+            self._attr_device_class = SensorDeviceClass.MONETARY
+            self._attr_native_unit_of_measurement = "EUR"
 
     @property
     def device_info(self):
@@ -62,6 +74,9 @@ class ControllerSensor(SensorEntity):
                 if self.key == "planning_start"
                 else max(end for _, end in intervals)
             )
+        summary = self.manager.planning_summary()
+        if self.key in summary:
+            return summary[self.key]
         snapshot = self.manager.snapshot()
         return {
             "status": self.manager.reason,
@@ -109,6 +124,18 @@ def controller_sensors(manager):
         ControllerSensor(manager, "status", "Status", "mdi:view-dashboard-outline"),
         ControllerSensor(manager, "planning_start", "Planning start", "mdi:calendar-start"),
         ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
+        ControllerSensor(manager, "planning_status", "Planning status", "mdi:calendar-check"),
+        ControllerSensor(manager, "price_horizon_end", "Price horizon end", "mdi:clock-outline"),
+        ControllerSensor(manager, "required_energy", "Required charging energy", "mdi:battery-outline"),
+        ControllerSensor(manager, "planned_energy", "Planned charging energy", "mdi:battery-charging"),
+        ControllerSensor(manager, "unplanned_energy", "Unplanned charging energy", "mdi:battery-alert"),
+        ControllerSensor(manager, "planned_today", "Planned today", "mdi:calendar-today"),
+        ControllerSensor(manager, "planned_tomorrow", "Planned tomorrow", "mdi:calendar-arrow-right"),
+        ControllerSensor(manager, "indicative_cost", "Indicative charging cost", "mdi:currency-eur"),
+        ControllerSensor(manager, "indicative_cost_today", "Indicative cost today", "mdi:currency-eur"),
+        ControllerSensor(manager, "indicative_cost_tomorrow", "Indicative cost tomorrow", "mdi:currency-eur"),
+        ControllerSensor(manager, "peak_control_status", "Peak control status", "mdi:chart-bell-curve"),
+        ControllerSensor(manager, "available_ev_power", "Available EV power", "mdi:flash-outline"),
         ControllerSensor(manager, "chargers", "Chargers", "mdi:ev-station"),
         ControllerSensor(manager, "connected", "Connected chargers", "mdi:connection"),
         ControllerSensor(manager, "connection_unknown", "Unknown connections", "mdi:help-circle-outline"),
