@@ -299,9 +299,7 @@ class ChargeSupervisor:
                             slots.append(PriceSlot(start, following, value))
                             start = following
                     slots.sort(key=lambda slot: slot.start)
-                    if any(
-                        a.end > b.start for a, b in zip(slots, slots[1:])
-                    ):
+                    if any(a.end > b.start for a, b in zip(slots, slots[1:])):
                         raise ValueError("Conflicting overlapping tariff intervals")
                 except (KeyError, ValueError, TypeError, OverflowError):
                     _LOGGER.warning("Invalid EVSC price intervals for %s", key)
@@ -328,7 +326,9 @@ class ChargeSupervisor:
             self.available_ev_power_kw = None
             return None, True
         site = _meter(
-            self.hass, opts.get("site_power_sensor"), "site_power",
+            self.hass,
+            opts.get("site_power_sensor"),
+            "site_power",
             max_age=PEAK_METER_MAX_AGE,
         )
         target = _number(opts.get("peak_target_kw"))
@@ -349,7 +349,9 @@ class ChargeSupervisor:
                 return None, False
             cfg = self._source_config(key, obj)
             power = _meter(
-                self.hass, cfg.get("power_sensor"), "power",
+                self.hass,
+                cfg.get("power_sensor"),
+                "power",
                 max_age=PEAK_METER_MAX_AGE,
             )
             if power is None:

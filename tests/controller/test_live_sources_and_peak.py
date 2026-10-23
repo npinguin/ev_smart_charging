@@ -182,8 +182,11 @@ def test_overlapping_same_charger_price_intervals_are_unavailable_not_duplicated
     controller, charger = supervisor()
     charger.raw_two_days.get_raw = lambda: [
         {"start": T, "end": T + timedelta(minutes=30), "value": 0.2},
-        {"start": T + timedelta(minutes=15),
-         "end": T + timedelta(minutes=45), "value": 0.3},
+        {
+            "start": T + timedelta(minutes=15),
+            "end": T + timedelta(minutes=45),
+            "value": 0.3,
+        },
     ]
     assert controller._prices([charger]) == {"a": []}
 
