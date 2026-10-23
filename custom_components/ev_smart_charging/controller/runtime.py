@@ -20,6 +20,7 @@ from homeassistant.util import dt
 from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
 from .monitor import collect
+from .costs import ActualCostLedger
 from .admission import SupervisionGate
 from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
 
@@ -182,6 +183,7 @@ class ChargeSupervisor:
         # into paused_chargers. A restart still requires fresh live admission.
         self._peak_recovery_since = None
         self._peak_latched = False
+        self._actual_cost_ledgers = {}
 
     @property
     def participants(self):
@@ -259,6 +261,51 @@ class ChargeSupervisor:
             ),
             "session_energy_coverage": sum(v is not None for v in energy),
         }
+
+    def actual_cost_summary(self):
+        """Never publish complete EUR until all original EVSC entries qualify."""
+        chargers = self.chargers()
+        ledgers = self._actual_cost_ledgers
+        covered = sum(
+            key in ledgers and ledgers[key].actual_cost_today is not None
+            for key in chargers
+        )
+        complete = bool(chargers) and covered == len(chargers)
+        return {
+            "actual_cost_today": (
+                round(
+                    sum(ledgers[key].actual_cost_today for key in chargers), 4
+                )
+                if complete
+                else None
+            ),
+            "cost_meter_coverage": covered,
+            "cost_meter_total": len(chargers),
+        }
+
+    def _record_actual_costs(self):
+        """Observe dated native meter deltas against each EVSC's own tariff."""
+        objs = self.chargers()
+        prices = self._prices(list(objs.values()))
+        for key, obj in objs.items():
+            cfg = self._source_config(key, obj)
+            entity = cfg.get("energy_sensor")
+            ledger = self._actual_cost_ledgers.setdefault(
+                key, ActualCostLedger()
+            )
+            state = self.hass.states.get(entity) if entity else None
+            reading = _meter(self.hass, entity, "energy")
+            stamp = (
+                getattr(state, "last_updated", None) if state is not None else None
+            )
+            if (
+                reading is None
+                or not isinstance(stamp, datetime)
+                or stamp.tzinfo is None
+            ):
+                ledger.complete = False
+                continue
+            ledger.observe(stamp, reading, entity, prices.get(key, []))
 
     def _prices(self, objects):
         """Different rates and missing horizons are independent per EVSC."""
@@ -625,6 +672,7 @@ class ChargeSupervisor:
             "indicative_cost": cost,
             "indicative_cost_today": today_cost,
             "indicative_cost_tomorrow": tomorrow_cost,
+            "actual_cost_today": self.actual_cost_summary()["actual_cost_today"],
             "peak_control_status": self.peak_status,
             "available_ev_power": self.available_ev_power_kw,
         }
@@ -693,6 +741,7 @@ class ChargeSupervisor:
         """Serialize peak events, planned grants, and native Start/Stop."""
         async with self._refresh_lock:
             self.rebuild()
+            self._record_actual_costs()
             for key in self.participants:
                 obj = self.chargers().get(key)
                 if obj is not None:
