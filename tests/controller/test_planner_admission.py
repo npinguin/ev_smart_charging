@@ -444,3 +444,14 @@ def test_stored_energy_exceeding_usable_capacity_is_rejected():
     )
     with pytest.raises(ValueError, match="exceeds usable capacity"):
         _ = c.required_battery_kwh
+
+
+def test_operator_disabled_coordinated_charger_cannot_claim_planned_slots():
+    c = Charger(
+        "disabled", "coordinated", True, 50, 75, 40, 7.2,
+        T + timedelta(hours=1), enabled=False,
+    )
+    p = build_plan([c], {"disabled": slots(4)}, T)
+    assert not p.assignments
+    assert p.results[0].status == "BLOCKED"
+    assert "operator" in p.results[0].reason.lower()
