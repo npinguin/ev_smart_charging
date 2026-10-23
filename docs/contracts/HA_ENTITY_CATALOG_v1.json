@@ -1,0 +1,815 @@
+{
+  "version": "1.0.0-draft",
+  "status": "PROPOSED — awaiting functional sign-off",
+  "domain": "ev_smart_charging",
+  "constraints": {
+    "one_hacs_package": true,
+    "controller_device_always_present": true,
+    "controller_native_evse_writer": false,
+    "charger_native_evse_writer": "existing EVSC coordinator only",
+    "price_horizon": "contiguous actual effective-energy-cost intervals",
+    "time_grid": "15m UTC instants, local display, dynamic horizon",
+    "unknown_values": "HA unknown/unavailable, never fabricated zero",
+    "config_mode_default": "local",
+    "backward_compatible_entry_version": 8,
+    "entity_id_guaranteed": false
+  },
+  "identity": {
+    "controller": {
+      "config_entry_unique_id": "evsc_charge_controller",
+      "device_identifier": [
+        "ev_smart_charging",
+        "charge_controller"
+      ],
+      "entity_unique_id_rule": "ev_smart_charging_charge_controller_<key>"
+    },
+    "charger": {
+      "device_identifier_rule": [
+        "ev_smart_charging",
+        "<config_entry_id>"
+      ],
+      "existing_unique_ids": "unchanged",
+      "new_unique_id_rule": "<config_entry_id>.<platform>.<key>",
+      "calendar_unique_id_exception": "<config_entry_id>.datetime.absolute_ready_by (already in RC1)"
+    }
+  },
+  "devices": [
+    {
+      "type": "charge_controller",
+      "name": "EVSC Charge Controller",
+      "entities": [
+        {
+          "platform": "sensor",
+          "key": "status",
+          "label": "Controller status",
+          "unit": "",
+          "kind": "enum",
+          "source": "supervisor",
+          "stage": "current",
+          "note": "Monitoring / planning / active / degraded; explicit error reasons"
+        },
+        {
+          "platform": "sensor",
+          "key": "operation_mode",
+          "label": "Operation mode",
+          "unit": "",
+          "kind": "enum",
+          "source": "participants",
+          "stage": "new",
+          "note": "local | mixed | coordinated"
+        },
+        {
+          "platform": "sensor",
+          "key": "chargers",
+          "label": "Chargers",
+          "unit": "count",
+          "kind": "measurement",
+          "source": "registry",
+          "stage": "current",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "connected",
+          "label": "Connected",
+          "unit": "count",
+          "kind": "measurement",
+          "source": "connection",
+          "stage": "current",
+          "note": "Logical EVSC connection state; not physical proof"
+        },
+        {
+          "platform": "sensor",
+          "key": "connection_unknown",
+          "label": "Unknown connections",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "connection",
+          "stage": "current",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "planned_chargers",
+          "label": "Planned chargers",
+          "unit": "count",
+          "kind": "measurement",
+          "source": "joint/local plans",
+          "stage": "current",
+          "note": "Must correct semantics: planning source included"
+        },
+        {
+          "platform": "sensor",
+          "key": "scheduled_hours",
+          "label": "Scheduled charging hours",
+          "unit": "h",
+          "kind": "measurement",
+          "source": "plan windows",
+          "stage": "current",
+          "note": "Sum of charger-hours, not group wall-clock span"
+        },
+        {
+          "platform": "sensor",
+          "key": "physically_charging",
+          "label": "Physically charging",
+          "unit": "count",
+          "kind": "measurement",
+          "source": "native charge-state",
+          "stage": "current",
+          "note": "Known native charging state only"
+        },
+        {
+          "platform": "sensor",
+          "key": "physical_state_unknown",
+          "label": "Unverified physical states",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "native charge-state",
+          "stage": "current",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_power_kw",
+          "label": "Actual charging power",
+          "unit": "kW",
+          "kind": "measurement",
+          "source": "native EVSE meter",
+          "stage": "current",
+          "note": "Total only if every included charger measured; else unavailable"
+        },
+        {
+          "platform": "sensor",
+          "key": "session_energy_kwh",
+          "label": "Measured session energy",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "native EVSE meter",
+          "stage": "current",
+          "note": "No day/month semantic assumed"
+        },
+        {
+          "platform": "sensor",
+          "key": "power_coverage",
+          "label": "Power meter coverage",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "source validation",
+          "stage": "current",
+          "note": "Valid measured chargers over total; explicit denominator attribute"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_coverage",
+          "label": "Energy meter coverage",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "source validation",
+          "stage": "current",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "planning_start",
+          "label": "Planning start",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "schedule",
+          "stage": "new",
+          "note": "Earliest active or future assigned charging slot, across Local + Coordinated"
+        },
+        {
+          "platform": "sensor",
+          "key": "planning_end",
+          "label": "Planning end",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "schedule",
+          "stage": "new",
+          "note": "End of latest active/future assigned slot; envelope may contain gaps"
+        },
+        {
+          "platform": "sensor",
+          "key": "planning_state",
+          "label": "Planning state",
+          "unit": "",
+          "kind": "enum",
+          "source": "joint planner",
+          "stage": "new",
+          "note": "idle|valid|provisional|pending_prices|infeasible|blocked"
+        },
+        {
+          "platform": "sensor",
+          "key": "plan_last_updated",
+          "label": "Plan last updated",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "planner",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "plan_revision",
+          "label": "Plan revision",
+          "unit": "",
+          "kind": "diagnostic",
+          "source": "planner",
+          "stage": "new",
+          "note": "Monotonic persisted revision, changes only when material plan changes"
+        },
+        {
+          "platform": "sensor",
+          "key": "price_horizon_start",
+          "label": "Price horizon start",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "price source",
+          "stage": "new",
+          "note": "First instant of contiguous valid future price coverage"
+        },
+        {
+          "platform": "sensor",
+          "key": "price_horizon_end",
+          "label": "Price horizon end",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "price source",
+          "stage": "new",
+          "note": "Exclusive end of last contiguous valid priced interval"
+        },
+        {
+          "platform": "sensor",
+          "key": "price_status",
+          "label": "Price status",
+          "unit": "",
+          "kind": "enum",
+          "source": "validated price source",
+          "stage": "new",
+          "note": "valid|partial|unavailable|invalid|stale"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_cost_price",
+          "label": "Energy cost price",
+          "unit": "EUR/kWh",
+          "kind": "measurement",
+          "source": "price source",
+          "stage": "new",
+          "note": "Current effective variable import price; no raw spot-only fallback"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_required",
+          "label": "Charging required",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "vehicle need",
+          "stage": "new",
+          "note": "Grid-side charging need across included vehicles; unavailable if incomplete"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_planned",
+          "label": "Charging planned",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "merged plans",
+          "stage": "new",
+          "note": "Grid-side AC planned energy, one assignment counted once"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_unplanned",
+          "label": "Still to plan",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "need minus plan",
+          "stage": "new",
+          "note": "Max(required-planned,0), not delivered/remaining SoC"
+        },
+        {
+          "platform": "sensor",
+          "key": "planned_today",
+          "label": "Planned today",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "merged plans",
+          "stage": "new",
+          "note": "Local HA calendar day; never fixed 24h assumption"
+        },
+        {
+          "platform": "sensor",
+          "key": "planned_tomorrow",
+          "label": "Planned tomorrow",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "merged plans",
+          "stage": "new",
+          "note": "Local HA calendar day; timezone and DST correct"
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_charging_cost",
+          "label": "Indicative charging cost",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "schedule × future energy cost price",
+          "stage": "new",
+          "note": "Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage"
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_charging_cost_today",
+          "label": "Actual charging cost today",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "metered 15-minute energy × time-aligned price",
+          "stage": "conditional",
+          "note": "Requires native energy or sampled power + validated interval price history"
+        },
+        {
+          "platform": "sensor",
+          "key": "remaining_charging_cost",
+          "label": "Remaining indicative cost",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "pending demand × available future priced slots",
+          "stage": "new",
+          "note": "Unavailable for unpriced demand; avoid fake complete cost"
+        },
+        {
+          "platform": "sensor",
+          "key": "next_ready_by",
+          "label": "Next Ready by",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "participating deadlines",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "participants",
+          "label": "Coordinated chargers",
+          "unit": "count",
+          "kind": "measurement",
+          "source": "controller ownership",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "paused_chargers",
+          "label": "Paused chargers",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "supervision",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "unmet_deadlines",
+          "label": "Unmet deadlines",
+          "unit": "count",
+          "kind": "diagnostic",
+          "source": "feasibility",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "number",
+          "key": "max_parallel",
+          "label": "Maximum parallel chargers",
+          "unit": "chargers",
+          "kind": "config",
+          "source": "controller policy",
+          "stage": "new",
+          "note": "Integer >=1; default 1"
+        },
+        {
+          "platform": "number",
+          "key": "group_power_budget",
+          "label": "Group charger power budget",
+          "unit": "kW",
+          "kind": "config",
+          "source": "controller policy",
+          "stage": "new",
+          "note": "Only supervised EVSC charging; no electrical protective guarantee"
+        },
+        {
+          "platform": "button",
+          "key": "recalculate_plan",
+          "label": "Recalculate planning",
+          "unit": "",
+          "kind": "action",
+          "source": "planner",
+          "stage": "new",
+          "note": "Idempotent replanning, never direct physical command"
+        }
+      ]
+    },
+    {
+      "type": "evsc_charger",
+      "name": "existing EVSC charger entry title",
+      "existing_entities": [
+        {
+          "platform": "sensor",
+          "key": "charging",
+          "preserve": true
+        },
+        {
+          "platform": "sensor",
+          "key": "status",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "charging_speed",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "electricity_price_limit",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "opportunistic_level",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "opportunistic_type2_level",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "low_price_charging_level",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "low_soc_charging_level",
+          "preserve": true
+        },
+        {
+          "platform": "number",
+          "key": "minimum_ev_soc",
+          "preserve": true
+        },
+        {
+          "platform": "select",
+          "key": "charge_start_time",
+          "preserve": true
+        },
+        {
+          "platform": "select",
+          "key": "charge_completion_time",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "smart_charging_activated",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "apply_price_limit",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "continuous_charging_preferred",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "ev_connected",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "keep_charger_on",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "opportunistic_charging",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "opportunistic_type2_charging",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "low_price_charging",
+          "preserve": true
+        },
+        {
+          "platform": "switch",
+          "key": "low_soc_charging",
+          "preserve": true
+        },
+        {
+          "platform": "button",
+          "key": "manually_start_charging",
+          "preserve": true
+        },
+        {
+          "platform": "button",
+          "key": "manually_stop_charging",
+          "preserve": true
+        }
+      ],
+      "entities": [
+        {
+          "platform": "sensor",
+          "key": "planning_start",
+          "label": "Planning start",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "effective local/group plan",
+          "stage": "new",
+          "note": "Earliest current/future assigned slot for this charger"
+        },
+        {
+          "platform": "sensor",
+          "key": "planning_end",
+          "label": "Planning end",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "effective local/group plan",
+          "stage": "new",
+          "note": "Latest current/future assigned slot end for this charger"
+        },
+        {
+          "platform": "sensor",
+          "key": "planning_state",
+          "label": "Planning state",
+          "unit": "",
+          "kind": "enum",
+          "source": "charger schedule",
+          "stage": "new",
+          "note": "local|planned|charging|paused|pending_prices|infeasible|unavailable"
+        },
+        {
+          "platform": "sensor",
+          "key": "effective_ready_by",
+          "label": "Effective Ready by",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "calendar override or legacy time",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "charging_required",
+          "label": "Charging required",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "SoC/capacity/efficiency",
+          "stage": "new",
+          "note": "Grid AC energy required to reach target"
+        },
+        {
+          "platform": "sensor",
+          "key": "charging_planned",
+          "label": "Charging planned",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "authoritative schedule",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "still_to_plan",
+          "label": "Still to plan",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "required minus scheduled",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "planned_today",
+          "label": "Planned today",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "effective schedule",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "planned_tomorrow",
+          "label": "Planned tomorrow",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "effective schedule",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "indicative_charging_cost",
+          "label": "Indicative charging cost",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "schedule × future price",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_charging_cost",
+          "label": "Actual session charging cost",
+          "unit": "EUR",
+          "kind": "measurement",
+          "source": "native meter and time-based prices",
+          "stage": "conditional",
+          "note": "Current session; no costs when metering or price time coverage is missing"
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_charging_power",
+          "label": "Actual charging power",
+          "unit": "kW",
+          "kind": "measurement",
+          "source": "native EVSE meter",
+          "stage": "conditional",
+          "note": "Proxy/derived read-only; do not copy native EVSE device identity"
+        },
+        {
+          "platform": "sensor",
+          "key": "actual_session_energy",
+          "label": "Actual session energy",
+          "unit": "kWh",
+          "kind": "measurement",
+          "source": "native EVSE meter",
+          "stage": "conditional",
+          "note": "No invented daily stats"
+        },
+        {
+          "platform": "sensor",
+          "key": "energy_cost_price",
+          "label": "Energy cost price",
+          "unit": "EUR/kWh",
+          "kind": "measurement",
+          "source": "validated local/shared effective price",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "sensor",
+          "key": "metering_status",
+          "label": "Metering status",
+          "unit": "",
+          "kind": "enum",
+          "source": "source validation",
+          "stage": "new",
+          "note": "complete|power_only|energy_only|missing|invalid"
+        },
+        {
+          "platform": "sensor",
+          "key": "schedule_source",
+          "label": "Schedule source",
+          "unit": "",
+          "kind": "enum",
+          "source": "mode",
+          "stage": "new",
+          "note": "local|charge_controller"
+        },
+        {
+          "platform": "sensor",
+          "key": "schedule_last_updated",
+          "label": "Schedule last updated",
+          "unit": "",
+          "kind": "timestamp",
+          "source": "planner",
+          "stage": "new",
+          "note": ""
+        },
+        {
+          "platform": "select",
+          "key": "control_mode",
+          "label": "Charging control mode",
+          "unit": "",
+          "kind": "config",
+          "source": "HA persisted mode",
+          "stage": "new",
+          "note": "local|coordinated; transfer is deliberate, never a fallback"
+        },
+        {
+          "platform": "datetime",
+          "key": "absolute_ready_by",
+          "label": "Absolute Ready by",
+          "unit": "",
+          "kind": "config",
+          "source": "user input",
+          "stage": "current",
+          "note": "Existing RC1 unique_id retained; optional; unset means legacy recurring time"
+        },
+        {
+          "platform": "number",
+          "key": "usable_battery_capacity",
+          "label": "Usable battery capacity",
+          "unit": "kWh",
+          "kind": "config",
+          "source": "vehicle profile fallback",
+          "stage": "new",
+          "note": "Use bound current vehicle capability when available; no fixed-assignment assumption"
+        },
+        {
+          "platform": "number",
+          "key": "expected_charging_power",
+          "label": "Expected charging power",
+          "unit": "kW",
+          "kind": "config",
+          "source": "charger capability",
+          "stage": "new",
+          "note": "Not a physical current limit nor measured power"
+        },
+        {
+          "platform": "number",
+          "key": "charging_efficiency",
+          "label": "Expected charging efficiency",
+          "unit": "%",
+          "kind": "config",
+          "source": "planning assumption",
+          "stage": "new",
+          "note": "Planning only; measured AC power prevails for actual cost"
+        },
+        {
+          "platform": "number",
+          "key": "planning_priority",
+          "label": "Planning priority",
+          "unit": "",
+          "kind": "config",
+          "source": "charger/session policy",
+          "stage": "new",
+          "note": "Range 0..100, default 50; secondary to hard deadlines"
+        },
+        {
+          "platform": "button",
+          "key": "pause_coordinated",
+          "label": "Pause coordinated charging",
+          "unit": "",
+          "kind": "action",
+          "source": "EVSC supervision",
+          "stage": "new",
+          "note": "Persistent inhibit via existing EVSC writer; never direct EVSE command"
+        },
+        {
+          "platform": "button",
+          "key": "resume_coordinated",
+          "label": "Resume coordinated charging",
+          "unit": "",
+          "kind": "action",
+          "source": "EVSC supervision",
+          "stage": "new",
+          "note": "Clears pause, requires fresh group plan before ON"
+        },
+        {
+          "platform": "button",
+          "key": "clear_absolute_ready_by",
+          "label": "Clear absolute Ready by",
+          "unit": "",
+          "kind": "action",
+          "source": "EVSC deadline",
+          "stage": "current",
+          "note": "Existing RC1 unique_id retained"
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "service": "get_charge_plan",
+      "supports_response": "ONLY",
+      "target": "controller config_entry_id",
+      "response": "full plan object contract described in Markdown",
+      "read_only": true
+    }
+  ],
+  "reserved_future": [
+    {
+      "key": "peak_shaving",
+      "rule": "Not published until verified site meter/phase constraints and fail behavior implemented"
+    },
+    {
+      "key": "vehicle_profile",
+      "rule": "Dynamic source mapping without creating EVSE ownership"
+    },
+    {
+      "key": "planner_strategy",
+      "rule": "Do not expose options without algorithms and tests"
+    }
+  ]
+}
