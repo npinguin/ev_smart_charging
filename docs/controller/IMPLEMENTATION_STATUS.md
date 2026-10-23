@@ -30,3 +30,18 @@ entities, downgrade to upstream v2.6.0 and no changes to original EVSC options.
 No new mandatory EVSC Options fields. Existing charger config entries retain v8.
 The controller import entry is additive and is never eligible for physical service
 calls. Its HA entry is internal, and it has no required user Options.
+
+
+## P3/P5 preparatory pure modules (not yet active)
+
+- `controller/planner.py` defines a deterministic, price-aware joint planner with
+  timezone-aware 15-minute slots, per-vehicle calendar deadline and explicit
+  coverage, capacity and remaining-demand states.
+- `controller/admission.py` defines local pass-through vs coordinated fail-closed
+  grants, including restart-expiry and manual start safety.
+- Neither module is yet connected to EVSC coordinator, Options, services, HA
+  entities or physical execution. Do not confuse planner unit tests with live
+  coordinated charging.
+- Before activation: persistent supervised-mode recovery, physical writer gate
+  on **all** ON paths, meter/source validation, real HA load/unload and four-EVSE
+  runtime acceptance.
