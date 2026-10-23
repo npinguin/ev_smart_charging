@@ -21,6 +21,7 @@ from .const import (
     START_QUARTER_NONE,
 )
 from .coordinator import EVSmartChargingCoordinator
+from .controller.runtime import is_supervised, set_control_mode
 from .entity import EVSmartChargingEntity
 from .helpers.general import get_parameter, get_quarter_index
 
@@ -36,6 +37,7 @@ async def async_setup_entry(
     selects = []
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectReadyQuarter(entry, coordinator))
+    selects.append(EVSmartChargingSelectControlMode(entry, coordinator))
     async_add_devices(selects)
 
 
@@ -116,3 +118,34 @@ class EVSmartChargingSelectReadyQuarter(EVSmartChargingSelect):
                 # Treat 00:00 as 24:00
                 self.coordinator.ready_quarter_local = 24 * 4
             await self.coordinator.update_configuration()
+
+
+class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
+    """Per-charger operator mode backed only by controller membership."""
+
+    _attr_should_poll = False
+
+    _entity_key = "control_mode"
+    _attr_name = "Control mode"
+    _attr_icon = "mdi:source-branch"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = ["local", "coordinated"]
+
+    @property
+    def current_option(self):
+        return (
+            "coordinated"
+            if is_supervised(self.coordinator.hass, self.config_entry.entry_id)
+            else "local"
+        )
+
+    async def async_added_to_hass(self):
+        # Controller config entry is the sole persistent mode owner.
+        # Never apply an independently restored SelectEntity state.
+        await SelectEntity.async_added_to_hass(self)
+
+    async def async_select_option(self, option):
+        set_control_mode(
+            self.coordinator.hass, self.config_entry.entry_id, option
+        )
+        self.async_write_ha_state()

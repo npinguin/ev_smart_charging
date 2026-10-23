@@ -1,118 +1,211 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "Configuratie van de naam en gekoppelde entities.",
-                "data": {
-                    "device_name": "Naam",
-                    "price_sensor": "Electriciteit prijs template entity",
-                    "ev_soc_sensor": "EV SOC sensor",
-                    "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
-                    "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
-                    "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
-                    "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electriciteit prijs sensor niet gevonden.",
-            "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
-            "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
-            "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
-            "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
-            "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
-            "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
-            "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
-            "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-            "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
+  "config": {
+    "step": {
+      "user": {
+        "description": "Configuratie van de naam en gekoppelde entities.",
+        "data": {
+          "device_name": "Naam",
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
         }
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "description": "Configuratie van de gekoppelde entities.",
-                "data": {
-                    "price_sensor": "Electriciteit prijs template entity",
-                    "ev_soc_sensor": "EV SOC sensor",
-                    "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
-                    "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
-                    "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
-                    "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electriciteit prijs sensor niet gevonden.",
-            "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
-            "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
-            "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
-            "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
-            "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
-            "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
-            "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
-            "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-            "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
-        }
-    },
-    "entity": {
-        "button": {
-            "manually_start_charging": { "name": "Handmatige start opladen" },
-            "manually_stop_charging": { "name": "Handmatige stop opladen" }
-        },
-        "number": {
-            "charging_speed": { "name": "Oplaadsnelheid" },
-            "electricity_price_limit": { "name": "Limiet elektriciteitsprijs" },
-            "opportunistic_level": { "name": "Opportunistisch niveau" },
-            "opportunistic_type2_level": { "name": "Opportunistisch type 2 niveau" },
-            "low_price_charging_level": { "name": "Lage prijs oplaadniveau" },
-            "low_soc_charging_level": { "name": "Lage SOC oplaadniveau" },
-            "minimum_ev_soc": { "name": "Minimum EV SOC" }
-        },
-        "select": {
-            "charge_start_time": { "name": "Oplaad starttijd" },
-            "charge_completion_time": { "name": "Oplaad voltooiingstijd" }
-        },
-        "sensor": {
-            "charging": {
-                "name": "Opladen",
-                "state_attributes": {
-                    "current_price": { "name": "Actuele prijs"},
-                    "ev_soc": {"name": "EV SOC"},
-                    "ev_target_soc": {"name": "EV instelwaarde SOC"},
-                    "charging_is_planned": {"name": "Opladen staat gepland"},
-                    "charging_start_time": {"name": "Starttijd opladen"},
-                    "charging_stop_time": {"name": "Tijd opladen gereed"},
-                    "charging_number_of_hours": {"name": "Aantal uren opladen"},
-                    "opportunistic": {"name": "Opportunistisch"},
-                    "raw_two_days": {"name": "Ruwe data van 2 dagen"},
-                    "charging_schedule": {"name": "Oplaad schema"}
-                }
-            },
-            "status": {
-                "name": "Status",
-                "state": {
-                    "waiting_for_new_prices": "Wachten op nieuwe prijzen",
-                    "no_charging_planned": "Geen opladen gepland",
-                    "waiting_for_charging_to_begin": "Wachten tot het opladen begint",
-                    "charging": "Aan het opladen",
-                    "keeping_charger_on": "Oplader ingeschakeld houden",
-                    "disconnected": "Losgekoppeld",
-                    "smart_charging_not_active": "Slim opladen niet actief",
-                    "low_price_charging": "Lage prijs opladen",
-                    "low_soc_charging": "Lage SOC opladen"
-                }
-            }
-        },
-        "switch": {
-            "smart_charging_activated": { "name": "Activeer slim opladen" },
-            "apply_price_limit": { "name": "Prijslimiet toepassen" },
-            "continuous_charging_preferred": { "name": "Bij voorkeur continu opladen" },
-            "ev_connected": { "name": "EV aangesloten" },
-            "keep_charger_on": { "name": "Oplader ingeschakeld houden" },
-            "opportunistic_charging": { "name": "Opportunistisch opladen" },
-            "opportunistic_type2_charging": { "name": "Opportunistisch type 2 opladen" },
-            "low_price_charging": { "name": "Lage prijs opladen" },
-            "low_soc_charging": { "name": "Lage SOC opladen" }
-        }
+    "error": {
+      "price_not_found": "Electriciteit prijs sensor niet gevonden.",
+      "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
+      "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
+      "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
+      "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
+      "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
+      "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
+      "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
+      "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Configuratie van de gekoppelde entities.",
+        "data": {
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
+        }
+      },
+      "charger": {
+        "title": "Laadgegevens voor {charger}",
+        "data": {
+          "capacity_kwh": "Bruikbare batterijcapaciteit voertuig (kWh)",
+          "power_kw": "Verwacht laadvermogen (kW)",
+          "power_sensor": "Native laadsensor vermogen",
+          "energy_sensor": "Native sessie-energiemeter"
+        }
+      },
+      "controller": {
+        "description": "Selecteer laadpunten voor centrale planning. Niet geselecteerde laders behouden hun Local-planning. Vink gepauzeerde laders uit om ze opnieuw te starten.",
+        "data": {
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen",
+          "participants": "Centraal geplande laadpunten",
+          "max_parallel": "Maximaal gelijktijdig laden",
+          "power_budget_kw": "Vermogensbudget laadpunten (kW, 0 = geen limiet)",
+          "paused_chargers": "Handmatig gepauzeerde laadpunten"
+        },
+        "title": "Instellingen Charge Controller"
+      }
+    },
+    "error": {
+      "price_not_found": "Electriciteit prijs sensor niet gevonden.",
+      "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
+      "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
+      "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
+      "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
+      "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
+      "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
+      "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
+      "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
+    }
+  },
+  "entity": {
+    "button": {
+      "manually_start_charging": {
+        "name": "Handmatige start opladen"
+      },
+      "manually_stop_charging": {
+        "name": "Handmatige stop opladen"
+      },
+      "clear_absolute_ready_by": {
+        "name": "Klaar-tegen-datum wissen"
+      }
+    },
+    "number": {
+      "charging_speed": {
+        "name": "Oplaadsnelheid"
+      },
+      "electricity_price_limit": {
+        "name": "Limiet elektriciteitsprijs"
+      },
+      "opportunistic_level": {
+        "name": "Opportunistisch niveau"
+      },
+      "opportunistic_type2_level": {
+        "name": "Opportunistisch type 2 niveau"
+      },
+      "low_price_charging_level": {
+        "name": "Lage prijs oplaadniveau"
+      },
+      "low_soc_charging_level": {
+        "name": "Lage SOC oplaadniveau"
+      },
+      "minimum_ev_soc": {
+        "name": "Minimum EV SOC"
+      }
+    },
+    "select": {
+      "charge_start_time": {
+        "name": "Oplaad starttijd"
+      },
+      "charge_completion_time": {
+        "name": "Oplaad voltooiingstijd"
+      }
+    },
+    "sensor": {
+      "charging": {
+        "name": "Opladen",
+        "state_attributes": {
+          "current_price": {
+            "name": "Actuele prijs"
+          },
+          "ev_soc": {
+            "name": "EV SOC"
+          },
+          "ev_target_soc": {
+            "name": "EV instelwaarde SOC"
+          },
+          "charging_is_planned": {
+            "name": "Opladen staat gepland"
+          },
+          "charging_start_time": {
+            "name": "Starttijd opladen"
+          },
+          "charging_stop_time": {
+            "name": "Tijd opladen gereed"
+          },
+          "charging_number_of_hours": {
+            "name": "Aantal uren opladen"
+          },
+          "opportunistic": {
+            "name": "Opportunistisch"
+          },
+          "raw_two_days": {
+            "name": "Ruwe data van 2 dagen"
+          },
+          "charging_schedule": {
+            "name": "Oplaad schema"
+          }
+        }
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "waiting_for_new_prices": "Wachten op nieuwe prijzen",
+          "no_charging_planned": "Geen opladen gepland",
+          "waiting_for_charging_to_begin": "Wachten tot het opladen begint",
+          "charging": "Aan het opladen",
+          "keeping_charger_on": "Oplader ingeschakeld houden",
+          "disconnected": "Losgekoppeld",
+          "smart_charging_not_active": "Slim opladen niet actief",
+          "low_price_charging": "Lage prijs opladen",
+          "low_soc_charging": "Lage SOC opladen"
+        }
+      }
+    },
+    "switch": {
+      "smart_charging_activated": {
+        "name": "Activeer slim opladen"
+      },
+      "apply_price_limit": {
+        "name": "Prijslimiet toepassen"
+      },
+      "continuous_charging_preferred": {
+        "name": "Bij voorkeur continu opladen"
+      },
+      "ev_connected": {
+        "name": "EV aangesloten"
+      },
+      "keep_charger_on": {
+        "name": "Oplader ingeschakeld houden"
+      },
+      "opportunistic_charging": {
+        "name": "Opportunistisch opladen"
+      },
+      "opportunistic_type2_charging": {
+        "name": "Opportunistisch type 2 opladen"
+      },
+      "low_price_charging": {
+        "name": "Lage prijs opladen"
+      },
+      "low_soc_charging": {
+        "name": "Lage SOC opladen"
+      }
+    },
+    "datetime": {
+      "absolute_ready_by": {
+        "name": "Klaar tegen (datum en uur)"
+      }
+    }
+  }
 }

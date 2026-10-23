@@ -3,9 +3,13 @@
 import asyncio
 import logging
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
+from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+try:
+    from homeassistant.core import SupportsResponse
+except ImportError:
+    SupportsResponse = None  # Original Local EVSC works on older HA versions.
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
 from homeassistant.helpers.device_registry import DeviceRegistry, DeviceEntry
@@ -31,8 +35,60 @@ from .const import (
     STARTUP_MESSAGE,
     PLATFORMS,
 )
+from .controller.runtime import ChargeSupervisor
+
+CONTROLLER_ENTRY_TYPE = "charge_controller"
+CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
+
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+
+async def async_setup(hass: HomeAssistant, _config) -> bool:
+    """Bootstrap the singleton after HA startup, not during EVSC entry setup.
+
+    Reentering config-entry setup while forwarding charger platforms can
+    cause the same source entry to be loaded twice (and breaks upstream).
+    """
+    async def ensure_controller():
+        if not any(
+            entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
+            for entry in hass.config_entries.async_entries(DOMAIN)
+        ):
+            await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": SOURCE_IMPORT},
+                data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
+            )
+
+    if SupportsResponse is not None:
+        async def get_charge_plan(_call):
+            controller = next(
+                (obj for obj in hass.data.get(DOMAIN, {}).values()
+                 if isinstance(obj, ChargeSupervisor)),
+                None,
+            )
+            if controller is None:
+                return {
+                    "schema_version": "1.0",
+                    "status": "CONTROLLER_NOT_READY",
+                    "chargers": [],
+                }
+            return controller.plan_payload()
+
+        hass.services.async_register(
+            DOMAIN, "get_charge_plan", get_charge_plan,
+            supports_response=SupportsResponse.ONLY,
+        )
+
+    if not hass.is_running:
+        # When EVSC is installed into an already-running HA instance, its
+        # singleton is bootstrapped at the next normal HA start. Reentering
+        # config-entry setup here would race existing platform forwarding.
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _event: hass.async_create_task(ensure_controller()),
+        )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -42,6 +98,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if hass.data.get(DOMAIN) is None:
         hass.data.setdefault(DOMAIN, {})
         _LOGGER.debug(STARTUP_MESSAGE)
+
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        hass.data[DOMAIN][entry.entry_id] = ChargeSupervisor(hass, entry)
+        try:
+            if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
+                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+            else:
+                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+            await hass.data[DOMAIN][entry.entry_id].async_start()
+        except Exception:
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            raise
+        return True
 
     coordinator = EVSmartChargingCoordinator(hass, entry)
     validation_error = coordinator.validate_input_sensors()
@@ -88,12 +158,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         device.id, name_by_user=entry.title
                     )
 
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     _LOGGER.debug("async_unload_entry")
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        unloaded = await hass.config_entries.async_forward_entry_unload(
+            entry, Platform.SENSOR
+        )
+        if unloaded:
+            hass.data[DOMAIN][entry.entry_id].async_stop()
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+        return unloaded
+
     coordinator = hass.data[DOMAIN][entry.entry_id]
     unloaded = all(
         await asyncio.gather(

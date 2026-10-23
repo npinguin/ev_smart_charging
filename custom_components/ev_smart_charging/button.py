@@ -13,6 +13,7 @@ from .const import (
     ICON_STOP,
 )
 from .coordinator import EVSmartChargingCoordinator
+from .controller.runtime import is_supervised, pause_supervised, resume_supervised
 from .entity import EVSmartChargingEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +26,8 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     buttons = []
     buttons.append(EVSmartChargingButtonStart(entry, coordinator))
     buttons.append(EVSmartChargingButtonStop(entry, coordinator))
+    buttons.append(EVSmartChargingButtonClearReadyBy(entry, coordinator))
+    buttons.append(EVSmartChargingButtonResumeCoordinated(entry, coordinator))
     async_add_devices(buttons)
 
 
@@ -58,5 +61,35 @@ class EVSmartChargingButtonStop(EVSmartChargingButton):
     _attr_icon = ICON_STOP
 
     async def async_press(self) -> None:
-        """Press the button."""
+        """Manual Stop latches a pause in Coordinated; Local remains unchanged."""
+        if is_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id):
+            pause_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id)
         await self.coordinator.turn_off_charging()
+
+
+class EVSmartChargingButtonClearReadyBy(EVSmartChargingButton):
+    """Return to the original recurring completion time without altering Options."""
+
+    _entity_key = "clear_absolute_ready_by"
+    _attr_name = "Clear absolute Ready by"
+    _attr_icon = "mdi:calendar-remove"
+
+    async def async_press(self) -> None:
+        self.coordinator.absolute_ready_by = None
+        self.coordinator.absolute_ready_by_pending = False
+        if self.coordinator.absolute_ready_by_entity is not None:
+            self.coordinator.absolute_ready_by_entity.clear()
+        await self.coordinator.update_configuration()
+
+
+class EVSmartChargingButtonResumeCoordinated(EVSmartChargingButton):
+    """Clear only an explicit operator stop; never issue a physical Start."""
+
+    _entity_key = "resume_coordinated"
+    _attr_name = "Resume coordinated charging"
+    _attr_icon = "mdi:play-circle-outline"
+
+    async def async_press(self):
+        resume_supervised(
+            self.coordinator.hass, self.coordinator.config_entry.entry_id
+        )

@@ -39,12 +39,23 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._errors = {}
         self.user_input = {}
 
+    async def async_step_import(self, user_input=None):
+        """Create one persistent, internal controller config entry per HA instance."""
+        await self.async_set_unique_id("evsc_charge_controller")
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title="EVSC Charge Controller",
+            data={"__evsc_entry_type": "charge_controller"},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
+        if config_entry.data.get("__evsc_entry_type") == "charge_controller":
+            return ControllerOptionsFlow()
         return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
@@ -170,6 +181,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_EV_CONTROLLED,
                 default=get_parameter(self.config_entry, CONF_EV_CONTROLLED),
             ): cv.boolean,
+            # All optional measurements belong to this EVSC entry, not to
+            # the Charge Controller or the native EVSE device.
+            vol.Optional("evsc_capacity_kwh", default=get_parameter(
+                self.config_entry, "evsc_capacity_kwh", 0,
+            )): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
+            vol.Optional("evsc_expected_power_kw", default=get_parameter(
+                self.config_entry, "evsc_expected_power_kw", 0,
+            )): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+            vol.Optional("evsc_actual_power_entity", default=get_parameter(
+                self.config_entry, "evsc_actual_power_entity", "",
+            )): cv.string,
+            vol.Optional("evsc_actual_energy_entity", default=get_parameter(
+                self.config_entry, "evsc_actual_energy_entity", "",
+            )): cv.string,
+            vol.Optional("evsc_price_validated", default=get_parameter(
+                self.config_entry, "evsc_price_validated", False,
+            )): cv.boolean,
         }
 
         return self.async_show_form(
@@ -178,3 +206,46 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors=self._errors,
             last_step=True,
         )
+
+
+class ControllerOptionsFlow(config_entries.OptionsFlow):
+    """Only controller-wide policy; charger sources stay with each EVSC."""
+
+    async def async_step_init(self, user_input=None):
+        known = {
+            e.entry_id: e.title
+            for e in self.hass.config_entries.async_entries(DOMAIN)
+            if e.data.get("__evsc_entry_type") != "charge_controller"
+        }
+        previous = self.config_entry.options
+        if user_input is not None:
+            # Keep legacy per-charger source values as fallback until the
+            # individual source mapping is explicitly moved. Do not offer
+            # them again in the controller UI.
+            data = dict(previous)
+            data.update(user_input)
+            data["participants"] = [
+                e for e in user_input.get("participants", ()) if e in known
+            ]
+            data["paused_chargers"] = [
+                e for e in previous.get("paused_chargers", ())
+                if e in data["participants"]
+            ]
+            return self.async_create_entry(title="", data=data)
+        schema = vol.Schema({
+            vol.Optional("participants", default=previous.get("participants", [])):
+                cv.multi_select(known),
+            vol.Optional("max_parallel", default=previous.get("max_parallel", 1)):
+                vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
+            vol.Optional("power_budget_kw", default=previous.get("power_budget_kw", 0)):
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+            vol.Optional("peak_shaving_enabled", default=previous.get("peak_shaving_enabled", False)):
+                cv.boolean,
+            vol.Optional("site_power_sensor", default=previous.get("site_power_sensor", "")):
+                cv.string,
+            vol.Optional("peak_target_kw", default=previous.get("peak_target_kw", 0)):
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+            vol.Optional("peak_reserve_kw", default=previous.get("peak_reserve_kw", 0)):
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
+        })
+        return self.async_show_form(step_id="init", data_schema=schema)
