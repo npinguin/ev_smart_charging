@@ -191,6 +191,32 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     0,
                 ),
             ): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
+            # Optional native numeric kWh source facts. Blank defaults
+            # preserve every existing Local entry, source, and entity ID.
+            vol.Optional(
+                "evsc_capacity_entity",
+                default=get_parameter(
+                    self.config_entry, "evsc_capacity_entity", ""
+                ),
+            ): cv.string,
+            vol.Optional(
+                "evsc_current_energy_entity",
+                default=get_parameter(
+                    self.config_entry, "evsc_current_energy_entity", ""
+                ),
+            ): cv.string,
+            vol.Optional(
+                "evsc_target_energy_entity",
+                default=get_parameter(
+                    self.config_entry, "evsc_target_energy_entity", ""
+                ),
+            ): cv.string,
+            vol.Optional(
+                "evsc_effective_price_entity",
+                default=get_parameter(
+                    self.config_entry, "evsc_effective_price_entity", ""
+                ),
+            ): cv.string,
             vol.Optional(
                 "evsc_expected_power_kw",
                 default=get_parameter(
