@@ -39,12 +39,23 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._errors = {}
         self.user_input = {}
 
+    async def async_step_import(self, user_input=None):
+        """Create one persistent, internal controller config entry per HA instance."""
+        await self.async_set_unique_id("evsc_charge_controller")
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title="EVSC Charge Controller",
+            data={"__evsc_entry_type": "charge_controller"},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
+        if config_entry.data.get("__evsc_entry_type") == "charge_controller":
+            return ControllerOptionsFlow()
         return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
@@ -178,3 +189,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors=self._errors,
             last_step=True,
         )
+
+
+class ControllerOptionsFlow(config_entries.OptionsFlow):
+    """The passive controller has no mandatory configuration."""
+
+    async def async_step_init(self, user_input=None):
+        return self.async_abort(reason="controller_read_only")

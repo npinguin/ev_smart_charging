@@ -3,8 +3,8 @@
 import asyncio
 import logging
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
@@ -31,6 +31,11 @@ from .const import (
     STARTUP_MESSAGE,
     PLATFORMS,
 )
+from .controller.sensors import ControllerMonitor
+
+CONTROLLER_ENTRY_TYPE = "charge_controller"
+CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
+
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -42,6 +47,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if hass.data.get(DOMAIN) is None:
         hass.data.setdefault(DOMAIN, {})
         _LOGGER.debug(STARTUP_MESSAGE)
+
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        hass.data[DOMAIN][entry.entry_id] = ControllerMonitor(hass)
+        try:
+            if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
+                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+            else:
+                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+        except Exception:
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            raise
+        return True
 
     coordinator = EVSmartChargingCoordinator(hass, entry)
     validation_error = coordinator.validate_input_sensors()
@@ -88,12 +105,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         device.id, name_by_user=entry.title
                     )
 
+    # A controller is an independent internal config entry. Its stable HA device
+    # identity does not depend on the first or last charger config entry.
+    if not any(
+        candidate.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
+        for candidate in hass.config_entries.async_entries(DOMAIN)
+    ):
+        hass.async_create_task(hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
+        ))
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     _LOGGER.debug("async_unload_entry")
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        unloaded = await hass.config_entries.async_forward_entry_unload(
+            entry, Platform.SENSOR
+        )
+        if unloaded:
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+        return unloaded
+
     coordinator = hass.data[DOMAIN][entry.entry_id]
     unloaded = all(
         await asyncio.gather(
