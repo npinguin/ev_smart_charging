@@ -33,7 +33,22 @@ jobs:
         with:
           python-version: "3.x"
       - run: python3 -m pip install black
-      - run: black .
+      - run: black --check .
+
+  controller_tests:
+    runs-on: "ubuntu-latest"
+    name: Controller behavioral regression (3.11)
+    steps:
+      - uses: "actions/checkout@v7"
+      - uses: "actions/setup-python@v7"
+        with:
+          python-version: "3.11"
+      - name: Install test requirements
+        run: python3 -m pip install -r requirements_test311.txt
+      - name: Run focused controller tests
+        run: |
+          pytest -q -n 0 --timeout=45 --asyncio-mode=auto \
+            -p no:sugar tests/controller
 
   tests:
     runs-on: "ubuntu-latest"
