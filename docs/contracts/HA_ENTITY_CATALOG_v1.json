@@ -46,7 +46,9 @@
           "kind": "enum",
           "source": "supervisor",
           "stage": "current",
-          "note": "Monitoring / planning / active / degraded; explicit error reasons"
+          "note": "Monitoring / planning / active / degraded; explicit error reasons",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -56,7 +58,9 @@
           "kind": "enum",
           "source": "participants",
           "stage": "new",
-          "note": "local | mixed | coordinated"
+          "note": "local | mixed | coordinated",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -66,7 +70,9 @@
           "kind": "measurement",
           "source": "registry",
           "stage": "current",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -76,7 +82,9 @@
           "kind": "measurement",
           "source": "connection",
           "stage": "current",
-          "note": "Logical EVSC connection state; not physical proof"
+          "note": "Logical EVSC connection state; not physical proof",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -86,7 +94,9 @@
           "kind": "diagnostic",
           "source": "connection",
           "stage": "current",
-          "note": ""
+          "note": "",
+          "entity_category": "diagnostic",
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -96,7 +106,9 @@
           "kind": "measurement",
           "source": "joint/local plans",
           "stage": "current",
-          "note": "Must correct semantics: planning source included"
+          "note": "Must correct semantics: planning source included",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -106,7 +118,9 @@
           "kind": "measurement",
           "source": "plan windows",
           "stage": "current",
-          "note": "Sum of charger-hours, not group wall-clock span"
+          "note": "Sum of charger-hours, not group wall-clock span",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -116,7 +130,9 @@
           "kind": "measurement",
           "source": "native charge-state",
           "stage": "current",
-          "note": "Known native charging state only"
+          "note": "Known native charging state only",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -126,7 +142,9 @@
           "kind": "diagnostic",
           "source": "native charge-state",
           "stage": "current",
-          "note": ""
+          "note": "",
+          "entity_category": "diagnostic",
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -136,7 +154,9 @@
           "kind": "measurement",
           "source": "native EVSE meter",
           "stage": "current",
-          "note": "Total only if every included charger measured; else unavailable"
+          "note": "Total only if every included charger measured; else unavailable",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -146,7 +166,9 @@
           "kind": "measurement",
           "source": "native EVSE meter",
           "stage": "current",
-          "note": "No day/month semantic assumed"
+          "note": "No day/month semantic assumed",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -156,7 +178,9 @@
           "kind": "diagnostic",
           "source": "source validation",
           "stage": "current",
-          "note": "Valid measured chargers over total; explicit denominator attribute"
+          "note": "Valid measured chargers over total; explicit denominator attribute",
+          "entity_category": "diagnostic",
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -166,7 +190,9 @@
           "kind": "diagnostic",
           "source": "source validation",
           "stage": "current",
-          "note": ""
+          "note": "",
+          "entity_category": "diagnostic",
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -176,7 +202,9 @@
           "kind": "timestamp",
           "source": "schedule",
           "stage": "new",
-          "note": "Earliest active or future assigned charging slot, across Local + Coordinated"
+          "note": "Earliest active or future assigned charging slot, across Local + Coordinated",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -186,7 +214,9 @@
           "kind": "timestamp",
           "source": "schedule",
           "stage": "new",
-          "note": "End of latest active/future assigned slot; envelope may contain gaps"
+          "note": "End of latest active/future assigned slot; envelope may contain gaps",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -196,7 +226,9 @@
           "kind": "enum",
           "source": "joint planner",
           "stage": "new",
-          "note": "idle|valid|provisional|pending_prices|infeasible|blocked"
+          "note": "idle|valid|provisional|pending_prices|infeasible|blocked",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -206,7 +238,9 @@
           "kind": "timestamp",
           "source": "planner",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -216,7 +250,9 @@
           "kind": "diagnostic",
           "source": "planner",
           "stage": "new",
-          "note": "Monotonic persisted revision, changes only when material plan changes"
+          "note": "Monotonic persisted revision, changes only when material plan changes",
+          "entity_category": "diagnostic",
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -226,7 +262,9 @@
           "kind": "timestamp",
           "source": "price source",
           "stage": "new",
-          "note": "First instant of contiguous valid future price coverage"
+          "note": "First instant of contiguous valid future price coverage",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -236,7 +274,9 @@
           "kind": "timestamp",
           "source": "price source",
           "stage": "new",
-          "note": "Exclusive end of last contiguous valid priced interval"
+          "note": "Exclusive end of last contiguous valid priced interval",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -246,7 +286,9 @@
           "kind": "enum",
           "source": "validated price source",
           "stage": "new",
-          "note": "valid|partial|unavailable|invalid|stale"
+          "note": "valid|partial|unavailable|invalid|stale",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -256,7 +298,9 @@
           "kind": "measurement",
           "source": "price source",
           "stage": "new",
-          "note": "Current effective variable import price; no raw spot-only fallback"
+          "note": "Current effective variable import price; no raw spot-only fallback",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -266,7 +310,9 @@
           "kind": "measurement",
           "source": "vehicle need",
           "stage": "new",
-          "note": "Grid-side charging need across included vehicles; unavailable if incomplete"
+          "note": "Grid-side charging need across included vehicles; unavailable if incomplete",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -276,7 +322,9 @@
           "kind": "measurement",
           "source": "merged plans",
           "stage": "new",
-          "note": "Grid-side AC planned energy, one assignment counted once"
+          "note": "Grid-side AC planned energy, one assignment counted once",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -286,7 +334,9 @@
           "kind": "measurement",
           "source": "need minus plan",
           "stage": "new",
-          "note": "Max(required-planned,0), not delivered/remaining SoC"
+          "note": "Max(required-planned,0), not delivered/remaining SoC",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -296,7 +346,9 @@
           "kind": "measurement",
           "source": "merged plans",
           "stage": "new",
-          "note": "Local HA calendar day; never fixed 24h assumption"
+          "note": "Local HA calendar day; never fixed 24h assumption",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -306,7 +358,9 @@
           "kind": "measurement",
           "source": "merged plans",
           "stage": "new",
-          "note": "Local HA calendar day; timezone and DST correct"
+          "note": "Local HA calendar day; timezone and DST correct",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -316,7 +370,9 @@
           "kind": "measurement",
           "source": "schedule × future energy cost price",
           "stage": "new",
-          "note": "Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage"
+          "note": "Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -326,7 +382,9 @@
           "kind": "measurement",
           "source": "metered 15-minute energy × time-aligned price",
           "stage": "conditional",
-          "note": "Requires native energy or sampled power + validated interval price history"
+          "note": "Requires native energy or sampled power + validated interval price history",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -336,7 +394,9 @@
           "kind": "measurement",
           "source": "pending demand × available future priced slots",
           "stage": "new",
-          "note": "Unavailable for unpriced demand; avoid fake complete cost"
+          "note": "Unavailable for unpriced demand; avoid fake complete cost",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -346,7 +406,9 @@
           "kind": "timestamp",
           "source": "participating deadlines",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -356,7 +418,9 @@
           "kind": "measurement",
           "source": "controller ownership",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -366,7 +430,9 @@
           "kind": "diagnostic",
           "source": "supervision",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": "diagnostic",
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -376,7 +442,9 @@
           "kind": "diagnostic",
           "source": "feasibility",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": "diagnostic",
+          "enabled_by_default": false
         },
         {
           "platform": "number",
@@ -386,7 +454,9 @@
           "kind": "config",
           "source": "controller policy",
           "stage": "new",
-          "note": "Integer >=1; default 1"
+          "note": "Integer >=1; default 1",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "number",
@@ -396,7 +466,9 @@
           "kind": "config",
           "source": "controller policy",
           "stage": "new",
-          "note": "Only supervised EVSC charging; no electrical protective guarantee"
+          "note": "Only supervised EVSC charging; no electrical protective guarantee",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "button",
@@ -406,7 +478,9 @@
           "kind": "action",
           "source": "planner",
           "stage": "new",
-          "note": "Idempotent replanning, never direct physical command"
+          "note": "Idempotent replanning, never direct physical command",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -416,7 +490,9 @@
           "kind": "measurement",
           "source": "priced slots today",
           "stage": "new",
-          "note": "Estimated cost of priced scheduled charging within current HA-local calendar day"
+          "note": "Estimated cost of priced scheduled charging within current HA-local calendar day",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -426,7 +502,9 @@
           "kind": "measurement",
           "source": "priced slots tomorrow",
           "stage": "new",
-          "note": "Estimated cost of priced scheduled charging within next HA-local calendar day"
+          "note": "Estimated cost of priced scheduled charging within next HA-local calendar day",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -436,7 +514,9 @@
           "kind": "measurement",
           "source": "native EVSE intervals",
           "stage": "conditional",
-          "note": "Integrated metered AC energy since HA-local midnight"
+          "note": "Integrated metered AC energy since HA-local midnight",
+          "entity_category": null,
+          "enabled_by_default": true
         }
       ]
     },
@@ -564,7 +644,9 @@
           "kind": "timestamp",
           "source": "effective local/group plan",
           "stage": "new",
-          "note": "Earliest current/future assigned slot for this charger"
+          "note": "Earliest current/future assigned slot for this charger",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -574,7 +656,9 @@
           "kind": "timestamp",
           "source": "effective local/group plan",
           "stage": "new",
-          "note": "Latest current/future assigned slot end for this charger"
+          "note": "Latest current/future assigned slot end for this charger",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -584,7 +668,9 @@
           "kind": "enum",
           "source": "charger schedule",
           "stage": "new",
-          "note": "local|planned|charging|paused|pending_prices|infeasible|unavailable"
+          "note": "local|planned|charging|paused|pending_prices|infeasible|unavailable",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -594,7 +680,9 @@
           "kind": "timestamp",
           "source": "calendar override or legacy time",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -604,7 +692,9 @@
           "kind": "measurement",
           "source": "SoC/capacity/efficiency",
           "stage": "new",
-          "note": "Grid AC energy required to reach target"
+          "note": "Grid AC energy required to reach target",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -614,7 +704,9 @@
           "kind": "measurement",
           "source": "authoritative schedule",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -624,7 +716,9 @@
           "kind": "measurement",
           "source": "required minus scheduled",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -634,7 +728,9 @@
           "kind": "measurement",
           "source": "effective schedule",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -644,7 +740,9 @@
           "kind": "measurement",
           "source": "effective schedule",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -654,7 +752,9 @@
           "kind": "measurement",
           "source": "schedule × future price",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -664,7 +764,9 @@
           "kind": "measurement",
           "source": "native meter and time-based prices",
           "stage": "conditional",
-          "note": "Current session; no costs when metering or price time coverage is missing"
+          "note": "Current session; no costs when metering or price time coverage is missing",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -674,7 +776,9 @@
           "kind": "measurement",
           "source": "native EVSE meter",
           "stage": "conditional",
-          "note": "Proxy/derived read-only; do not copy native EVSE device identity"
+          "note": "Proxy/derived read-only; do not copy native EVSE device identity",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -684,7 +788,9 @@
           "kind": "measurement",
           "source": "native EVSE meter",
           "stage": "conditional",
-          "note": "No invented daily stats"
+          "note": "No invented daily stats",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -694,7 +800,9 @@
           "kind": "measurement",
           "source": "validated local/shared effective price",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -704,7 +812,9 @@
           "kind": "enum",
           "source": "source validation",
           "stage": "new",
-          "note": "complete|power_only|energy_only|missing|invalid"
+          "note": "complete|power_only|energy_only|missing|invalid",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -714,7 +824,9 @@
           "kind": "enum",
           "source": "mode",
           "stage": "new",
-          "note": "local|charge_controller"
+          "note": "local|charge_controller",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -724,7 +836,9 @@
           "kind": "timestamp",
           "source": "planner",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": false
         },
         {
           "platform": "select",
@@ -734,7 +848,9 @@
           "kind": "config",
           "source": "HA persisted mode",
           "stage": "new",
-          "note": "local|coordinated; transfer is deliberate, never a fallback"
+          "note": "local|coordinated; transfer is deliberate, never a fallback",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "datetime",
@@ -744,7 +860,9 @@
           "kind": "config",
           "source": "user input",
           "stage": "current",
-          "note": "Existing RC1 unique_id retained; optional; unset means legacy recurring time"
+          "note": "Existing RC1 unique_id retained; optional; unset means legacy recurring time",
+          "entity_category": "config",
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "number",
@@ -754,7 +872,9 @@
           "kind": "config",
           "source": "vehicle profile fallback",
           "stage": "new",
-          "note": "Use bound current vehicle capability when available; no fixed-assignment assumption"
+          "note": "Use bound current vehicle capability when available; no fixed-assignment assumption",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "number",
@@ -764,7 +884,9 @@
           "kind": "config",
           "source": "charger capability",
           "stage": "new",
-          "note": "Not a physical current limit nor measured power"
+          "note": "Not a physical current limit nor measured power",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "number",
@@ -774,7 +896,9 @@
           "kind": "config",
           "source": "planning assumption",
           "stage": "new",
-          "note": "Planning only; measured AC power prevails for actual cost"
+          "note": "Planning only; measured AC power prevails for actual cost",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "number",
@@ -784,7 +908,9 @@
           "kind": "config",
           "source": "charger/session policy",
           "stage": "new",
-          "note": "Range 0..100, default 50; secondary to hard deadlines"
+          "note": "Range 0..100, default 50; secondary to hard deadlines",
+          "entity_category": "config",
+          "enabled_by_default": true
         },
         {
           "platform": "button",
@@ -794,7 +920,9 @@
           "kind": "action",
           "source": "EVSC supervision",
           "stage": "new",
-          "note": "Persistent inhibit via existing EVSC writer; never direct EVSE command"
+          "note": "Persistent inhibit via existing EVSC writer; never direct EVSE command",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "button",
@@ -804,7 +932,9 @@
           "kind": "action",
           "source": "EVSC supervision",
           "stage": "new",
-          "note": "Clears pause, requires fresh group plan before ON"
+          "note": "Clears pause, requires fresh group plan before ON",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "button",
@@ -814,7 +944,9 @@
           "kind": "action",
           "source": "EVSC deadline",
           "stage": "current",
-          "note": "Existing RC1 unique_id retained"
+          "note": "Existing RC1 unique_id retained",
+          "entity_category": null,
+          "enabled_by_default": "preserve_user_registry"
         },
         {
           "platform": "sensor",
@@ -824,7 +956,9 @@
           "kind": "measurement",
           "source": "priced assigned slots today",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -834,7 +968,9 @@
           "kind": "measurement",
           "source": "priced assigned slots tomorrow",
           "stage": "new",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -844,7 +980,9 @@
           "kind": "measurement",
           "source": "native meter × actual time based prices",
           "stage": "conditional",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -854,7 +992,9 @@
           "kind": "measurement",
           "source": "native EVSE interval data",
           "stage": "conditional",
-          "note": ""
+          "note": "",
+          "entity_category": null,
+          "enabled_by_default": true
         }
       ]
     }
