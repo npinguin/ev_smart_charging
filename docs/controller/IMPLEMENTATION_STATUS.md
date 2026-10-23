@@ -1,5 +1,30 @@
 # EV Smart Charging — Current Engineering Handover
 
+## P0 SIMPLIFICATION PASS — 1..N engine, Local-style execution (2026-10-24)
+
+**Engineering branch only; unmerged, no prerelease and physical Coordinated still disabled.** This section supersedes the historical event-driven architecture description below. The hard switch in `controller/safety.py` remains `COORDINATED_ACTUATION_ENABLED = False`.
+
+### What changed in source
+- **Root lifecycle fix:** the options listener now calls the Home Assistant-managed `hass.config_entries.async_reload(entry.entry_id)`. HA itself runs `async_on_unload` callbacks, preventing update-listener multiplication from manual unload/setup.
+- **Single 5-second supervisor sampler:** sample cached HA state only, not native network integrations. No runtime subscription to frequent native readback/power state events. Compare planning-relevant prices, per-EVSC effective tariff, SoC, target, usable/current/target stored kWh, Ready By, activation/connection, options, source availability, 15-minute UTC boundary, and peak-feasible EVSE sets. **Only material changes trigger the 1..N `build_plan()` engine**.
+- **Native execution separate from planning:** actual power/energy/switch readback feed cost/status and a controlled native reconciliation, never trigger a full group optimization by themselves. One bounded work queue remains for planning and reconciliation; teardown prevents stopped controllers from rebuilding or rearming.
+- **Peak safety:** monitor fresh site and EVSE power every 5 seconds; changed feasible combinations or a 90-second stable recovery trigger replanning, not every meter watt fluctuation. Peak remains a software load policy, not electrical protection. Keep fail-closed behavior, margins, manual pause and full-rate binary Stop/Resume.
+- **P0 native quarantine:** automatic EV-disconnect OFF from HA restored `EV Connected` is held for persisted Coordinated participants during the hard safety hold; explicit operator Stop and original Local disconnect behavior remain intact.
+- **Cardinality:** existing `build_plan` handles one to multiple coordinated chargers using the same code path. No separate one-charger coordinated engine.
+
+### Strict scope / no feature drift
+**Retained:** 4 unchanged v8 Local entries / original IDs, original Local price limits, opportunistic/low-SoC/keep-on/ready-time behavior, native writer, individual prices and effective EUR curves, optional native battery kWh, group power/concurrency/mixed kW, 15-minute UTC/DST, current-quarter commitment, rolling deadlines, non-duplicated Local+Coordinated totals, cost ledger, peak with manual latch and 90-second recovery, source ownership and native readback.
+
+**Migration boundary:** the original Local scheduler remains the established Local implementation until its complete configuration semantics are proven equivalent in the generalized `build_plan` planner. This is deliberate zero-drift compatibility, **not** a claim that Local was silently switched to another planner. Coordinated already uses the same 1..N group planner for a single charger or four chargers and the same native EVSC physical writer. Do not remove legacy Local behavior or introduce a second physical writer to meet a cosmetic 'single planner' objective.
+
+### Validation and release gates
+- New HA-managed repeated Options-reload test: no listener buildup, no surviving old controller or timer.
+- New polling/readback tests: raw native changes do not replan; price and SoC changes do; stopped controller cannot schedule or rearm; restoring disconnected Coordinated participants is passive during P0; Local disconnect is unaffected.
+- Explicit one-versus-four plan regression plus full existing functional/compatibility matrix.
+- **Status is code-in-review only:** current exact-head CI must pass after these commits, then operator-supervised four-entry drop-in / physical readback and rollback before any physical coordinated release. Never cite historical green runs as evidence of this new head.
+
+---
+
 ## P0 FIELD INCIDENT — Coordinated HARD HOLD (2026-10-23)
 
 **FIELD ACCEPTANCE FAILED**: switching the Peblar EVSC entry Local → Coordinated made the user's entire Home Assistant installation unresponsive. The earlier thread-safety violation and this subsequent hang are separate observations. The event storm/feedback loop is a *plausible code-backed hypothesis*, not a proven single root cause without incident runtime logs. Track [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5).
