@@ -217,6 +217,8 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
             vol.Optional("power_budget_kw", default=old.get("power_budget_kw", 0)):
                 vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+            vol.Optional("paused_chargers", default=old.get("paused_chargers", [])):
+                cv.multi_select(self._titles),
         })
         return self.async_show_form(step_id="init", data_schema=schema)
 

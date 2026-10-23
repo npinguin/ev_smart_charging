@@ -13,6 +13,7 @@ from .const import (
     ICON_STOP,
 )
 from .coordinator import EVSmartChargingCoordinator
+from .controller.runtime import is_supervised, pause_supervised
 from .entity import EVSmartChargingEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,7 +60,9 @@ class EVSmartChargingButtonStop(EVSmartChargingButton):
     _attr_icon = ICON_STOP
 
     async def async_press(self) -> None:
-        """Press the button."""
+        """Manual Stop latches a pause in Coordinated; Local remains unchanged."""
+        if is_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id):
+            pause_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id)
         await self.coordinator.turn_off_charging()
 
 

@@ -62,7 +62,22 @@ def _charger_switch_readback(hass, coordinator):
     return state is not None and state.state in ("on", "off")
 
 
+def pause_supervised(hass, charger_id):
+    """Persist explicit manual STOP before a delayed EVSC retry can run."""
+    entry = controller_entry(hass)
+    if entry is None or not is_supervised(hass, charger_id):
+        return
+    paused = set(entry.options.get("paused_chargers", []))
+    paused.add(charger_id)
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "paused_chargers": sorted(paused)}
+    )
+
+
 def physical_grant(hass, charger_id, reason):
+    entry = controller_entry(hass)
+    if entry is not None and charger_id in entry.options.get("paused_chargers", []):
+        return False
     if not is_supervised(hass, charger_id):
         return True
     entry = controller_entry(hass)
@@ -196,6 +211,8 @@ class ChargeSupervisor:
     def allowed(self, charger_id, reason):
         """A manual start must first explicitly transfer the charger to Local."""
         if reason == "manual" or self.plan is None:
+            return False
+        if charger_id in self.config_entry.options.get("paused_chargers", []):
             return False
         now = dt.utcnow()
         age = now - self.plan.created_at

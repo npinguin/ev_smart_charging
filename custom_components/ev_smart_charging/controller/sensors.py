@@ -65,6 +65,10 @@ class ControllerSensor(SensorEntity):
             "scheduled_hours": snapshot.scheduled_hours,
             "physically_charging": snapshot.physically_charging,
             "physical_state_unknown": snapshot.physical_state_unknown,
+            "actual_power_kw": self.manager.meters()["actual_power_kw"],
+            "session_energy_kwh": self.manager.meters()["session_energy_kwh"],
+            "power_coverage": self.manager.meters()["actual_power_coverage"],
+            "energy_coverage": self.manager.meters()["session_energy_coverage"],
         }[self.key]
 
     @property
@@ -74,6 +78,7 @@ class ControllerSensor(SensorEntity):
                 "mode": "coordinated" if self.manager.participants else "local",
                 "coordination_enabled": bool(self.manager.participants),
                 "participants": len(self.manager.participants),
+                "manually_paused": len(self.manager.config_entry.options.get("paused_chargers", [])),
                 "actual_power_kw": self.manager.meters()["actual_power_kw"],
                 "actual_power_coverage": self.manager.meters()["actual_power_coverage"],
                 "session_energy_kwh": self.manager.meters()["session_energy_kwh"],
@@ -105,4 +110,8 @@ def controller_sensors(manager):
         ControllerSensor(manager, "scheduled_hours", "Planned charging hours", "mdi:clock-outline"),
         ControllerSensor(manager, "physically_charging", "Physically charging", "mdi:ev-plug-type2"),
         ControllerSensor(manager, "physical_state_unknown", "Unverified physical states", "mdi:alert-circle-outline"),
+        ControllerSensor(manager, "actual_power_kw", "Actual charging power", "mdi:flash"),
+        ControllerSensor(manager, "session_energy_kwh", "Measured session energy", "mdi:battery-charging"),
+        ControllerSensor(manager, "power_coverage", "Power meter coverage", "mdi:gauge"),
+        ControllerSensor(manager, "energy_coverage", "Session meter coverage", "mdi:counter"),
     ]
