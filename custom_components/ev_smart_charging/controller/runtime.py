@@ -714,10 +714,7 @@ class ChargeSupervisor:
                     ),
                     "planned_ac_kwh": (
                         round(
-                            sum(
-                                slot["estimated_ac_kwh"]
-                                for slot in per_charger[key]
-                            ),
+                            sum(slot["estimated_ac_kwh"] for slot in per_charger[key]),
                             4,
                         )
                         if per_charger[key]
@@ -730,8 +727,7 @@ class ChargeSupervisor:
                     "indicative_cost_eur": (
                         round(
                             sum(
-                                slot["estimated_cost_eur"]
-                                for slot in per_charger[key]
+                                slot["estimated_cost_eur"] for slot in per_charger[key]
                             ),
                             4,
                         )
@@ -753,13 +749,11 @@ class ChargeSupervisor:
                     ),
                     "peak_pause_reason": (
                         "peak"
-                        if key in self.participants
-                        and self.peak_status == "paused"
+                        if key in self.participants and self.peak_status == "paused"
                         else (
                             "manual"
-                            if key in self.config_entry.options.get(
-                                "paused_chargers", ()
-                            )
+                            if key
+                            in self.config_entry.options.get("paused_chargers", ())
                             else None
                         )
                     ),
