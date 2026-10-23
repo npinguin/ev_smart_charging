@@ -382,7 +382,9 @@ def test_native_kwh_planning_works_without_usable_capacity_or_soc():
         target_battery_kwh=23.24,
     )
     p = build_plan(
-        [c], {"native_energy": slots(4)}, T,
+        [c],
+        {"native_energy": slots(4)},
+        T,
         Policy(max_parallel=1),
     )
     assert c.required_battery_kwh == pytest.approx(3.24)
@@ -412,8 +414,15 @@ def test_direct_energy_surplus_never_commands_charge():
 
 def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
     c = Charger(
-        "hybrid", "coordinated", True, 50, None, 40, 7.2,
-        T + timedelta(hours=1), current_battery_kwh=None,
+        "hybrid",
+        "coordinated",
+        True,
+        50,
+        None,
+        40,
+        7.2,
+        T + timedelta(hours=1),
+        current_battery_kwh=None,
         target_battery_kwh=23.24,
     )
     assert c.required_battery_kwh == pytest.approx(3.24)
@@ -422,8 +431,15 @@ def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
 
 def test_stored_energy_exceeding_usable_capacity_is_rejected():
     c = Charger(
-        "invalid", "coordinated", True, 50, 80, 40, 7.2,
-        T + timedelta(hours=1), current_battery_kwh=45,
+        "invalid",
+        "coordinated",
+        True,
+        50,
+        80,
+        40,
+        7.2,
+        T + timedelta(hours=1),
+        current_battery_kwh=45,
         target_battery_kwh=50,
     )
     with pytest.raises(ValueError, match="exceeds usable capacity"):

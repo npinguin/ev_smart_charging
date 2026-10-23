@@ -50,12 +50,8 @@ def individual_facts(coordinator):
     )
     soc = _number(coordinator.ev_soc)
     target = _number(coordinator.ev_target_soc)
-    measured_current = _meter(
-        coordinator.hass, current_energy_source, "energy"
-    )
-    measured_target = _meter(
-        coordinator.hass, target_energy_source, "energy"
-    )
+    measured_current = _meter(coordinator.hass, current_energy_source, "energy")
+    measured_target = _meter(coordinator.hass, target_energy_source, "energy")
     if capacity is not None and measured_current is not None:
         if measured_current > capacity:
             measured_current = None
@@ -72,13 +68,12 @@ def individual_facts(coordinator):
         if capacity is not None and target is not None and 0 <= target <= 100
         else None
     )
-    current = (
-        measured_current if measured_current is not None else derived_current
-    )
+    current = measured_current if measured_current is not None else derived_current
     goal = measured_target if measured_target is not None else derived_target
     required = (
         round(max(0, goal - current) / 0.90, 4)
-        if goal is not None and current is not None else None
+        if goal is not None and current is not None
+        else None
     )
     # Indicative plan cost is only meaningful for validated, currently
     # coordinated grants. A legacy Local schedule is NOT a controller plan.
@@ -128,11 +123,13 @@ def individual_facts(coordinator):
             target_energy_source if measured_target is not None else None
         ),
         "battery_current_resolution": (
-            "direct" if measured_current is not None
+            "direct"
+            if measured_current is not None
             else "derived" if derived_current is not None else "unavailable"
         ),
         "battery_target_resolution": (
-            "direct" if measured_target is not None
+            "direct"
+            if measured_target is not None
             else "derived" if derived_target is not None else "unavailable"
         ),
         "cost_quality": "validated_plan" if indicative is not None else "unavailable",

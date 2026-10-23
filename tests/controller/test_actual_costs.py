@@ -130,9 +130,7 @@ def test_native_meter_rebinding_discards_incompatible_known_subtotals():
     ledger = ActualCostLedger()
     tariffs = interval(start)
     ledger.observe(start, 10, "sensor.first_energy", tariffs)
-    ledger.observe(
-        start + timedelta(minutes=5), 11, "sensor.first_energy", tariffs
-    )
+    ledger.observe(start + timedelta(minutes=5), 11, "sensor.first_energy", tariffs)
     assert ledger.summary()["known_subtotal_eur"] == 0.2
     ledger.observe(
         start + timedelta(minutes=10), 50, "sensor.replacement_energy", tariffs

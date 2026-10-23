@@ -79,9 +79,7 @@ class Charger:
             not isfinite(self.charging_speed_pct_h) or self.charging_speed_pct_h <= 0
         ):
             raise ValueError("Invalid charging speed")
-        for battery_value in (
-            self.current_battery_kwh, self.target_battery_kwh
-        ):
+        for battery_value in (self.current_battery_kwh, self.target_battery_kwh):
             if battery_value is not None and (
                 not isfinite(battery_value) or battery_value < 0
             ):
@@ -102,16 +100,14 @@ class Charger:
         """Use direct stored kWh when present; preserve legacy %/hour otherwise."""
         energy = self.required_battery_kwh
         direct = (
-            self.current_battery_kwh is not None
-            or self.target_battery_kwh is not None
+            self.current_battery_kwh is not None or self.target_battery_kwh is not None
         )
         if direct:
             if energy == 0:
                 return 0
             if self.charge_power_kw is not None:
                 return ceil(
-                    energy / (self.charge_power_kw * 0.25 * self.efficiency)
-                    - 1e-9
+                    energy / (self.charge_power_kw * 0.25 * self.efficiency) - 1e-9
                 )
         if self.current_soc is None or self.target_soc is None:
             return None
@@ -121,10 +117,7 @@ class Charger:
         if self.charging_speed_pct_h is not None:
             return ceil((delta / self.charging_speed_pct_h) * 4 - 1e-9)
         if energy is not None and self.charge_power_kw is not None:
-            return ceil(
-                energy / (self.charge_power_kw * 0.25 * self.efficiency)
-                - 1e-9
-            )
+            return ceil(energy / (self.charge_power_kw * 0.25 * self.efficiency) - 1e-9)
         return None
 
     @property
@@ -139,8 +132,7 @@ class Charger:
         if current is None or target is None:
             return None
         if self.usable_capacity_kwh is not None and (
-            current > self.usable_capacity_kwh
-            or target > self.usable_capacity_kwh
+            current > self.usable_capacity_kwh or target > self.usable_capacity_kwh
         ):
             raise ValueError("Stored battery energy exceeds usable capacity")
         return max(0.0, target - current)

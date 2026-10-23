@@ -195,9 +195,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # preserve every existing Local entry, source, and entity ID.
             vol.Optional(
                 "evsc_capacity_entity",
-                default=get_parameter(
-                    self.config_entry, "evsc_capacity_entity", ""
-                ),
+                default=get_parameter(self.config_entry, "evsc_capacity_entity", ""),
             ): cv.string,
             vol.Optional(
                 "evsc_current_energy_entity",

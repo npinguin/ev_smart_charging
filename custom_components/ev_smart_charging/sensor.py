@@ -309,7 +309,9 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
                 self.coordinator.config_entry.options.get("evsc_capacity_entity"),
                 self.coordinator.config_entry.options.get("evsc_current_energy_entity"),
                 self.coordinator.config_entry.options.get("evsc_target_energy_entity"),
-                self.coordinator.config_entry.options.get("evsc_effective_price_entity"),
+                self.coordinator.config_entry.options.get(
+                    "evsc_effective_price_entity"
+                ),
             )
             if value
         }

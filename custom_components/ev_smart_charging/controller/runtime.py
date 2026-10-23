@@ -239,11 +239,10 @@ class ChargeSupervisor:
     def _charger(self, key, obj):
         attrs = self._source_config(key, obj)
         ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
-        native_capacity = _meter(
-            self.hass, attrs.get("capacity_sensor"), "energy"
-        )
+        native_capacity = _meter(self.hass, attrs.get("capacity_sensor"), "energy")
         direct_capacity = (
-            native_capacity if native_capacity is not None and native_capacity > 0
+            native_capacity
+            if native_capacity is not None and native_capacity > 0
             else _number(attrs.get("capacity_kwh"))
         )
         return Charger(
@@ -343,10 +342,9 @@ class ChargeSupervisor:
             # Financial group allocation must compare genuinely comparable
             # effective energy costs. A spot-index price is not automatically
             # the customer's final EUR/kWh rate.
-            source_id = (
-                obj.config_entry.options.get("evsc_effective_price_entity")
-                or getattr(obj, "price_entity_id", None)
-            )
+            source_id = obj.config_entry.options.get(
+                "evsc_effective_price_entity"
+            ) or getattr(obj, "price_entity_id", None)
             separate_effective_source = bool(
                 obj.config_entry.options.get("evsc_effective_price_entity")
             )
@@ -367,9 +365,10 @@ class ChargeSupervisor:
                     # A dedicated effective tariff provider must publish
                     # explicit future intervals. The legacy spot curve MUST
                     # NOT silently replace an invalid selected tariff.
-                    if source is None or source.attributes.get(
-                        "currency", "EUR"
-                    ) != "EUR":
+                    if (
+                        source is None
+                        or source.attributes.get("currency", "EUR") != "EUR"
+                    ):
                         raise ValueError("Effective tariff currency unsupported")
                     stream = [
                         {
@@ -619,7 +618,10 @@ class ChargeSupervisor:
                 # It must never become an executable grant or influence a
                 # physical writer. Do not compare unequal energy allocations.
                 baseline_plan = build_plan(
-                    members, prices, dt.utcnow(), policy,
+                    members,
+                    prices,
+                    dt.utcnow(),
+                    policy,
                     committed=previous,
                     live_peak_headroom_kw=None,
                 )
@@ -630,7 +632,8 @@ class ChargeSupervisor:
                     and abs(
                         baseline_plan.total_planned_grid_kwh
                         - self.plan.total_planned_grid_kwh
-                    ) < 1e-3
+                    )
+                    < 1e-3
                     and all(
                         next(
                             (
@@ -639,7 +642,8 @@ class ChargeSupervisor:
                                 if result.charger_id == key
                             ),
                             None,
-                        ) == next(
+                        )
+                        == next(
                             (
                                 result.remaining_battery_kwh
                                 for result in self.plan.results
@@ -651,8 +655,7 @@ class ChargeSupervisor:
                     )
                 ):
                     self.peak_price_comparison = {
-                        "price_best_without_live_peak_eur":
-                            baseline_plan.expected_cost_eur,
+                        "price_best_without_live_peak_eur": baseline_plan.expected_cost_eur,
                         "price_with_live_peak_eur": self.plan.expected_cost_eur,
                         "estimated_peak_cost_impact_eur": round(
                             self.plan.expected_cost_eur
