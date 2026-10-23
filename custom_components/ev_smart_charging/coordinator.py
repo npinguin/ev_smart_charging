@@ -1,7 +1,9 @@
 """Coordinator for EV Smart Charging"""
 
 from datetime import datetime
+import asyncio
 import logging
+from time import monotonic
 from homeassistant.config_entries import (
     ConfigEntry,
 )
@@ -96,6 +98,8 @@ from .sensor import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+# Same-target native commands must not be repeated for every HA readback event.
+COORDINATED_COMMAND_RETRY_SECONDS = 15.0
 
 
 class ChargerSwitch:
@@ -120,6 +124,9 @@ class EVSmartChargingCoordinator:
         """Initialize."""
         self.hass = hass
         self.config_entry = config_entry
+        self._coordinated_command_lock = asyncio.Lock()
+        self._last_coordinated_command = None
+        self._last_coordinated_command_at = 0.0
         self.platforms = []
         self.listeners = []
         self.setup_timestamp = None
@@ -494,23 +501,47 @@ class EVSmartChargingCoordinator:
                 self.sensor.charging_schedule = self._charging_schedule
 
     async def _update_coordinated_state(self):
-        """Execute only current group permits; stop if permission is absent."""
+        """Serialize physical actions and cap same-target feedback retries."""
         if not safety.COORDINATED_ACTUATION_ENABLED:
             return
-        admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
-        state = (
-            self.hass.states.get(self.charger_switch.entity_id)
-            if self.charger_switch.entity_id
-            else None
-        )
-        actual_on = state is not None and state.state == STATE_ON
-        internal_on = self.auto_charging_state == STATE_ON
-        if admit and not internal_on:
-            if await self.turn_on_charging(reason="automatic"):
-                self.auto_charging_state = STATE_ON
-        elif not admit and (internal_on or actual_on):
-            self.auto_charging_state = STATE_OFF
-            await self.turn_off_charging()
+        async with self._coordinated_command_lock:
+            if not safety.COORDINATED_ACTUATION_ENABLED:
+                return
+            admit = physical_grant(
+                self.hass, self.config_entry.entry_id, "automatic"
+            )
+            state = (
+                self.hass.states.get(self.charger_switch.entity_id)
+                if self.charger_switch.entity_id
+                else None
+            )
+            actual_on = state is not None and state.state == STATE_ON
+            internal_on = self.auto_charging_state == STATE_ON
+            command = None
+            if admit and not internal_on:
+                command = "on"
+            elif not admit and (internal_on or actual_on):
+                command = "off"
+            if command is None:
+                return
+
+            now = monotonic()
+            if (
+                command == self._last_coordinated_command
+                and now - self._last_coordinated_command_at
+                < COORDINATED_COMMAND_RETRY_SECONDS
+            ):
+                return
+            # Mark before the service call: immediate readback must not
+            # launch an unbounded retry while the first write is pending.
+            self._last_coordinated_command = command
+            self._last_coordinated_command_at = now
+            if command == "on":
+                if await self.turn_on_charging(reason="automatic"):
+                    self.auto_charging_state = STATE_ON
+            else:
+                self.auto_charging_state = STATE_OFF
+                await self.turn_off_charging()
 
     async def turn_on_charging(self, state: bool = True, *, reason: str = "manual"):
         """Existing physical writer; fail closed before any supervised ON."""
