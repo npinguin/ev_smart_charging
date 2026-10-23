@@ -1,5 +1,17 @@
 # Charge Controller — qualification and acceptance evidence
 
+## Non-negotiable qualification sequence — 2026-10-23
+
+**Gate A — Feature complete BEFORE the first field test.** All agreed Phase 1 requirements must be implemented, integration and entity/Options contract matched, and automated compatibility/regression gates passed. A partial feature build is not a release candidate. No tag or promotion on a passing synthetic fixture alone.
+
+**Gate B — First field test: ZERO-CONFIG, IN-PLACE DROP-IN UPGRADE.** Starting with the operator's existing Home Assistant and its four configured EVSC charging entries, take registry/config snapshot and backup. Replace the entire integration component; make **no changes** to YAML, config-entry data/options, entity IDs, device/source bindings or automations. Restart HA. Assert all four legacy chargers remain Local and operational; their original user-facing entities/unique IDs, prices, physical Start/Stop and scheduler are unchanged. One automatically provisioned controller may appear, but initially monitors only: no new native Start/Stop/current commands. Compare before/after exported config entry, entity/device registry and native write logs. Any required manual configuration adjustment is a **FAIL**, not a workaround.
+
+**Gate C — Controlled feature acceptance.** Only after Gate B passes, opt in one EVSC to Coordinated, verify physical native-writer readback and Stop/Resume/peak fail-closed behavior, then progress to four-charger planning/price/deadline/financial acceptance. Perform tested rollback to the pre-upgrade backup/original code with intact original config. No production approval without verified physical evidence.
+
+**Current status:** Gate A = **OPEN / NOT FEATURE COMPLETE**. Gate B = **NOT RUN**. Gate C = **NOT RUN**. Synthetic 4-entry Local fixture on `712b6f4` and code fixes through `938d3d5` are developer evidence only; check PR #3 workflow results before claiming they pass.
+
+---
+
 **Current authority:** [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). This is a release **gate checklist**, not a second version/status source.
 
 **Latest isolated engineering checkpoint:** `138aa585b4b8d599833bbe100685763702e40d47` documentation on `fix/local-bootstrap-lifecycle`, 2026-10-23. Regression evidence is from [PR #3 CI](https://github.com/npinguin/ev_smart_charging/actions/runs/39969458373), not the active feature branch or a released build. See [implementation status](IMPLEMENTATION_STATUS.md#follow-up-checkpoint--2026-10-23--isolated-p0-local-lifecycle-fix).
