@@ -1,0 +1,485 @@
+{
+  "schema_version": "1.0-draft",
+  "status": "PROPOSED — not an implementation claim",
+  "domain": "ev_smart_charging",
+  "configuration_contract_version": 8,
+  "documents": {
+    "individual": "INDIVIDUAL_EVSC.md",
+    "controller": "CHARGE_CONTROLLER.md"
+  },
+  "owners": {
+    "native_evse": [
+      "charging_control",
+      "charging_state_actual",
+      "charging_power_actual_kw",
+      "charging_power_requested",
+      "charging_energy_actual_kwh"
+    ],
+    "native_vehicle": [
+      "current_soc_pct",
+      "target_soc_pct",
+      "battery_capacity_usable_kwh",
+      "battery_energy_current_kwh",
+      "battery_energy_target_kwh"
+    ],
+    "external_tariff_provider": [
+      "effective_energy_cost_intervals_for_each_evsc"
+    ],
+    "individual_evsc": [
+      "source_bindings",
+      "ready_by",
+      "charge_speed_pct_h",
+      "normalized_current_need",
+      "individual_effective_plan",
+      "single_physical_writer"
+    ],
+    "charge_controller": [
+      "participation",
+      "group_constraints",
+      "multi_ev_schedule_grants",
+      "aggregate_status",
+      "aggregate_schedule",
+      "aggregate_costs"
+    ]
+  },
+  "source_binding_storage": "individual_evsc_config_entry_options_only",
+  "controller_policy_storage": "internal_charge_controller_config_entry_options_only",
+  "pricing_contract": {
+    "single_common_price_required": false,
+    "per_evsc_price_stream_required_for_financial_coordination": true,
+    "effective_unit": "EUR/kWh",
+    "intervals": "timezone-aware real start/end; 15 minute planning grid; source intervals may be longer",
+    "objective": "minimize sum(planned_ac_kwh[evsc,slot] * effective_eur_per_kwh[evsc,slot])",
+    "differences_between_charger_prices": "valid_and_expected",
+    "source_conflict_scope": "within_same_evsc_source_evidence_not_between_chargers",
+    "common_price_horizon_end": "minimum per-coordinated-participant continuous valid horizon; null if coverage absent",
+    "per_evsc_price_horizon": "independent, never truncated to another charger's horizon",
+    "local_price_source": "unchanged legacy, observed for aggregation; not rescheduled",
+    "total_cost_available_when": "every_included_planned_ac_energy_and_individual_effective_price_valid",
+    "actual_cost_available_when": "time_aligned_measured_evse_energy_and_own_historical_effective_price_valid",
+    "aggregate_effective_price_scalar_allowed": false
+  },
+  "devices": [
+    {
+      "type": "charge_controller",
+      "device_name": "EVSC Charge Controller",
+      "config_entry_unique_id": "evsc_charge_controller",
+      "device_identifier": [
+        "ev_smart_charging",
+        "charge_controller"
+      ],
+      "unique_id_pattern": "ev_smart_charging_charge_controller_<key>",
+      "existing_rc1_sensor_keys": [
+        "status",
+        "chargers",
+        "connected",
+        "connection_unknown",
+        "planned_chargers",
+        "scheduled_hours",
+        "physically_charging",
+        "physical_state_unknown",
+        "actual_power_kw",
+        "session_energy_kwh",
+        "power_coverage",
+        "energy_coverage"
+      ],
+      "new_sensors": [
+        {
+          "key": "planning_start",
+          "platform": "sensor",
+          "kind": "timestamp",
+          "unit": null,
+          "category": "primary",
+          "required": "source-dependent"
+        },
+        {
+          "key": "planning_end",
+          "platform": "sensor",
+          "kind": "timestamp",
+          "unit": null,
+          "category": "primary",
+          "required": "source-dependent"
+        },
+        {
+          "key": "planning_status",
+          "platform": "sensor",
+          "kind": "enum",
+          "unit": null,
+          "category": "primary",
+          "required": "source-dependent"
+        },
+        {
+          "key": "price_horizon_end",
+          "platform": "sensor",
+          "kind": "timestamp",
+          "unit": "",
+          "category": "diagnostic",
+          "required": "requires_contiguous_per_participant_prices"
+        },
+        {
+          "key": "required_energy",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "all_included_chargers_have_energy_basis"
+        },
+        {
+          "key": "planned_energy",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "all_included_chargers_have_energy_basis"
+        },
+        {
+          "key": "unplanned_energy",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "required_and_planned_available"
+        },
+        {
+          "key": "planned_today",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "relevant_slots_valid"
+        },
+        {
+          "key": "planned_tomorrow",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "relevant_slots_valid"
+        },
+        {
+          "key": "indicative_cost",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "all_planned_energy_and_per_charger_prices_valid"
+        },
+        {
+          "key": "indicative_cost_today",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "all_todays_planned_energy_and_per_charger_prices_valid"
+        },
+        {
+          "key": "indicative_cost_tomorrow",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "all_tomorrows_planned_energy_and_per_charger_prices_valid"
+        },
+        {
+          "key": "actual_cost_today",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "all_included_measured_energy_and_historical_prices_valid"
+        }
+      ],
+      "options": {
+        "participants": {
+          "type": "evsc_config_entry_id[]",
+          "default": [],
+          "required": false
+        },
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "scope": "coordinated_only"
+        },
+        "group_power_budget_kw": {
+          "type": "number|null",
+          "minimum": 0,
+          "default": null,
+          "scope": "coordinated_only",
+          "condition": "validated_expected_ac_power_for_all_participants"
+        },
+        "priority": {
+          "type": "map<evsc_entry_id,int>",
+          "required": false,
+          "default": "deadline_first"
+        },
+        "paused": {
+          "type": "evsc_config_entry_id[]",
+          "required": false,
+          "default": []
+        }
+      },
+      "forbidden_bindings": [
+        "charger_native_control_entity",
+        "charger_actual_power_entity",
+        "vehicle_soc_entity",
+        "charger_price_source_entity",
+        "charger_battery_capacity_source"
+      ]
+    },
+    {
+      "type": "individual_evsc",
+      "existing_device_identifier_pattern": [
+        "ev_smart_charging",
+        "<config_entry_id>"
+      ],
+      "config_entry_version": 8,
+      "existing_entities": [
+        {
+          "platform": "sensor",
+          "key": "charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "sensor",
+          "key": "status",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "charging_speed",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "electricity_price_limit",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "opportunistic_level",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "opportunistic_type2_level",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "low_price_charging_level",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "low_soc_charging_level",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "number",
+          "key": "minimum_ev_soc",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "select",
+          "key": "charge_start_time",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "select",
+          "key": "charge_completion_time",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "smart_charging_activated",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "apply_price_limit",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "continuous_charging_preferred",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "ev_connected",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "keep_charger_on",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "opportunistic_charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "opportunistic_type2_charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "low_price_charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "switch",
+          "key": "low_soc_charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "button",
+          "key": "manually_start_charging",
+          "identity": "preserve_existing_unique_id"
+        },
+        {
+          "platform": "button",
+          "key": "manually_stop_charging",
+          "identity": "preserve_existing_unique_id"
+        }
+      ],
+      "existing_rc1_extensions": [
+        {
+          "platform": "datetime",
+          "key": "absolute_ready_by",
+          "identity": "preserve_rc1_unique_id"
+        },
+        {
+          "platform": "button",
+          "key": "clear_absolute_ready_by",
+          "identity": "preserve_rc1_unique_id"
+        }
+      ],
+      "proposed_entities": [
+        {
+          "key": "current_charging_power",
+          "platform": "sensor",
+          "kind": "power",
+          "unit": "kW",
+          "category": "primary",
+          "required": "actual_evse_meter_source_available"
+        },
+        {
+          "key": "battery_capacity",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "usable_vehicle_capacity_or_confirmed_fallback"
+        },
+        {
+          "key": "battery_energy_current",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "direct_or_valid_derivation"
+        },
+        {
+          "key": "battery_energy_target",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "direct_or_valid_derivation"
+        },
+        {
+          "key": "charging_required",
+          "platform": "sensor",
+          "kind": "energy",
+          "unit": "kWh",
+          "category": "primary",
+          "required": "valid_ac_energy_basis"
+        },
+        {
+          "key": "indicative_charging_cost",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "own_priced_schedule_and_energy_basis"
+        },
+        {
+          "key": "actual_charging_cost",
+          "platform": "sensor",
+          "kind": "monetary",
+          "unit": "EUR",
+          "category": "primary",
+          "required": "metered_intervals_and_own_historical_prices"
+        },
+        {
+          "platform": "select",
+          "key": "control_mode",
+          "options": [
+            "local",
+            "coordinated"
+          ],
+          "owner": "controller_config_entry",
+          "default": "local",
+          "identity": "stable_new_unique_id"
+        },
+        {
+          "platform": "button",
+          "key": "resume_coordinated",
+          "owner": "existing_evsc",
+          "required": "coordinated_paused_only"
+        },
+        {
+          "platform": "number",
+          "key": "set_charging_power",
+          "kind": "physical_requested_setpoint",
+          "unit": "kW",
+          "conditional": true,
+          "owner": "native_evse",
+          "writer": "existing_evsc_only",
+          "required": "verified_native_power_setpoint_support"
+        },
+        {
+          "key": "charging_speed_observed",
+          "platform": "sensor",
+          "kind": "measurement",
+          "unit": "%/h",
+          "category": "diagnostic",
+          "required": "metered_power_usable_capacity_and_efficiency"
+        }
+      ],
+      "source_binding_owner": "individual_evsc",
+      "writer": "existing_individual_evsc_only",
+      "optional_sources": [
+        "evse_actual_power_entity",
+        "evse_actual_energy_entity",
+        "evse_requested_power_entity",
+        "ev_usable_capacity_entity",
+        "ev_current_battery_energy_entity",
+        "ev_target_battery_energy_entity",
+        "effective_energy_cost_price_entity"
+      ],
+      "preserved_existing_sources": [
+        "price_sensor",
+        "ev_soc_sensor",
+        "ev_target_soc_sensor",
+        "charger_entity",
+        "charging_state_entity",
+        "pct_per_hour"
+      ]
+    }
+  ],
+  "global_rules": [
+    "Existing v8 Local config entries require no new fields and must keep prior behavior.",
+    "No duplicate device identifiers, physical writer or charger source bindings.",
+    "No assumption that all EVSC instances use the same price or provider.",
+    "Missing actual measurements or price coverage yields unavailable, never fabricated zero.",
+    "Timeline price interval, identity, quality, local-day/DST and plan revision are explicit.",
+    "Plan includes current active slot without discarding it mid-quarter.",
+    "An HA entity_id is user-renameable; identity is by unique_id.",
+    "Input capability requirements do not imply mandatory fields for every EVSC instance."
+  ]
+}
