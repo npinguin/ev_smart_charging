@@ -507,9 +507,7 @@ class EVSmartChargingCoordinator:
         async with self._coordinated_command_lock:
             if not safety.COORDINATED_ACTUATION_ENABLED:
                 return
-            admit = physical_grant(
-                self.hass, self.config_entry.entry_id, "automatic"
-            )
+            admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
             state = (
                 self.hass.states.get(self.charger_switch.entity_id)
                 if self.charger_switch.entity_id
