@@ -84,3 +84,60 @@ def test_new_scalar_entity_identity_is_additive_and_attached_to_original_device(
         assert entity.unique_id == f"existing_evsc.sensor.{key}"
         ids.append(entity.unique_id)
     assert len(ids) == len(set(ids))
+
+
+def test_native_energy_sources_take_precedence_over_soc_derived_values():
+    c = coordinator(
+        options={
+            "evsc_capacity_entity": "sensor.usable_capacity",
+            "evsc_current_energy_entity": "sensor.native_stored",
+            "evsc_target_energy_entity": "sensor.native_target",
+        },
+        soc=10,
+        target=20,
+    )
+    c.hass.states.values.update(
+        {
+            "sensor.usable_capacity": SimpleNamespace(
+                state="40000", attributes={"unit_of_measurement": "Wh"}
+            ),
+            "sensor.native_stored": SimpleNamespace(
+                state="18", attributes={"unit_of_measurement": "kWh"}
+            ),
+            "sensor.native_target": SimpleNamespace(
+                state="28", attributes={"unit_of_measurement": "kWh"}
+            ),
+        }
+    )
+    facts = individual_facts(c)
+    assert facts["battery_capacity"] == 40
+    assert facts["battery_energy_current"] == 18
+    assert facts["battery_energy_target"] == 28
+    assert facts["charging_required"] == 11.1111
+    assert facts["battery_current_resolution"] == "direct"
+    assert facts["battery_target_resolution"] == "direct"
+
+
+def test_direct_battery_energy_no_capacity_needed_for_ac_demand():
+    c = coordinator(
+        options={
+            "evsc_current_energy_entity": "sensor.native_stored",
+            "evsc_target_energy_entity": "sensor.native_target",
+        },
+        soc=None,
+        target=None,
+    )
+    c.hass.states.values.update(
+        {
+            "sensor.native_stored": SimpleNamespace(
+                state="12", attributes={"unit_of_measurement": "kWh"}
+            ),
+            "sensor.native_target": SimpleNamespace(
+                state="24", attributes={"unit_of_measurement": "kWh"}
+            ),
+        }
+    )
+    facts = individual_facts(c)
+    assert facts["battery_capacity"] is None
+    assert facts["charging_required"] == 13.3333
+    assert facts["battery_current_resolution"] == "direct"
