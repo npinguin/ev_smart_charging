@@ -21,7 +21,7 @@ from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
 from .monitor import collect
 from .admission import SupervisionGate
-from .planner import Charger, Policy, PriceSlot, build_plan
+from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
 
 _LOGGER = logging.getLogger(__name__)
 MARKER = "__evsc_entry_type"
@@ -280,9 +280,30 @@ class ChargeSupervisor:
                 try:
                     for item in raw.get_raw():
                         value = _number(item["value"])
-                        if value is not None:
-                            slots.append(PriceSlot(item["start"], item["end"], value))
-                except (KeyError, ValueError, TypeError):
+                        if value is None:
+                            raise ValueError("Invalid effective energy rate")
+                        start, end = utc(item["start"]), utc(item["end"])
+                        # Normalize a valid longer tariff interval to 15-minute
+                        # allocation slices without claiming the source itself
+                        # published 15-minute price precision.
+                        if (
+                            end <= start
+                            or start.minute % 15
+                            or start.second
+                            or start.microsecond
+                            or (end - start) % QUARTER
+                        ):
+                            raise ValueError("Unaligned effective tariff interval")
+                        while start < end:
+                            following = start + QUARTER
+                            slots.append(PriceSlot(start, following, value))
+                            start = following
+                    slots.sort(key=lambda slot: slot.start)
+                    if any(
+                        a.end > b.start for a, b in zip(slots, slots[1:])
+                    ):
+                        raise ValueError("Conflicting overlapping tariff intervals")
+                except (KeyError, ValueError, TypeError, OverflowError):
                     _LOGGER.warning("Invalid EVSC price intervals for %s", key)
                     slots = []
             prices[key] = slots
