@@ -1,5 +1,17 @@
 # EV Smart Charging — Current Engineering Handover
 
+## P0 FIELD INCIDENT — Coordinated HARD HOLD (2026-10-23)
+
+**FIELD ACCEPTANCE FAILED**: switching the Peblar EVSC entry Local → Coordinated made the user's entire Home Assistant installation unresponsive. The earlier thread-safety violation and this subsequent hang are separate observations. The event storm/feedback loop is a *plausible code-backed hypothesis*, not a proven single root cause without incident runtime logs. Track [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5).
+
+**Do NOT install/promote or run coordinated charging** from v2.6.0-rc.2/rc.3, or infer fitness from prior synthetic CI. Restore HA safely first. Real field tests STOP until independent OEM control confirmed and HA runtime is recovered.
+
+**Engineering containment on the isolated PR branch**: the `controller/safety.py` hard kill switch is `COORDINATED_ACTUATION_ENABLED = False` and has **no UI/config override**. Already-persisted Coordinated participants remain in storage but are prevented from automatic Start *and* Stop after restart; new Coordinated selection is rejected without writing Options. Unmodified Local behavior and native manual OFF must remain possible. The runtime's HA event listeners are `@callback` and source/peak state events use **one coalesced, debounced, rate-limited refresh worker**; identical state content is ignored; stop/unload cancels any pending runner. P0 tests stress 2000 HA events, write feedback, cancellation, persisted restart hold and native writer inactivity. Code CI on exact HEAD and real recovery evidence remain REQUIRED before considering any further field test.
+
+**HACS distribution hold**: `hacs-test-prerelease.yml` publication job is explicitly disabled during P0, even for a request-file change. This document does not authorize a tag, release, PR merge, or unattended native action. Re-enabling requires separate risk review, incident evidence and supervised live acceptance.
+
+---
+
 ## HACS field-test prerelease exception — 2026-10-23
 
 The operator requested a **HACS-installable test prerelease** after the full Gate A passed (exact CI run [40019900033](https://github.com/npinguin/ev_smart_charging/actions/runs/40019900033)). This permits only a deliberately marked **`v2.6.0-rc.2` GitHub prerelease**, built from the isolated `fix/local-bootstrap-lifecycle` branch using `hacs-test-prerelease.yml`. Publication is contingent on a fresh exact-head full 9-job CI Gate A via the reusable `pull.yml`. The test ZIP is `ev_smart_charging.zip` with integration files at archive root. Manifest and code both read `2.6.0-rc.2`.
