@@ -16,6 +16,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.util import dt
+from homeassistant.helpers.storage import Store
 
 from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
@@ -184,6 +185,7 @@ class ChargeSupervisor:
         self._peak_recovery_since = None
         self._peak_latched = False
         self._actual_cost_ledgers = {}
+        self._cost_store = None
 
     @property
     def participants(self):
@@ -283,6 +285,7 @@ class ChargeSupervisor:
 
     def _record_actual_costs(self):
         """Observe dated native meter deltas against each EVSC's own tariff."""
+        changed = False
         objs = self.chargers()
         prices = self._prices(list(objs.values()))
         for key, obj in objs.items():
@@ -297,9 +300,15 @@ class ChargeSupervisor:
                 or not isinstance(stamp, datetime)
                 or stamp.tzinfo is None
             ):
+                if ledger.complete:
+                    changed = True
                 ledger.complete = False
                 continue
+            before = ledger.to_storage()
             ledger.observe(stamp, reading, entity, prices.get(key, []))
+            if ledger.to_storage() != before:
+                changed = True
+        return changed
 
     def _prices(self, objects):
         """Different rates and missing horizons are independent per EVSC."""
@@ -781,11 +790,19 @@ class ChargeSupervisor:
         self._subscribers.add(callback)
         return lambda: self._subscribers.discard(callback)
 
+    def _stored_costs(self):
+        return {
+            "ledgers": {
+                key: ledger.to_storage()
+                for key, ledger in self._actual_cost_ledgers.items()
+            }
+        }
+
     async def async_refresh(self, _now=None):
         """Serialize peak events, planned grants, and native Start/Stop."""
         async with self._refresh_lock:
             self.rebuild()
-            self._record_actual_costs()
+            cost_changed = self._record_actual_costs()
             for key in self.participants:
                 obj = self.chargers().get(key)
                 if obj is not None:
@@ -795,6 +812,14 @@ class ChargeSupervisor:
                         _LOGGER.exception(
                             "Could not synchronize supervised charger %s", key
                         )
+            if cost_changed and self._cost_store is not None:
+                # Persist after native protective START/STOP decisions.
+                try:
+                    await self._cost_store.async_save(self._stored_costs())
+                except Exception:
+                    _LOGGER.exception("Cannot persist EVSC actual-cost ledger")
+                    for ledger in self._actual_cost_ledgers.values():
+                        ledger.complete = False
             for callback in tuple(self._subscribers):
                 callback()
 
@@ -804,6 +829,19 @@ class ChargeSupervisor:
         self.hass.async_create_task(self.async_refresh())
 
     async def async_start(self):
+        # HA native storage survives normal restart/drop-in upgrade.
+        self._cost_store = Store(self.hass, 1, f"{DOMAIN}_actual_costs")
+        try:
+            saved = await self._cost_store.async_load()
+            if isinstance(saved, dict) and isinstance(saved.get("ledgers"), dict):
+                self._actual_cost_ledgers = {
+                    key: ActualCostLedger.from_storage(value)
+                    for key, value in saved["ledgers"].items()
+                    if isinstance(key, str)
+                }
+        except Exception:
+            _LOGGER.exception("Cannot restore EVSC cost evidence")
+            self._actual_cost_ledgers = {}
         self._unsub = async_track_time_interval(
             self.hass, self.async_refresh, timedelta(minutes=1)
         )
