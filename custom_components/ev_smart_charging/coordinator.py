@@ -78,6 +78,7 @@ from .const import (
     START_QUARTER_NONE,
     SWITCH,
 )
+from .controller.deadlines import effective_deadline, price_coverage_reaches_deadline
 from .helpers.coordinator import (
     Scheduler,
     get_charging_value,
@@ -203,6 +204,11 @@ class EVSmartChargingCoordinator:
         self.ready_quarter_first = (
             True  # True for first update_sensor the ready_quarter
         )
+        # An optional absolute deadline; unset by default for full legacy parity.
+        # DateTimeEntity restores it, without changing the original Options fields.
+        self.absolute_ready_by = None
+        self.absolute_ready_by_entity = None
+        self.absolute_ready_by_pending = False
 
         self.max_price = float(get_parameter(self.config_entry, CONF_MAX_PRICE, 0.0))
         self.number_min_soc = int(get_parameter(self.config_entry, CONF_MIN_SOC, 0.0))
@@ -998,6 +1004,24 @@ class EVSmartChargingCoordinator:
         if self.sensor.opportunistic != self.opportunistic_feature_triggered:
             self.sensor.opportunistic = self.opportunistic_feature_triggered
 
+        # Explicit calendar deadlines cannot be optimized against unknown future
+        # prices. Never substitute today's cheap slots for an unpriced later day.
+        if self.absolute_ready_by is not None:
+            raw = self.raw_two_days.get_raw() if self.raw_two_days else []
+            priced_until = raw[-1]["end"] if raw else None
+            if not price_coverage_reaches_deadline(self.absolute_ready_by, priced_until):
+                self.absolute_ready_by_pending = True
+                self.scheduler.set_empty_schedule()
+                self._charging_schedule = Scheduler.get_empty_schedule()
+                if self.sensor is not None:
+                    self.sensor.charging_schedule = self._charging_schedule
+                await self.update_state()
+                return
+            if self.absolute_ready_by_pending:
+                configuration_updated = True
+                self.ev_soc_before_last_charging = -1
+            self.absolute_ready_by_pending = False
+
         scheduling_params = {
             "ev_soc": self.ev_soc,
             "ev_target_soc": self.ev_target_soc,
@@ -1006,7 +1030,10 @@ class EVSmartChargingCoordinator:
             "start_quarter": get_start_quarter_utc(
                 self.start_quarter_local, self.ready_quarter_local
             ),
-            "ready_quarter": get_ready_quarter_utc(self.ready_quarter_local),
+            "ready_quarter": effective_deadline(
+                self.absolute_ready_by,
+                get_ready_quarter_utc(self.ready_quarter_local),
+            ),
             "switch_active": self.switch_active,
             "switch_apply_limit": self.switch_apply_limit
             or self.opportunistic_feature_triggered,
@@ -1019,7 +1046,7 @@ class EVSmartChargingCoordinator:
 
         # To handle non-live SOC
         # # To enable rescheduling after ready_quarter if no live SOC is available
-        if time_now_quarter_local == self.ready_quarter_local:
+        if self.absolute_ready_by is None and time_now_quarter_local == self.ready_quarter_local:
             if self.ready_quarter_first:
                 self.ev_soc_before_last_charging = -1
                 self.ready_quarter_first = False
@@ -1079,7 +1106,8 @@ class EVSmartChargingCoordinator:
         # If the ready_quarter is updated to next day before next day's prices are available,
         # then remove the schedule
         if (
-            not self.tomorrow_valid
+            self.absolute_ready_by is None
+            and not self.tomorrow_valid
             and time_now_quarter_local > self.ready_quarter_local
             and configuration_updated
         ):

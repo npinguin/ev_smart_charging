@@ -45,3 +45,17 @@ calls. Its HA entry is internal, and it has no required user Options.
 - Before activation: persistent supervised-mode recovery, physical writer gate
   on **all** ON paths, meter/source validation, real HA load/unload and four-EVSE
   runtime acceptance.
+
+
+## P3: optional calendar Ready-by (code integrated, HA proof pending)
+
+- Existing completion-time select is preserved exactly for users who never set a
+  calendar date. One new native HA DateTimeEntity is added per original charger.
+- A separate Clear button removes the one-time override and restores original
+  recurring-hour behavior; existing Options entries are never rewritten.
+- Explicit future deadlines beyond actual known prices defer the ordinary
+  cost-optimized schedule instead of silently shifting the desired day.
+- Low-SoC, low-price and manual Local EVSC behavior remains governed by existing
+  upstream settings. Calendar Ready-by does not claim to replace these controls.
+- Daylight saving, restore ordering and source-price availability still require
+  installed Home Assistant acceptance before P3 is considered closed.

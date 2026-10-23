@@ -25,6 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     buttons = []
     buttons.append(EVSmartChargingButtonStart(entry, coordinator))
     buttons.append(EVSmartChargingButtonStop(entry, coordinator))
+    buttons.append(EVSmartChargingButtonClearReadyBy(entry, coordinator))
     async_add_devices(buttons)
 
 
@@ -60,3 +61,17 @@ class EVSmartChargingButtonStop(EVSmartChargingButton):
     async def async_press(self) -> None:
         """Press the button."""
         await self.coordinator.turn_off_charging()
+
+
+class EVSmartChargingButtonClearReadyBy(EVSmartChargingButton):
+    """Return to the original recurring completion time without altering Options."""
+
+    _entity_key = "clear_absolute_ready_by"
+    _attr_icon = "mdi:calendar-remove"
+
+    async def async_press(self) -> None:
+        self.coordinator.absolute_ready_by = None
+        self.coordinator.absolute_ready_by_pending = False
+        if self.coordinator.absolute_ready_by_entity is not None:
+            self.coordinator.absolute_ready_by_entity.clear()
+        await self.coordinator.update_configuration()
