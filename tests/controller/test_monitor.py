@@ -41,3 +41,17 @@ def test_planned_quarters_are_aggregated():
 def test_missing_scheduler_not_fabricated():
     x = collect([SimpleNamespace(switch_ev_connected=True)])
     assert x.planned_chargers == 0
+
+
+def test_physical_readback_is_not_evsc_intent():
+    x = collect([mock_coordinator(True, True, 8), mock_coordinator(True, True, 8)],
+                [True, None])
+    assert x.planned_chargers == 2
+    assert x.physically_charging == 1
+    assert x.physical_state_unknown == 1
+
+
+def test_no_physical_readback_remains_unknown():
+    x = collect([mock_coordinator(True)])
+    assert x.physically_charging == 0
+    assert x.physical_state_unknown == 1

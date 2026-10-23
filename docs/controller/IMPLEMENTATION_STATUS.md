@@ -59,3 +59,11 @@ calls. Its HA entry is internal, and it has no required user Options.
   upstream settings. Calendar Ready-by does not claim to replace these controls.
 - Daylight saving, restore ordering and source-price availability still require
   installed Home Assistant acceptance before P3 is considered closed.
+
+
+## P2 physical readback extension
+
+The Charge Controller now separately counts chargers reporting actual `on`
+through their configured EVSC charging-state source. Unknown/unavailable or
+unconfigured native charging-state references are counted as **unverified**, not
+as physical `off`. This is a state count only, not a kW/kWh measurement.

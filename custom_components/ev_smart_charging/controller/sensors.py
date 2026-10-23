@@ -16,11 +16,19 @@ class ControllerMonitor:
         self.hass = hass
 
     def snapshot(self):
-        coordinators = (
+        coordinators = [
             c for c in self.hass.data.get(DOMAIN, {}).values()
             if isinstance(c, EVSmartChargingCoordinator)
-        )
-        return collect(coordinators)
+        ]
+        readbacks = []
+        for coordinator in coordinators:
+            source = getattr(coordinator, "charging_state_entity_id", None)
+            state = self.hass.states.get(source) if source else None
+            if state is not None and state.state in ("on", "off"):
+                readbacks.append(state.state == "on")
+            else:
+                readbacks.append(None)
+        return collect(coordinators, readbacks)
 
 
 class ControllerSensor(SensorEntity):
@@ -55,6 +63,8 @@ class ControllerSensor(SensorEntity):
             "connection_unknown": snapshot.connection_unknown,
             "planned_chargers": snapshot.planned_chargers,
             "scheduled_hours": snapshot.scheduled_hours,
+            "physically_charging": snapshot.physically_charging,
+            "physical_state_unknown": snapshot.physical_state_unknown,
         }[self.key]
 
     @property
@@ -87,4 +97,6 @@ def controller_sensors(manager):
         ControllerSensor(manager, "connection_unknown", "Unknown connections", "mdi:help-circle-outline"),
         ControllerSensor(manager, "planned_chargers", "Chargers with a plan", "mdi:calendar-clock"),
         ControllerSensor(manager, "scheduled_hours", "Planned charging hours", "mdi:clock-outline"),
+        ControllerSensor(manager, "physically_charging", "Physically charging", "mdi:ev-plug-type2"),
+        ControllerSensor(manager, "physical_state_unknown", "Unverified physical states", "mdi:alert-circle-outline"),
     ]
