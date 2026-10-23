@@ -276,7 +276,7 @@
           "stage": "new",
           "note": "Exclusive end of last contiguous valid priced interval",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": true
         },
         {
           "platform": "sensor",
@@ -396,7 +396,7 @@
           "stage": "new",
           "note": "Unavailable for unpriced demand; avoid fake complete cost",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -420,7 +420,7 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -492,7 +492,7 @@
           "stage": "new",
           "note": "Estimated cost of priced scheduled charging within current HA-local calendar day",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -504,7 +504,7 @@
           "stage": "new",
           "note": "Estimated cost of priced scheduled charging within next HA-local calendar day",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -516,7 +516,7 @@
           "stage": "conditional",
           "note": "Integrated metered AC energy since HA-local midnight",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         }
       ]
     },
@@ -790,7 +790,7 @@
           "stage": "conditional",
           "note": "No invented daily stats",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -802,7 +802,7 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -958,7 +958,7 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -970,7 +970,7 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -982,7 +982,7 @@
           "stage": "conditional",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         },
         {
           "platform": "sensor",
@@ -994,7 +994,7 @@
           "stage": "conditional",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": false
         }
       ]
     }
