@@ -1,5 +1,13 @@
 # EV Smart Charging — Current Engineering Handover
 
+## HACS field-test prerelease exception — 2026-10-23
+
+The operator requested a **HACS-installable test prerelease** after the full Gate A passed (exact CI run [40019900033](https://github.com/npinguin/ev_smart_charging/actions/runs/40019900033)). This permits only a deliberately marked **`v2.6.0-rc.2` GitHub prerelease**, built from the isolated `fix/local-bootstrap-lifecycle` branch using `hacs-test-prerelease.yml`. Publication is contingent on a fresh exact-head full 9-job CI Gate A via the reusable `pull.yml`. The test ZIP is `ev_smart_charging.zip` with integration files at archive root. Manifest and code both read `2.6.0-rc.2`.
+
+This is a **test distribution**, NOT a stable/production release, not physical acceptance, and NOT permission to merge PR #3, modify `main`, or promote the frozen RC1. A full target HA backup, rollback files, 4 unchanged Local entries and initially passive controller remain mandatory. This explicit exception supersedes earlier blanket 'no tag before field-test' wording only for this **single isolated prerelease tag**.
+
+---
+
 ## Current CI decision — 2026-10-23: Codecov OPTIONAL
 
 The operator explicitly approved optional external Codecov reporting. Both `.github/workflows/pull.yml` and `.github/workflows/push.yml` now enforce a **required local pytest minimum coverage of 90%** on Python 3.11–3.14, in addition to full test success. A failing or unavailable external Codecov report must **not** fail the CI job. OIDC reporting is retained as a best-effort integration.
