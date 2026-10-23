@@ -380,6 +380,69 @@ class ChargeSupervisor:
             self.peak_status = "constrained" if headroom < sum(powers) else "active"
         return headroom, True
 
+    def _apply_peak_recovery(self, headroom, chargers, opts):
+        """Stop immediately, resume only after stable full-rate headroom.
+
+        A transient peak pause is NOT a manual pause: it is never written to
+        persistent paused_chargers. The next real admission still requires a
+        fresh plan, current native state and the exclusive EVSC writer.
+        """
+        now = dt.utcnow()
+        expected = [
+            _number(self._source_config(key, chargers[key]).get("power_kw"))
+            for key in self.participants
+            if key not in opts.get("paused_chargers", ())
+        ]
+        expected = [power for power in expected if power is not None and power > 0]
+        observed = {
+            key: _meter(
+                self.hass,
+                self._source_config(key, chargers[key]).get("power_sensor"),
+                "power",
+                max_age=PEAK_METER_MAX_AGE,
+            )
+            for key in self.participants
+        }
+        # Peak measurement validity was already checked by _peak_headroom.
+        # A running charger may report less power than its validated startup
+        # demand; never use the low observed draw as its full-rate budget.
+        running_demand = [
+            _number(self._source_config(key, chargers[key]).get("power_kw"))
+            for key, power in observed.items()
+            if power is not None and power > 0.05
+        ]
+        overload = (
+            self.peak_status == "not_achievable"
+            or any(
+                demand is not None and headroom + 1e-9 < demand
+                for demand in running_demand
+            )
+        )
+        if overload:
+            self._peak_latched = True
+            self._peak_recovery_since = None
+
+        if not self._peak_latched:
+            return headroom
+
+        minimum_start = min(expected, default=None)
+        if (
+            minimum_start is None
+            or headroom < minimum_start + PEAK_RESTART_MARGIN_KW
+            or self.peak_status == "not_achievable"
+        ):
+            self._peak_recovery_since = None
+        elif self._peak_recovery_since is None:
+            self._peak_recovery_since = now
+        elif now - self._peak_recovery_since >= PEAK_RECOVERY_STABLE:
+            self._peak_latched = False
+            self._peak_recovery_since = None
+
+        if self._peak_latched:
+            self.peak_status = "paused"
+            return 0.0
+        return headroom
+
     def rebuild(self):
         self.gate.update_plan(None)
         self.gate.set_membership(self.participants)
@@ -422,55 +485,8 @@ class ChargeSupervisor:
                 self.plan = None
                 self.reason = "PEAK_METER_UNAVAILABLE"
                 return
-            # A peak-induced STOP is immediate. Resumption is intentionally
-            # delayed until a fresh, stable headroom window is observed; the
-            # manual STOP latch remains a separate persistent authority.
-            # A margin is required only when recovering from a peak pause,
-            # not for an initial valid admission.
             if peak_limit is not None:
-                now = dt.utcnow()
-                observed_kw = sum(
-                    _meter(
-                        self.hass,
-                        self._source_config(key, objs[key]).get("power_sensor"),
-                        "power",
-                        max_age=PEAK_METER_MAX_AGE,
-                    )
-                    or 0
-                    for key in self.participants
-                )
-                was_constrained = self.peak_status in ("constrained", "not_achievable")
-                if was_constrained and (
-                    peak_limit + 1e-9 < observed_kw
-                    or self.peak_status == "not_achievable"
-                ):
-                    self._peak_latched = True
-                    self._peak_recovery_since = None
-                if self._peak_latched:
-                    expected = [
-                        _number(self._source_config(key, objs[key]).get("power_kw"))
-                        for key in self.participants
-                        if key not in opts.get("paused_chargers", ())
-                    ]
-                    required_kw = min(
-                        (power for power in expected if power is not None and power > 0),
-                        default=None,
-                    )
-                    recovering = (
-                        required_kw is not None
-                        and peak_limit >= required_kw + PEAK_RESTART_MARGIN_KW
-                        and self.peak_status != "not_achievable"
-                    )
-                    if not recovering:
-                        self._peak_recovery_since = None
-                    elif self._peak_recovery_since is None:
-                        self._peak_recovery_since = now
-                    elif now - self._peak_recovery_since >= PEAK_RECOVERY_STABLE:
-                        self._peak_latched = False
-                        self._peak_recovery_since = None
-                    if self._peak_latched:
-                        peak_limit = 0
-                        self.peak_status = "paused"
+                peak_limit = self._apply_peak_recovery(peak_limit, objs, opts)
             # Static EV group budget applies to future slots. Measured site
             # headroom can veto only the *current* quarter; later demand is
             # unknown until a real site forecast is available.
