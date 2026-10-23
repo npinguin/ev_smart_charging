@@ -1,5 +1,6 @@
 """Deterministic scheduler and supervisory admission tests."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import pytest
 
@@ -462,3 +463,21 @@ def test_operator_disabled_coordinated_charger_cannot_claim_planned_slots():
     assert not p.assignments
     assert p.results[0].status == "BLOCKED"
     assert "operator" in p.results[0].reason.lower()
+
+
+def test_operator_disable_revokes_existing_active_quarter_grant():
+    charger_on = Charger(
+        "a", "coordinated", True, 50, 52.25, 40, 4,
+        T + timedelta(hours=1),
+    )
+    source = {"a": slots(4)}
+    original = build_plan([charger_on], source, T)
+    assert grant_for(original, "a", T)
+    charger_off = replace(charger_on, enabled=False)
+    updated = build_plan(
+        [charger_off], source, T + timedelta(minutes=1),
+        committed=original.assignments,
+    )
+    assert not updated.assignments
+    assert not grant_for(updated, "a", T + timedelta(minutes=1))
+    assert updated.results[0].status == "BLOCKED"
