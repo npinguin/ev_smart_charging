@@ -96,23 +96,33 @@ def test_peak_current_quarter_assignment_is_not_optimized_away():
     assert len(refined) == 3
 
 
-def test_heterogeneous_kw_budget_does_not_get_unsafe_flow_claim():
+def test_heterogeneous_kw_budget_forces_safe_one_at_a_time_global_cost():
+    now = T + timedelta(minutes=1)
+    plan = build_plan(
+        [car("a", power=4), car("b", power=7.2)],
+        {"a": curve([9, 1, 2]), "b": curve([9, 1, 8])},
+        now,
+        Policy(max_parallel=2, group_power_budget_kw=8),
+    )
+    assert [(a.charger_id, a.start) for a in plan.assignments] == [
+        ("b", T + timedelta(minutes=15)),
+        ("a", T + timedelta(minutes=30)),
+    ]
+    assert plan.expected_cost_eur == 3.8
+    assert all(a.grid_kwh * 4 <= 8 for a in plan.assignments)
+
+
+def test_mixed_kw_parallel_budget_keeps_a_proven_safe_feasible_plan():
     now = T + timedelta(minutes=1)
     original = [
-        Assignment(
-            "a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9
-        ),
-        Assignment(
-            "b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62
-        ),
+        Assignment("a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9),
+        Assignment("b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62),
     ]
-    assert (
-        optimize_future(
-            [car("a", power=4), car("b", power=7.2)],
-            {"a": curve([9, 2, 1]), "b": curve([9, 3, 2])},
-            original,
-            now,
-            Policy(max_parallel=2, group_power_budget_kw=8),
-        )
-        == original
-    )
+    # 11.2 kW can fit both chargers, unlike an 8 kW envelope.
+    assert optimize_future(
+        [car("a", power=4), car("b", power=7.2)],
+        {"a": curve([9, 2, 1]), "b": curve([9, 3, 2])},
+        original,
+        now,
+        Policy(max_parallel=2, group_power_budget_kw=11.2),
+    ) == original
