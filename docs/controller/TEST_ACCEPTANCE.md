@@ -1,12 +1,18 @@
 # Charge Controller — qualification and acceptance evidence
 
+## Current Gate A coverage policy — 2026-10-23
+
+**External Codecov upload is optional by operator decision.** Required: all pytest suites PASS on Python 3.11, 3.12, 3.13 and 3.14, each with local Coverage.py **>=90%**, strict Black, original Local regression, controller regression and HACS validation. Codecov OIDC reporting remains best-effort and cannot make an otherwise green test job fail. Latest-HEAD CI evidence is still required before field acceptance.
+
+The repository has Issues enabled. GitHub repository topics remain missing and must be fixed for HACS. Real zero-config four-EVSC Home Assistant testing is still NOT RUN; no deploy/merge/tag until gates are satisfied. Historical evidence further below reflects prior CI configuration.
+
 ### Code-review edge cases added after initial gate definition
 - Mixed-power max-parallel and kW-constrained 0/1 quarter demand solved within explicit bounds; no unsafe native throttling and no global-optimality claim when solver caps are exceeded.
 - Local and Coordinated planned charger-hours counted exactly once and financial totals use independently validated charger rates; partial known subtotals are explicit.
 - Mid-quarter committed energy is prorated; an operator disabling a Coordinated EVSC revokes the **already active** quarter permit, not just new grants.
 - Optional native usable-battery kWh and current/target stored-kWh source/derived fallback and a separate effective-EUR tariff timeline belong to the individual EVSC; existing v8 Local data and unique IDs untouched.
 - Actual cost source rebinding resets incompatible subtotal; restored previous-day euros may not appear as today's measured total.
-- **Still mandatory:** latest-head Green engineering CI and external repository HACS/Codecov authorization, then unmodified four-charger physical upgrade, controlled opt-in, rollback. No field deployment until first code gate is demonstrably closed.
+- **Still mandatory:** latest-head green test/coverage CI and mandatory HACS repository validation, then unmodified four-charger physical upgrade, controlled opt-in, rollback. No field deployment until first code gate is demonstrably closed.
 
 ## Incremental Phase 1 implementation acceptance — 2026-10-23
 
@@ -21,7 +27,7 @@
 | Actual observed EUR with no fake timestamped deltas | `controller/costs.py`, `test_actual_costs.py`, native and group cost sensors | HA native Store-backed intervals implemented; across-restart HA runtime validation NOT COMPLETE |
 | Detailed per charger price/energy/cost/peak reason API | `controller/runtime.py` `plan_payload` | Implemented; end-to-end consumer acceptance still required |
 | Full original Local, Python 3.11–3.14 and strict formatting | GitHub PR #3 workflow, verify exact latest HEAD | Prior Python tests PASS; latest full-head CI must be checked |
-| HACS and Codecov | Repo Issues/topics, `CODECOV_TOKEN` | FAILED external administration gates |
+| HACS; optional Codecov | GitHub Issues ON, valid topics required; local pytest coverage >=90%; optional Codecov OIDC upload | HACS topics OPEN; Codecov is not a release gate |
 | Four native EVSE readback, physical writes, rollback | None | NOT RUN. Only after Gate A complete |
 
 **First field test remains one drop-in upgrade of untouched Home Assistant configuration.** Do not use new Options, new YAML, manual migration, modified entity IDs or per-charger remapping to make the installation work. No tag or merge to `main` under this open gate.
