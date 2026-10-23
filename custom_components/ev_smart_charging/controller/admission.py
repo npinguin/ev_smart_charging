@@ -40,7 +40,7 @@ class SupervisionGate:
         self._mode[charger_id] = mode
         self._plan = None
 
-    def update_plan(self, plan: GroupPlan):
+    def update_plan(self, plan: GroupPlan | None):
         self._plan = plan
 
     def stop(self, charger_id: str) -> Admission:
