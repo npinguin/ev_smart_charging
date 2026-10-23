@@ -9,7 +9,9 @@ import logging
 from datetime import timedelta
 from math import isfinite
 
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_time_interval, async_track_state_change_event,
+)
 from homeassistant.util import dt
 
 from ..const import DOMAIN
@@ -145,6 +147,12 @@ class ChargeSupervisor:
         self.price_issues = {}
         self._unsub = None
         self._subscribers = set()
+        self.peak_paused = set()
+        self.peak_control_status = "disabled"
+        self.available_ev_power_kw = None
+        self._peak_clear_since = {}
+        self._peak_meter_unsub = None
+        self.peak_restricted_slots = set()
 
     @property
     def participants(self):
@@ -238,6 +246,13 @@ class ChargeSupervisor:
                     else None
                 ),
                 "price_issues": self.price_issues,
+                "peak_control_status": self.peak_control_status,
+                "available_ev_power_kw": self.available_ev_power_kw,
+                "peak_restricted_slots": [
+                    {"charger_id": id, "start": start.isoformat()}
+                    for id, start in sorted(self.peak_restricted_slots)
+                ],
+                "future_site_headroom": "unknown_without_forecast",
                 "plan_is_complete": bool(plan and plan.coverage == "COMPLETE"),
             },
             "chargers": chargers,
@@ -295,7 +310,9 @@ class ChargeSupervisor:
             return "pending_prices"
         if "BLOCKED" in statuses or "UNKNOWN" in statuses:
             return "blocked"
-        if self.price_issues or "PROVISIONAL" in statuses:
+        if (self.price_issues or "PROVISIONAL" in statuses
+                or self.config_entry.options.get("peak_shaving_enabled", False)):
+            # Future site import is unknown without a trusted load forecast.
             return "provisional"
         return "valid" if self.plan.assignments else "idle"
 
@@ -391,7 +408,7 @@ class ChargeSupervisor:
             curves[id] = slots
         return curves, issues
 
-    def rebuild(self):
+    def rebuild(self, blocked_slots=None):
         if not self.participants:
             self.reason, self.plan = "LOCAL_MONITORING", None
             return
@@ -429,7 +446,8 @@ class ChargeSupervisor:
             now = dt.utcnow()
             active = self.plan.assignments if self.plan is not None else ()
             self.plan = build_plan(
-                members, prices, now, policy, committed=active
+                members, prices, now, policy, committed=active,
+                blocked_slots=blocked_slots
             )
             self.price_issues = price_issues
             self.reason = (
@@ -439,6 +457,95 @@ class ChargeSupervisor:
         except (ValueError, TypeError, OverflowError) as exc:
             _LOGGER.warning("EVSC joint planner rejected source inputs: %s", exc)
             self.reason, self.plan = "PLANNING_INPUT_INVALID", None
+
+    def _refresh_peak(self):
+        """Phase 1: live whole-charger admission, never native power writing.
+
+        This is an economic instantaneous import target, not a circuit breaker
+        or a predictive quarter-hour capacity-tariff controller.
+        """
+        options = self.config_entry.options
+        if not options.get("peak_shaving_enabled", False):
+            self.peak_paused.clear()
+            self._peak_clear_since.clear()
+            self.peak_control_status = "disabled"
+            self.available_ev_power_kw = None
+            return
+        now = dt.utcnow()
+        target = _number(options.get("peak_target_kw"))
+        reserve = _number(options.get("peak_reserve_kw", 0.25))
+        entity_id = options.get("site_import_power_entity")
+        state = self.hass.states.get(entity_id) if entity_id else None
+        site_import_kw = None
+        if state is not None and state.state not in ("unknown", "unavailable"):
+            reading = _number(state.state)
+            unit = state.attributes.get("unit_of_measurement")
+            last = getattr(state, "last_updated", None)
+            if (reading is not None and last is not None
+                    and last.tzinfo is not None
+                    and timedelta(0) <= now - last <= timedelta(minutes=2)):
+                if unit == "W":
+                    site_import_kw = reading / 1000
+                elif unit == "kW":
+                    site_import_kw = reading
+        self.available_ev_power_kw = None
+        previously_paused = set(self.peak_paused)
+        self.peak_paused = set(self.participants)
+        if (target is None or target <= 0 or reserve is None
+                or site_import_kw is None):
+            self.peak_control_status = "meter_unavailable"
+            self._peak_clear_since.clear()
+            return
+
+        objs = self.chargers()
+        powers = {}
+        for id in self.participants:
+            obj = objs.get(id)
+            if obj is None:
+                self.peak_control_status = "power_control_unavailable"
+                self._peak_clear_since.clear()
+                return
+            facts = self._charger(id, obj)
+            if facts.actual_power_kw is None or facts.charge_power_kw is None:
+                self.peak_control_status = "power_control_unavailable"
+                self._peak_clear_since.clear()
+                return
+            powers[id] = (facts.charge_power_kw, facts.actual_power_kw)
+        # The grid import reading already contains controllable EV load.
+        # Subtract it once so an active charging car doesn't count twice.
+        baseline_kw = site_import_kw - sum(actual for _, actual in powers.values())
+        headroom = target - baseline_kw - reserve
+        self.available_ev_power_kw = round(max(0.0, headroom), 3)
+        if baseline_kw > target - reserve:
+            self.peak_control_status = "not_achievable"
+            self._peak_clear_since.clear()
+            return
+
+        selected = [
+            a.charger_id for a in (self.plan.assignments if self.plan else ())
+            if a.start <= now < a.end and a.charger_id in self.participants
+        ]
+        permitted = set()
+        remaining = max(0.0, headroom)
+        for id in selected:
+            demand = powers[id][0]
+            if demand <= remaining + 1e-9:
+                permitted.add(id)
+                remaining -= demand
+        blocked = set(self.participants) - permitted
+        # Track *stable recovery*, not how long a charger was blocked.
+        recovering = {}
+        for id in list(permitted):
+            if id in previously_paused:
+                since = self._peak_clear_since.get(id, now)
+                if now - since < timedelta(seconds=45):
+                    blocked.add(id)
+                    recovering[id] = since
+        self._peak_clear_since = recovering
+        self.peak_paused = blocked
+        self.peak_control_status = (
+            "paused" if blocked else "active"
+        )
 
     def allowed(self, charger_id, reason):
         """A manual start must first explicitly transfer the charger to Local."""
@@ -452,6 +559,10 @@ class ChargeSupervisor:
             return False
         if not grant_for(self.plan, charger_id, now):
             return False
+        if self.config_entry.options.get("peak_shaving_enabled", False):
+            self._refresh_peak()
+            if charger_id in self.peak_paused:
+                return False
         coordinator = self.chargers().get(charger_id)
         if coordinator is None or coordinator.switch_active is not True:
             return False
@@ -465,6 +576,22 @@ class ChargeSupervisor:
 
     async def async_refresh(self, _now=None):
         self.rebuild()
+        self._refresh_peak()
+        self.peak_restricted_slots = set()
+        if (self.config_entry.options.get("peak_shaving_enabled", False)
+                and self.plan is not None and self.peak_paused):
+            now = dt.utcnow()
+            self.peak_restricted_slots = {
+                (a.charger_id, a.start)
+                for a in self.plan.assignments
+                if a.charger_id in self.peak_paused and a.start <= now < a.end
+            }
+            if self.peak_restricted_slots:
+                # A peak-blocked cheap quarter is not an eligible charging
+                # opportunity. Price-optimize remaining demand into other
+                # valid future slots, not a fake reduced-power quarter.
+                self.rebuild(blocked_slots=self.peak_restricted_slots)
+                self._refresh_peak()
         for key in self.participants:
             obj = self.chargers().get(key)
             if obj is not None:
@@ -479,9 +606,18 @@ class ChargeSupervisor:
         self._unsub = async_track_time_interval(
             self.hass, self.async_refresh, timedelta(minutes=1)
         )
+        if self.config_entry.options.get("peak_shaving_enabled", False):
+            site = self.config_entry.options.get("site_import_power_entity")
+            if site:
+                self._peak_meter_unsub = async_track_state_change_event(
+                    self.hass, [site], self.async_refresh
+                )
         await self.async_refresh()
 
     def async_stop(self):
+        if self._peak_meter_unsub:
+            self._peak_meter_unsub()
+            self._peak_meter_unsub = None
         if self._unsub:
             self._unsub()
             self._unsub = None

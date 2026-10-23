@@ -175,3 +175,109 @@ def test_read_only_plan_response_does_not_invent_energy_or_prices():
     assert response["controller"]["coordinated_indicative_cost_eur"] is None
     assert response["chargers"][0]["mode"] == "local"
     assert response["chargers"][0]["assigned_slots"] == []
+
+
+def peak_fixture():
+    from unittest.mock import AsyncMock
+    from homeassistant.util import dt as dt_util
+
+    hass, entries = ha()
+    now = dt_util.utcnow()
+    q = now.replace(minute=(now.minute // 15) * 15,
+                    second=0, microsecond=0)
+    entries.controller.options.update({
+        "participants": ["charger_1"],
+        "peak_shaving_enabled": True,
+        "peak_target_kw": 8.0,
+        "site_import_power_entity": "sensor.grid",
+        "peak_reserve_kw": 0.25,
+    })
+    entries.charger.options.update({
+        "usable_capacity_kwh": 40,
+        "expected_power_kw": 7.2,
+        "actual_power_entity": "sensor.ev_power",
+        "effective_price_confirmed": True,
+        "effective_price_unit": "EUR/kWh",
+    })
+    charger = SimpleNamespace(
+        config_entry=entries.charger,
+        raw_two_days=SimpleNamespace(get_raw=lambda: [
+            {"start": q + timedelta(minutes=15 * i),
+             "end": q + timedelta(minutes=15 * (i + 1)),
+             "value": .1 + .05 * i}
+            for i in range(5)
+        ]),
+        charger_switch=SimpleNamespace(entity_id="switch.native"),
+        absolute_ready_by=now + timedelta(hours=1),
+        ready_quarter_local=32,
+        switch_ev_connected=True, switch_active=True,
+        ev_soc=50, ev_target_soc=55,
+        charging_pct_per_hour=10,
+        price_entity_id="sensor.price",
+        update_state=AsyncMock(),
+    )
+    def state(value, unit, stamp=None):
+        return SimpleNamespace(
+            state=str(value),
+            attributes={"unit_of_measurement": unit},
+            last_updated=stamp or now,
+        )
+    sensor_states = {
+        "sensor.grid": state(5.0, "kW"),
+        "sensor.ev_power": state(0.0, "kW"),
+        "switch.native": SimpleNamespace(state="off"),
+    }
+    hass.states = SimpleNamespace(get=lambda key: sensor_states.get(key))
+    hass.data["ev_smart_charging"]["charger_1"] = charger
+    manager = ChargeSupervisor(hass, entries.controller)
+    hass.data["ev_smart_charging"]["controller"] = manager
+    return manager, entries, sensor_states
+
+
+def test_binary_peak_veto_when_headroom_less_than_full_charger_power():
+    manager, entries, states = peak_fixture()
+    manager.rebuild()
+    assert manager.plan is not None
+    assert manager.plan.assignments
+    manager._refresh_peak()
+    assert "charger_1" in manager.peak_paused
+    assert manager.peak_control_status == "paused"
+    assert manager.available_ev_power_kw == 2.75
+    assert not manager.allowed("charger_1", "automatic")
+    assert entries.controller.options["peak_target_kw"] == 8.0
+    assert entries.charger.options["expected_power_kw"] == 7.2
+
+
+def test_site_meter_missing_denies_coordinated_charging():
+    manager, entries, states = peak_fixture()
+    manager.rebuild()
+    states.pop("sensor.grid")
+    manager._refresh_peak()
+    assert manager.peak_control_status == "meter_unavailable"
+    assert "charger_1" in manager.peak_paused
+    assert not manager.allowed("charger_1", "automatic")
+
+
+def test_rise_in_target_requires_stable_recovery_before_resume():
+    manager, entries, states = peak_fixture()
+    manager.rebuild()
+    manager._refresh_peak()
+    assert manager.peak_paused
+    entries.controller.options["peak_target_kw"] = 15.0
+    manager._refresh_peak()
+    assert manager.peak_paused
+    manager._peak_clear_since["charger_1"] -= timedelta(seconds=46)
+    manager._refresh_peak()
+    assert "charger_1" not in manager.peak_paused
+    assert manager.peak_control_status == "active"
+
+
+async def test_peak_veto_replans_away_from_blocked_cheap_quarter():
+    manager, entries, states = peak_fixture()
+    await manager.async_refresh()
+    assert manager.peak_restricted_slots
+    assert not any(
+        (a.charger_id, a.start) in manager.peak_restricted_slots
+        for a in manager.plan.assignments
+    )
+    assert manager.hass.data["ev_smart_charging"]["charger_1"].update_state.await_count == 1

@@ -246,5 +246,20 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
             vol.Optional("paused_chargers", default=old.get("paused_chargers", [])):
                 cv.multi_select(self._titles),
+            # Opt-in, binary site peak admission. No native charger setpoint.
+            vol.Optional(
+                "peak_shaving_enabled",
+                default=old.get("peak_shaving_enabled", False),
+            ): cv.boolean,
+            vol.Optional(
+                "peak_target_kw", default=old.get("peak_target_kw", 0)
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+            vol.Optional(
+                "site_import_power_entity",
+                default=old.get("site_import_power_entity", ""),
+            ): cv.string,
+            vol.Optional(
+                "peak_reserve_kw", default=old.get("peak_reserve_kw", 0.25),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=20)),
         })
         return self.async_show_form(step_id="controller", data_schema=schema)

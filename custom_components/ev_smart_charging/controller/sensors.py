@@ -2,6 +2,7 @@
 from homeassistant.components.sensor import (
     SensorDeviceClass, SensorEntity, SensorStateClass,
 )
+from homeassistant.helpers.entity import EntityCategory
 
 from ..const import DOMAIN, NAME
 
@@ -20,11 +21,14 @@ class ControllerSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_charge_controller_{key}"
         if key in ("planning_start", "planning_end", "price_horizon_end"):
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
-        elif key == "actual_power_kw":
+        elif key in ("actual_power_kw", "available_ev_power"):
             self._attr_device_class = SensorDeviceClass.POWER
             self._attr_native_unit_of_measurement = "kW"
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-        elif key == "session_energy_kwh":
+            if key == "actual_power_kw":
+                self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "peak_control_status":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        if key == "session_energy_kwh":
             self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_native_unit_of_measurement = "kWh"
 
@@ -59,6 +63,8 @@ class ControllerSensor(SensorEntity):
             "price_horizon_end": (
                 self.manager.plan.priced_until if self.manager.plan else None
             ),
+            "peak_control_status": self.manager.peak_control_status,
+            "available_ev_power": self.manager.available_ev_power_kw,
         }[self.key]
 
     @property
@@ -105,4 +111,6 @@ def controller_sensors(manager):
         ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
         ControllerSensor(manager, "planning_status", "Planning status", "mdi:calendar-check"),
         ControllerSensor(manager, "price_horizon_end", "Price horizon end", "mdi:clock-end"),
+        ControllerSensor(manager, "peak_control_status", "Peak control status", "mdi:gauge"),
+        ControllerSensor(manager, "available_ev_power", "Available EV power", "mdi:flash-outline"),
     ]

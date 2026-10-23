@@ -173,6 +173,7 @@ def build_plan(
     now: datetime,
     policy: Policy = Policy(),
     committed: tuple[Assignment, ...] = (),
+    blocked_slots: set[tuple[str, datetime]] | None = None,
 ) -> GroupPlan:
     """Assign whole charging quarters with independent prices per EVSC instance.
 
@@ -235,6 +236,8 @@ def build_plan(
 
     def can_fit(c: Charger, slot: PriceSlot) -> bool:
         key = utc(slot.start)
+        if (blocked_slots and (c.id, key) in blocked_slots):
+            return False
         if (c.id, key) in selected or used.get(key, 0) >= policy.max_parallel:
             return False
         limit = policy.effective_budget
