@@ -1,5 +1,13 @@
 # Charge Controller — qualification and acceptance evidence
 
+### Code-review edge cases added after initial gate definition
+- Mixed-power max-parallel and kW-constrained 0/1 quarter demand solved within explicit bounds; no unsafe native throttling and no global-optimality claim when solver caps are exceeded.
+- Local and Coordinated planned charger-hours counted exactly once and financial totals use independently validated charger rates; partial known subtotals are explicit.
+- Mid-quarter committed energy is prorated; an operator disabling a Coordinated EVSC revokes the **already active** quarter permit, not just new grants.
+- Optional native usable-battery kWh and current/target stored-kWh source/derived fallback and a separate effective-EUR tariff timeline belong to the individual EVSC; existing v8 Local data and unique IDs untouched.
+- Actual cost source rebinding resets incompatible subtotal; restored previous-day euros may not appear as today's measured total.
+- **Still mandatory:** latest-head Green engineering CI and external repository HACS/Codecov authorization, then unmodified four-charger physical upgrade, controlled opt-in, rollback. No field deployment until first code gate is demonstrably closed.
+
 ## Incremental Phase 1 implementation acceptance — 2026-10-23
 
 **Contract gate A is still OPEN — no release/test package.** Additional source and synthetic CI checks are not physical acceptance.
@@ -8,8 +16,8 @@
 |---|---|---|
 | Zero configuration drop-in, existing four v8 entries and options unchanged | `tests/controller/test_drop_in_four_local.py`; managed bootstrap regression | Automated synthetic PASS; **real first drop-in NOT RUN** |
 | Peak fresh input, immediate whole-charger STOP, stable recovery, separate manual latch | `controller/runtime.py`; `test_live_sources_and_peak.py` | Implemented with regression; physical behavior NOT RUN |
-| Distinct own EUR/kWh curves, quarter normalization, cost of delay | `controller/planner.py`, `controller/optimizer.py`, `test_joint_optimizer.py` | Homogeneous-kW joint optimum supported; heterogeneous power-budget optimum NOT COMPLETE |
-| Additive individual facts without altering original Local entities | `controller/individual.py`, `sensor.py`, `test_individual_projection.py` | Source-dependent projection implemented, full optional source taxonomy NOT COMPLETE |
+| Distinct own EUR/kWh curves, quarter normalization, cost of delay | `controller/planner.py`, `controller/optimizer.py`, `test_joint_optimizer.py` | Homogeneous min-cost flow and bounded exact four-charger mixed-kW optimizer added; safe feasible fallback when bounds exceeded; exact-head CI and field evidence OPEN |
+| Additive individual facts without altering original Local entities | `controller/individual.py`, `sensor.py`, `test_individual_projection.py` | Native Wh/kWh usable capacity, stored current/target kWh and explicit effective EUR tariff Options implemented; complete target-HA validation OPEN |
 | Actual observed EUR with no fake timestamped deltas | `controller/costs.py`, `test_actual_costs.py`, native and group cost sensors | HA native Store-backed intervals implemented; across-restart HA runtime validation NOT COMPLETE |
 | Detailed per charger price/energy/cost/peak reason API | `controller/runtime.py` `plan_payload` | Implemented; end-to-end consumer acceptance still required |
 | Full original Local, Python 3.11–3.14 and strict formatting | GitHub PR #3 workflow, verify exact latest HEAD | Prior Python tests PASS; latest full-head CI must be checked |
