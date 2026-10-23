@@ -30,3 +30,5 @@ Field upgrade operator checklist:
 
 External Codecov upload is optional; full pytest >=90% code coverage, HACS,
 Hassfest, original Local and controller regressions and Black are mandatory.
+
+Release workflow gate retry #2: reusable CI requires OIDC permission in caller. No change to test scope or user configuration.
