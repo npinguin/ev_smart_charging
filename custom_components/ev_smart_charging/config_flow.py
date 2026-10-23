@@ -195,6 +195,9 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
     """Configure controller membership and rate evidence, not charger Options."""
 
     async def async_step_init(self, user_input=None):
+        return await self.async_step_controller(user_input)
+
+    async def async_step_controller(self, user_input=None):
         all_chargers = [
             entry for entry in self.hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") != "charge_controller"
@@ -220,7 +223,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("paused_chargers", default=old.get("paused_chargers", [])):
                 cv.multi_select(self._titles),
         })
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="controller", data_schema=schema)
 
     async def async_step_charger(self, user_input=None):
         """One focused editor per selected charger, stable IDs in stored data."""
