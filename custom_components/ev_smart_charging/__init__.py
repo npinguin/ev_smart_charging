@@ -218,17 +218,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unloaded
 
 
-# Global lock
-ev_smart_charging_lock = asyncio.Lock()
-
-
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
+    """Use HA-managed reload so async_on_unload unregisters old listeners.
+
+    Direct calls to this module's unload/setup bypass ConfigEntry cleanup,
+    multiplying options listeners after each mode or configuration change.
+    """
     _LOGGER.debug("async_reload_entry")
-    # Make sure setup is completed before next unload is started.
-    async with ev_smart_charging_lock:
-        await async_unload_entry(hass, entry)
-        await async_setup_entry(hass, entry)
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_migrate_entry(hass, config_entry: ConfigEntry):
