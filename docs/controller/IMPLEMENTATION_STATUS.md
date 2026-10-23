@@ -1,69 +1,54 @@
-# Charge Controller — implementation status
+# EV Smart Charging — Charge Controller implementation status
 
-This branch is an **in-progress implementation**, not an HA-qualified release.
+**Implementation target:** draft PR #2, `fix/controller-contract-p0` → `feature/charge-controller`  
+**Baseline:** upstream EV Smart Charging v2.6.0; pinned `test/v2.6.0-rc.1` remains unchanged.  
+**Contract authority:** `design/ha-device-contract-v1/docs/contracts/` — individual EVSC source ownership and Charge Controller behavior.  
+**Status:** **engineering candidate, NOT ready for HA/Advanced Home installation or release**. This document describes source changes; live hardware/registry acceptance has not happened.
 
-## P1: persistent monitor device (code integrated, HA proof pending)
+## Implemented in the repair branch
 
-- An internal config entry with the fixed unique ID `evsc_charge_controller` is created
-  automatically on successful setup of the first original charger config entry.
-- The internal entry owns one HA device with identifier
-  `(ev_smart_charging, charge_controller)`, independent of charger entry IDs.
-- Original charger options, schedules, services, entity unique IDs and physical
-  execution paths are not modified.
-- The permanent controller device currently publishes read-only scalar values:
-  charging instance count, connected count, unknown connection count,
-  number of scheduled chargers, and sum of planned charging hours.
-- Aggregated schedule hours are **not** measured charging hours.
-- Actual power, kWh and costs are intentionally not fabricated. Physical meter
-  bindings and quality semantics remain to be implemented.
-- Controller is **Local/monitoring only**. Coordinated scheduling, peak control,
-  absolute calendar deadlines and physical runtime qualification remain open.
+- A standalone persistent Charge Controller config-entry/device and the original 12 RC1 monitoring entities are retained.
+- The pure planner consumes **per-EVSC validated effective EUR/kWh price curves**, not a shared identical tariff series. Original Local EVSC price handling remains unchanged.
+- The running 15-minute grant survives minute-by-minute replanning while still valid; a partly elapsed quarter only contributes its remaining charging time.
+- Coordinated **time-only** planning can use original EVSC SoC, target and Charging Speed (%/hour), without requiring both new kWh capacity and kW power. Missing kW means kWh/cost totals remain unavailable; a configured kW group budget requires confirmed full-rate kW for admission.
+- Optional capacity, expected power, actual power/energy source bindings and effective tariff declaration belong on **individual EVSC Options**. Old controller-saved mapping remains readable as an upgrade fallback, without forcing remapping.
+- Controller Options retain participant selection, maximum parallel and optional static group kW budget. The old mandatory per-charger editor was removed.
+- Each existing EVSC charger device additionally exposes a Local/Coordinated mode select and an explicit Resume Coordinated button (the latter clears a persisted Manual Stop without directly starting the charger).
+- The Controller device additionally exposes read-only `planning_start`, `planning_end`, `planning_status` and `price_horizon_end` sensors. Timestamp sensors use native timezone-aware datetime values.
+- One supervisor refresh publishes the controller sensors rather than each controller sensor owning a duplicate timer.
+- `ev_smart_charging.get_charge_plan` is registered as a read-only response service; it reports individual source/price evidence and assignments without large HA-state arrays. Monetary totals remain `null` if full evidence is incomplete.
+- Regression tests were added for distinct per-charger price curves, cost-of-delay allocation, active-quarter grant persistence, partial-quarter energy, time-only planning, source/price validation, mode/Resume ownership and controller interface.
 
-## HA acceptance still required
+## Open blockers — do NOT claim completion
 
-Verify zero/one/multiple charger setup, concurrent first boot, controller entry import,
-device ID stability across reload and removal of the first charger, zero duplicate
-entities, downgrade to upstream v2.6.0 and no changes to original EVSC options.
+1. **Live Phase 1 peak shaving:** verified site import meter, instantaneous economic peak target, transient automatic Peak Pause/Resume, stable recovery/hysteresis, and full-rate binary charging admission are **not implemented**. The static group budget is not site peak shaving. Phase 2 variable charger power remains out of scope.
+2. **Actual charger metering and daily cost:** native cumulative/session meter reset/type, time-series integration and historical per-charger tariff alignment remain incomplete. Never report invented actual charging costs.
+3. **Full HA energy accounting:** all Local+Coordinated required/planned/unplanned kWh, today/tomorrow totals and pricing/coverage are not finished; do not present Coordinated-only numbers as whole-home/group totals.
+4. **Full dynamic future tariff horizon:** the original individual upstream EVSC price adaptor still supplies today/tomorrow; no arbitrary multi-day future source extension yet. This is a separate source-adaptor limitation, not a fixed product-contract requirement.
+5. **Single admission implementation:** the pure `controller/admission.py` gate has tests but is not the runtime writer's source of truth; align/remove the duplicate before release.
+6. **HA lifecycle proof:** startup order, singleton registration, mode restore, manual Stop/restart, native EVSE readback, source failure, migrations, downgrade and the Advanced Home four-charger test have not been qualified.
+7. **CI:** the original full upstream-era suite currently fails numerous legacy coordinator/HA timer-cleanup tests in the fork; these are not a green baseline. HACS validation is blocked by repository-level issues/topics settings. The repair-branch controller regression job must pass separately and cannot replace the whole-suite gate.
 
-## Backward compatibility
+## Required source options for an opted-in Coordinated charger
 
-No new mandatory EVSC Options fields. Existing charger config entries retain v8.
-The controller import entry is additive and is never eligible for physical service
-calls. Its HA entry is internal, and it has no required user Options.
+The individual EVSC must have valid existing SoC/target/Charging Speed inputs. In advanced **individual EVSC Options**, explicitly validate its effective price curve:
+- `effective_price_confirmed`: true only when applicable variable tariff components really are covered;
+- `effective_price_unit`: `EUR/kWh`, `EUR/MWh` or `cent/kWh`;
+- optional `effective_price_markup_eur_kwh` for applicable additional variable contract components.
 
+A raw market price is **not automatically** an all-in tariff. Without confirmation, this participant receives `PRICE_BASIS_UNCONFIRMED` and is not granted a financially optimized schedule; other independently valid participants can still plan. Local behavior requires none of these new Options.
 
-## P3/P5 preparatory pure modules (not yet active)
+Optional `usable_capacity_kwh`, `expected_power_kw`, `actual_power_entity` and `actual_energy_entity` remain on the individual EVSC Options only. If old RC1 Controller Options already contain these, they are read as a fallback until a controlled migration.
 
-- `controller/planner.py` defines a deterministic, price-aware joint planner with
-  timezone-aware 15-minute slots, per-vehicle calendar deadline and explicit
-  coverage, capacity and remaining-demand states.
-- `controller/admission.py` defines local pass-through vs coordinated fail-closed
-  grants, including restart-expiry and manual start safety.
-- Neither module is yet connected to EVSC coordinator, Options, services, HA
-  entities or physical execution. Do not confuse planner unit tests with live
-  coordinated charging.
-- Before activation: persistent supervised-mode recovery, physical writer gate
-  on **all** ON paths, meter/source validation, real HA load/unload and four-EVSE
-  runtime acceptance.
+## Engineering acceptance before publishing any new test build
 
+Run and pass tests for: original Local charging and entity IDs; different effective price curves; mid-quarter replanning; full-rate time-only scheduling; stable mode/Manual Stop/Resume; source outage/restart; correct HA units/classes and plan service response; eventual Phase 1 peak Stop/Resume; Advanced Home four native EVSE control paths; HACS/Hassfest and strict formatting checks; rollback to original EVSC. Actual native setpoint/variable-current control is **not** part of Phase 1.
 
-## P3: optional calendar Ready-by (code integrated, HA proof pending)
+## References
 
-- Existing completion-time select is preserved exactly for users who never set a
-  calendar date. One new native HA DateTimeEntity is added per original charger.
-- A separate Clear button removes the one-time override and restores original
-  recurring-hour behavior; existing Options entries are never rewritten.
-- Explicit future deadlines beyond actual known prices defer the ordinary
-  cost-optimized schedule instead of silently shifting the desired day.
-- Low-SoC, low-price and manual Local EVSC behavior remains governed by existing
-  upstream settings. Calendar Ready-by does not claim to replace these controls.
-- Daylight saving, restore ordering and source-price availability still require
-  installed Home Assistant acceptance before P3 is considered closed.
+- [Repair PR #2](https://github.com/npinguin/ev_smart_charging/pull/2)
+- [Architecture and implementation audit](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/audits/RC1_BEHAVIOR_AND_INTERFACE_AUDIT.md)
+- [Canonical controller contract](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/contracts/CHARGE_CONTROLLER.md)
+- [Canonical individual source contract](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/contracts/INDIVIDUAL_EVSC.md)
 
-
-## P2 physical readback extension
-
-The Charge Controller now separately counts chargers reporting actual `on`
-through their configured EVSC charging-state source. Unknown/unavailable or
-unconfigured native charging-state references are counted as **unverified**, not
-as physical `off`. This is a state count only, not a kW/kWh measurement.
+**Design language: English. No Advanced Home-specific entity ID belongs in source code or contract tests.**
