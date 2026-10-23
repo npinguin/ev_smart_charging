@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from math import isfinite
 
 from homeassistant.helpers.event import (
@@ -26,6 +26,8 @@ from .planner import Charger, Policy, PriceSlot, build_plan
 _LOGGER = logging.getLogger(__name__)
 MARKER = "__evsc_entry_type"
 CONTROLLER_TYPE = "charge_controller"
+# Enforced peak admission depends on fresh, timestamped native measurements.
+PEAK_METER_MAX_AGE = timedelta(minutes=5)
 
 
 def controller_entry(hass):
@@ -52,12 +54,24 @@ def _number(raw):
         return None
 
 
-def _meter(hass, entity_id, quantity):
+def _meter(hass, entity_id, quantity, *, max_age=None):
     if not entity_id:
         return None
     state = hass.states.get(entity_id)
     if state is None or state.state in ("unknown", "unavailable"):
         return None
+    if max_age is not None:
+        # Peak enforcement may never treat a cached stale HA value as live
+        # headroom. last_reported reflects repeated equal-value reports on HA
+        # versions that support it; older releases use last_updated.
+        observed_at = getattr(state, "last_reported", None) or getattr(
+            state, "last_updated", None
+        )
+        if not isinstance(observed_at, datetime) or observed_at.tzinfo is None:
+            return None
+        age = dt.utcnow() - observed_at
+        if age < timedelta(0) or age > max_age:
+            return None
     value = _number(state.state)
     if value is None or (value < 0 and quantity != "site_power"):
         return None
@@ -292,7 +306,10 @@ class ChargeSupervisor:
             self.peak_status = "disabled"
             self.available_ev_power_kw = None
             return None, True
-        site = _meter(self.hass, opts.get("site_power_sensor"), "site_power")
+        site = _meter(
+            self.hass, opts.get("site_power_sensor"), "site_power",
+            max_age=PEAK_METER_MAX_AGE,
+        )
         target = _number(opts.get("peak_target_kw"))
         reserve = _number(opts.get("peak_reserve_kw", 0))
         if site is None or target is None or target <= 0 or reserve is None:
@@ -310,7 +327,10 @@ class ChargeSupervisor:
                 self.available_ev_power_kw = None
                 return None, False
             cfg = self._source_config(key, obj)
-            power = _meter(self.hass, cfg.get("power_sensor"), "power")
+            power = _meter(
+                self.hass, cfg.get("power_sensor"), "power",
+                max_age=PEAK_METER_MAX_AGE,
+            )
             if power is None:
                 self.peak_status = "meter_unavailable"
                 self.available_ev_power_kw = None
@@ -321,7 +341,12 @@ class ChargeSupervisor:
         baseline = site - sum(powers)
         headroom = max(0.0, target - baseline - reserve)
         self.available_ev_power_kw = round(headroom, 3)
-        self.peak_status = "constrained" if headroom < sum(powers) else "active"
+        if baseline > target - reserve:
+            # Other, uncontrolled site loads already exceed the configured
+            # target. EV curtailment cannot guarantee that target.
+            self.peak_status = "not_achievable"
+        else:
+            self.peak_status = "constrained" if headroom < sum(powers) else "active"
         return headroom, True
 
     def rebuild(self):
@@ -329,6 +354,8 @@ class ChargeSupervisor:
         self.gate.set_membership(self.participants)
         if not self.participants:
             self.reason, self.plan = "LOCAL_MONITORING", None
+            self.peak_status = "disabled"
+            self.available_ev_power_kw = None
             return
         objs = self.chargers()
         if not self.participants.issubset(objs):
@@ -369,7 +396,7 @@ class ChargeSupervisor:
                 max_parallel=int(opts.get("max_parallel", 1)),
                 group_power_budget_kw=budget if budget and budget > 0 else None,
             )
-            if peak_limit is not None and peak_limit <= 0:
+            if peak_limit is not None and peak_limit <= 0 and self.peak_status == "constrained":
                 self.peak_status = "paused"
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
             previous = self.plan.assignments if self.plan is not None else ()
