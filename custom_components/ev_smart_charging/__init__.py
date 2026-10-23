@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
-from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant, callback
 
 try:
     from homeassistant.core import SupportsResponse
@@ -97,10 +97,13 @@ def _queue_controller_bootstrap(hass: HomeAssistant) -> None:
     if hass.is_running:
         hass.async_create_task(_ensure_controller(hass))
     else:
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED,
-            lambda _event: hass.async_create_task(_ensure_controller(hass)),
-        )
+
+        @callback
+        def _on_hass_started(_event):
+            """Schedule bootstrap on the event loop, not a worker thread."""
+            hass.async_create_task(_ensure_controller(hass))
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_hass_started)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
