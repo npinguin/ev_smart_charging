@@ -489,3 +489,28 @@ def test_operator_disable_revokes_existing_active_quarter_grant():
     assert not updated.assignments
     assert not grant_for(updated, "a", T + timedelta(minutes=1))
     assert updated.results[0].status == "BLOCKED"
+
+
+def test_one_to_four_coordinated_chargers_share_one_engine():
+    """N=1 is not a separate planner or special-case physical actuator."""
+    source = slots()
+    one = build_plan(
+        [charger("a")],
+        {"a": source},
+        T,
+        Policy(max_parallel=1, group_power_budget_kw=4),
+    )
+    assert result(one, "a").status != "LOCAL"
+    assert {item.charger_id for item in one.assignments} == {"a"}
+
+    names = ("a", "b", "c", "d")
+    four = build_plan(
+        [charger(name) for name in names],
+        {name: source for name in names},
+        T,
+        Policy(max_parallel=4, group_power_budget_kw=16),
+    )
+    assert {item.charger_id for item in four.assignments} == set(names)
+    assert len(four.results) == 4
+    # The only difference is the cardinality and optional group constraints.
+    assert all(item.status != "LOCAL" for item in four.results)
