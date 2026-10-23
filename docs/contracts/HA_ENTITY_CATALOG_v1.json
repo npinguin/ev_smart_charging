@@ -48,7 +48,19 @@
           "stage": "current",
           "note": "Monitoring / planning / active / degraded; explicit error reasons",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "monitoring",
+            "planning",
+            "active",
+            "paused",
+            "degraded",
+            "unavailable"
+          ]
         },
         {
           "platform": "sensor",
@@ -60,7 +72,16 @@
           "stage": "new",
           "note": "local | mixed | coordinated",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "local",
+            "mixed",
+            "coordinated"
+          ]
         },
         {
           "platform": "sensor",
@@ -72,7 +93,11 @@
           "stage": "current",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -84,7 +109,11 @@
           "stage": "current",
           "note": "Logical EVSC connection state; not physical proof",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -96,7 +125,11 @@
           "stage": "current",
           "note": "",
           "entity_category": "diagnostic",
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -108,7 +141,11 @@
           "stage": "current",
           "note": "Must correct semantics: planning source included",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -120,7 +157,11 @@
           "stage": "current",
           "note": "Sum of charger-hours, not group wall-clock span",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -132,7 +173,11 @@
           "stage": "current",
           "note": "Known native charging state only",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -144,7 +189,11 @@
           "stage": "current",
           "note": "",
           "entity_category": "diagnostic",
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -156,7 +205,11 @@
           "stage": "current",
           "note": "Total only if every included charger measured; else unavailable",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": "power",
+          "state_class": "measurement",
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -168,7 +221,11 @@
           "stage": "current",
           "note": "No day/month semantic assumed",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -180,7 +237,11 @@
           "stage": "current",
           "note": "Valid measured chargers over total; explicit denominator attribute",
           "entity_category": "diagnostic",
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -192,7 +253,11 @@
           "stage": "current",
           "note": "",
           "entity_category": "diagnostic",
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -204,7 +269,11 @@
           "stage": "new",
           "note": "Earliest active or future assigned charging slot, across Local + Coordinated",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -216,7 +285,11 @@
           "stage": "new",
           "note": "End of latest active/future assigned slot; envelope may contain gaps",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -228,7 +301,19 @@
           "stage": "new",
           "note": "idle|valid|provisional|pending_prices|infeasible|blocked",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "idle",
+            "valid",
+            "provisional",
+            "pending_prices",
+            "infeasible",
+            "blocked"
+          ]
         },
         {
           "platform": "sensor",
@@ -240,7 +325,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -252,7 +341,11 @@
           "stage": "new",
           "note": "Monotonic persisted revision, changes only when material plan changes",
           "entity_category": "diagnostic",
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -264,7 +357,11 @@
           "stage": "new",
           "note": "First instant of contiguous valid future price coverage",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -276,7 +373,11 @@
           "stage": "new",
           "note": "Exclusive end of last contiguous valid priced interval",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -288,7 +389,18 @@
           "stage": "new",
           "note": "valid|partial|unavailable|invalid|stale",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "valid",
+            "partial",
+            "unavailable",
+            "invalid",
+            "stale"
+          ]
         },
         {
           "platform": "sensor",
@@ -300,7 +412,11 @@
           "stage": "new",
           "note": "Current effective variable import price; no raw spot-only fallback",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -312,7 +428,11 @@
           "stage": "new",
           "note": "Grid-side charging need across included vehicles; unavailable if incomplete",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -324,7 +444,11 @@
           "stage": "new",
           "note": "Grid-side AC planned energy, one assignment counted once",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -336,7 +460,11 @@
           "stage": "new",
           "note": "Max(required-planned,0), not delivered/remaining SoC",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -348,7 +476,11 @@
           "stage": "new",
           "note": "Local HA calendar day; never fixed 24h assumption",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -360,7 +492,11 @@
           "stage": "new",
           "note": "Local HA calendar day; timezone and DST correct",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -372,7 +508,11 @@
           "stage": "new",
           "note": "Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -384,7 +524,11 @@
           "stage": "conditional",
           "note": "Requires native energy or sampled power + validated interval price history",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -396,7 +540,11 @@
           "stage": "new",
           "note": "Unavailable for unpriced demand; avoid fake complete cost",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -408,7 +556,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -420,7 +572,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -432,7 +588,11 @@
           "stage": "new",
           "note": "",
           "entity_category": "diagnostic",
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -444,7 +604,11 @@
           "stage": "new",
           "note": "",
           "entity_category": "diagnostic",
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "number",
@@ -456,7 +620,15 @@
           "stage": "new",
           "note": "Integer >=1; default 1",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 1,
+          "max": 16,
+          "step": 1,
+          "default": 1
         },
         {
           "platform": "number",
@@ -468,7 +640,16 @@
           "stage": "new",
           "note": "Only supervised EVSC charging; no electrical protective guarantee",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 0,
+          "max": 1000,
+          "step": 0.5,
+          "default": 0,
+          "zero_semantics": "unrestricted coordination power, not site fuse"
         },
         {
           "platform": "button",
@@ -480,7 +661,11 @@
           "stage": "new",
           "note": "Idempotent replanning, never direct physical command",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "action_only",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -492,7 +677,11 @@
           "stage": "new",
           "note": "Estimated cost of priced scheduled charging within current HA-local calendar day",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -504,7 +693,11 @@
           "stage": "new",
           "note": "Estimated cost of priced scheduled charging within next HA-local calendar day",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -516,7 +709,11 @@
           "stage": "conditional",
           "note": "Integrated metered AC energy since HA-local midnight",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         }
       ]
     },
@@ -646,7 +843,11 @@
           "stage": "new",
           "note": "Earliest current/future assigned slot for this charger",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -658,7 +859,11 @@
           "stage": "new",
           "note": "Latest current/future assigned slot end for this charger",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -670,7 +875,20 @@
           "stage": "new",
           "note": "local|planned|charging|paused|pending_prices|infeasible|unavailable",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "local",
+            "planned",
+            "charging",
+            "paused",
+            "pending_prices",
+            "infeasible",
+            "unavailable"
+          ]
         },
         {
           "platform": "sensor",
@@ -682,7 +900,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -694,7 +916,11 @@
           "stage": "new",
           "note": "Grid AC energy required to reach target",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -706,7 +932,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -718,7 +948,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -730,7 +964,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -742,7 +980,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -754,7 +996,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -766,7 +1012,11 @@
           "stage": "conditional",
           "note": "Current session; no costs when metering or price time coverage is missing",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -778,7 +1028,11 @@
           "stage": "conditional",
           "note": "Proxy/derived read-only; do not copy native EVSE device identity",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": "power",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -790,7 +1044,11 @@
           "stage": "conditional",
           "note": "No invented daily stats",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -802,7 +1060,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -814,7 +1076,18 @@
           "stage": "new",
           "note": "complete|power_only|energy_only|missing|invalid",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "complete",
+            "power_only",
+            "energy_only",
+            "missing",
+            "invalid"
+          ]
         },
         {
           "platform": "sensor",
@@ -826,7 +1099,15 @@
           "stage": "new",
           "note": "local|charge_controller",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "local",
+            "charge_controller"
+          ]
         },
         {
           "platform": "sensor",
@@ -838,7 +1119,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": "timestamp",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "select",
@@ -850,7 +1135,15 @@
           "stage": "new",
           "note": "local|coordinated; transfer is deliberate, never a fallback",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "enum_string_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "options": [
+            "local",
+            "coordinated"
+          ]
         },
         {
           "platform": "datetime",
@@ -862,7 +1155,11 @@
           "stage": "current",
           "note": "Existing RC1 unique_id retained; optional; unset means legacy recurring time",
           "entity_category": "config",
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "timezone_aware_datetime_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "number",
@@ -874,7 +1171,15 @@
           "stage": "new",
           "note": "Use bound current vehicle capability when available; no fixed-assignment assumption",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 1,
+          "max": 1000,
+          "step": 0.5,
+          "default": null
         },
         {
           "platform": "number",
@@ -886,7 +1191,15 @@
           "stage": "new",
           "note": "Not a physical current limit nor measured power",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 0.1,
+          "max": 100,
+          "step": 0.1,
+          "default": null
         },
         {
           "platform": "number",
@@ -898,7 +1211,15 @@
           "stage": "new",
           "note": "Planning only; measured AC power prevails for actual cost",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 50,
+          "max": 100,
+          "step": 1,
+          "default": 90
         },
         {
           "platform": "number",
@@ -910,7 +1231,15 @@
           "stage": "new",
           "note": "Range 0..100, default 50; secondary to hard deadlines",
           "entity_category": "config",
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "numeric_or_none",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "default": 50
         },
         {
           "platform": "button",
@@ -922,7 +1251,11 @@
           "stage": "new",
           "note": "Persistent inhibit via existing EVSC writer; never direct EVSE command",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "action_only",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "button",
@@ -934,7 +1267,11 @@
           "stage": "new",
           "note": "Clears pause, requires fresh group plan before ON",
           "entity_category": null,
-          "enabled_by_default": true
+          "enabled_by_default": true,
+          "native_value_type": "action_only",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "button",
@@ -946,7 +1283,11 @@
           "stage": "current",
           "note": "Existing RC1 unique_id retained",
           "entity_category": null,
-          "enabled_by_default": "preserve_user_registry"
+          "enabled_by_default": "preserve_user_registry",
+          "native_value_type": "action_only",
+          "device_class": null,
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -958,7 +1299,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -970,7 +1315,11 @@
           "stage": "new",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -982,7 +1331,11 @@
           "stage": "conditional",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "monetary",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         },
         {
           "platform": "sensor",
@@ -994,7 +1347,11 @@
           "stage": "conditional",
           "note": "",
           "entity_category": null,
-          "enabled_by_default": false
+          "enabled_by_default": false,
+          "native_value_type": "numeric_or_none",
+          "device_class": "energy",
+          "state_class": null,
+          "availability": "Never fabricate a zero; missing input yields None; configured source offline yields unavailable"
         }
       ]
     }
