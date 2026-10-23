@@ -40,7 +40,7 @@ class EVSmartChargingAbsoluteReadyBy(EVSmartChargingEntity, DateTimeEntity, Rest
             if value is not None and value.tzinfo is not None and value.utcoffset() is not None:
                 self._attr_native_value = value
                 self.coordinator.absolute_ready_by = value
-                await self.coordinator.update_configuration()
+                # The coordinator's own initial refresh runs after HA platforms load.
 
     async def async_set_value(self, value: datetime) -> None:
         """Save explicit calendar deadline; do not touch existing EVSC Options."""
