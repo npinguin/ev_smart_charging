@@ -6,6 +6,7 @@ fixture, not a substitute for physical four-charger admission/readback.
 
 from copy import deepcopy
 
+from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
@@ -17,7 +18,7 @@ from tests.const import MOCK_CONFIG_ALL
 
 
 async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
-    hass, bypass_validate_input_and_control
+    hass, bypass_validate_input_and_control, caplog
 ):
     """Import one passive controller; preserve all four original v8 entries."""
     entries = [
@@ -41,8 +42,12 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
     controller_id = None
     try:
         for entry in entries:
-            assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+            # HA may have automatically loaded other existing entries when
+            # the integration domain was initialized by the first setup.
+            if entry.state == ConfigEntryState.NOT_LOADED:
+                assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+        assert all(entry.state == ConfigEntryState.LOADED for entry in entries)
 
         controllers = [
             entry
@@ -56,6 +61,11 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
         assert not manager.participants
         assert manager.plan is None
         assert manager.reason == "LOCAL_MONITORING"
+        assert not any(
+            "Error while setting up ev_smart_charging platform" in record.message
+            or "Config entry has already been setup!" in record.message
+            for record in caplog.records
+        )
         assert set(manager.chargers()) == {entry.entry_id for entry in entries}
         observed = {
             item["evsc_entry_id"] for item in manager.plan_payload()["chargers"]
