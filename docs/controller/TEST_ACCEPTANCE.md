@@ -10,7 +10,7 @@
 | Peak fresh input, immediate whole-charger STOP, stable recovery, separate manual latch | `controller/runtime.py`; `test_live_sources_and_peak.py` | Implemented with regression; physical behavior NOT RUN |
 | Distinct own EUR/kWh curves, quarter normalization, cost of delay | `controller/planner.py`, `controller/optimizer.py`, `test_joint_optimizer.py` | Homogeneous-kW joint optimum supported; heterogeneous power-budget optimum NOT COMPLETE |
 | Additive individual facts without altering original Local entities | `controller/individual.py`, `sensor.py`, `test_individual_projection.py` | Source-dependent projection implemented, full optional source taxonomy NOT COMPLETE |
-| Actual observed EUR with no fake timestamped deltas | `controller/costs.py`, `test_actual_costs.py`, native and group cost sensors | In-memory qualified intervals implemented; across-restart complete-day history NOT COMPLETE |
+| Actual observed EUR with no fake timestamped deltas | `controller/costs.py`, `test_actual_costs.py`, native and group cost sensors | HA native Store-backed intervals implemented; across-restart HA runtime validation NOT COMPLETE |
 | Detailed per charger price/energy/cost/peak reason API | `controller/runtime.py` `plan_payload` | Implemented; end-to-end consumer acceptance still required |
 | Full original Local, Python 3.11–3.14 and strict formatting | GitHub PR #3 workflow, verify exact latest HEAD | Prior Python tests PASS; latest full-head CI must be checked |
 | HACS and Codecov | Repo Issues/topics, `CODECOV_TOKEN` | FAILED external administration gates |
