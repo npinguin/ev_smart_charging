@@ -28,6 +28,8 @@ MARKER = "__evsc_entry_type"
 CONTROLLER_TYPE = "charge_controller"
 # Enforced peak admission depends on fresh, timestamped native measurements.
 PEAK_METER_MAX_AGE = timedelta(minutes=5)
+PEAK_RECOVERY_STABLE = timedelta(seconds=90)
+PEAK_RESTART_MARGIN_KW = 0.5
 
 
 def controller_entry(hass):
@@ -176,6 +178,10 @@ class ChargeSupervisor:
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
         self.price_horizons = {}
+        # Transient peak pause; unlike an operator Stop this is never persisted
+        # into paused_chargers. A restart still requires fresh live admission.
+        self._peak_recovery_since = None
+        self._peak_latched = False
 
     @property
     def participants(self):
@@ -324,6 +330,8 @@ class ChargeSupervisor:
         if not opts.get("peak_shaving_enabled", False):
             self.peak_status = "disabled"
             self.available_ev_power_kw = None
+            self._peak_recovery_since = None
+            self._peak_latched = False
             return None, True
         site = _meter(
             self.hass,
@@ -379,6 +387,8 @@ class ChargeSupervisor:
             self.reason, self.plan = "LOCAL_MONITORING", None
             self.peak_status = "disabled"
             self.available_ev_power_kw = None
+            self._peak_latched = False
+            self._peak_recovery_since = None
             return
         objs = self.chargers()
         if not self.participants.issubset(objs):
@@ -412,6 +422,55 @@ class ChargeSupervisor:
                 self.plan = None
                 self.reason = "PEAK_METER_UNAVAILABLE"
                 return
+            # A peak-induced STOP is immediate. Resumption is intentionally
+            # delayed until a fresh, stable headroom window is observed; the
+            # manual STOP latch remains a separate persistent authority.
+            # A margin is required only when recovering from a peak pause,
+            # not for an initial valid admission.
+            if peak_limit is not None:
+                now = dt.utcnow()
+                observed_kw = sum(
+                    _meter(
+                        self.hass,
+                        self._source_config(key, objs[key]).get("power_sensor"),
+                        "power",
+                        max_age=PEAK_METER_MAX_AGE,
+                    )
+                    or 0
+                    for key in self.participants
+                )
+                was_constrained = self.peak_status in ("constrained", "not_achievable")
+                if was_constrained and (
+                    peak_limit + 1e-9 < observed_kw
+                    or self.peak_status == "not_achievable"
+                ):
+                    self._peak_latched = True
+                    self._peak_recovery_since = None
+                if self._peak_latched:
+                    expected = [
+                        _number(self._source_config(key, objs[key]).get("power_kw"))
+                        for key in self.participants
+                        if key not in opts.get("paused_chargers", ())
+                    ]
+                    required_kw = min(
+                        (power for power in expected if power is not None and power > 0),
+                        default=None,
+                    )
+                    recovering = (
+                        required_kw is not None
+                        and peak_limit >= required_kw + PEAK_RESTART_MARGIN_KW
+                        and self.peak_status != "not_achievable"
+                    )
+                    if not recovering:
+                        self._peak_recovery_since = None
+                    elif self._peak_recovery_since is None:
+                        self._peak_recovery_since = now
+                    elif now - self._peak_recovery_since >= PEAK_RECOVERY_STABLE:
+                        self._peak_latched = False
+                        self._peak_recovery_since = None
+                    if self._peak_latched:
+                        peak_limit = 0
+                        self.peak_status = "paused"
             # Static EV group budget applies to future slots. Measured site
             # headroom can veto only the *current* quarter; later demand is
             # unknown until a real site forecast is available.
