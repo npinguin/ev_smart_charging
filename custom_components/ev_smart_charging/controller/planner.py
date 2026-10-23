@@ -291,6 +291,7 @@ def build_plan(
             or c.mode != "coordinated"
             or not (utc(old.start) <= t < utc(old.end))
             or c.connected is not True
+            or c.enabled is not True
         ):
             continue
         prices_for_charger = {utc(p.start): p for p in by_charger.get(c.id, ())}
