@@ -11,6 +11,8 @@ These files are the **single source of truth** on this design branch:
 
 **Delivery staging:** Phase 1 peak management uses **binary pause/resume only** with the original EVSC physical writer. Peak restrictions may block cheapest intervals, so financial optimization selects the lowest-cost *feasible* schedule using individual per-charger prices. Native flexible charging-power control is deferred to Phase 2. These remain contract designs, not RC1 runtime claims.
 
+**Current implementation audit:** [RC1 behavior, HA interface and Advanced Home acceptance gaps](../audits/RC1_BEHAVIOR_AND_INTERFACE_AUDIT.md) — source-verified findings and required release gates; not a runtime certification.
+
 **Contract maintenance rules:**
 - Change the semantic Markdown and catalog **together in one commit**. Schema/unique ID diffs must be intentional.
 - Do not create another `_v1_1_FINAL_NEW` document. Edit these canonical files and use Git history for previous versions.
