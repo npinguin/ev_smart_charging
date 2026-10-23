@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from math import isfinite
 
+from homeassistant.core import callback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -1085,10 +1086,12 @@ class ChargeSupervisor:
                 self._source_changed,
             )
 
+    @callback
     def _source_changed(self, _event):
-        """Replan promptly on changed prices, vehicle need and EVSE readback."""
+        """Replan on the HA event loop, never in its worker executor."""
         self.hass.async_create_task(self.async_refresh())
 
+    @callback
     def _peak_meter_changed(self, _event):
         # Immediate re-evaluation on live site meter updates. Native EVSC
         # coordinators remain the only physical writers.
