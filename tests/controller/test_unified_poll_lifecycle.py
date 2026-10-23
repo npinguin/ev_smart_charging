@@ -26,7 +26,8 @@ def _controller(hass):
 def _native(entry_id):
     return SimpleNamespace(
         config_entry=SimpleNamespace(
-            entry_id=entry_id, options={"evsc_actual_power_entity": "sensor.native_power"}
+            entry_id=entry_id,
+            options={"evsc_actual_power_entity": "sensor.native_power"},
         ),
         price_entity_id="sensor.price",
         ev_soc_entity_id="sensor.soc",
