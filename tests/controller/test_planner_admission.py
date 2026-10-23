@@ -408,3 +408,23 @@ def test_direct_energy_surplus_never_commands_charge():
     assert c.required_battery_kwh == 0
     assert not p.assignments
     assert p.results[0].status == "COMPLETE"
+
+
+def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
+    c = Charger(
+        "hybrid", "coordinated", True, 50, None, 40, 7.2,
+        T + timedelta(hours=1), current_battery_kwh=None,
+        target_battery_kwh=23.24,
+    )
+    assert c.required_battery_kwh == 3.24
+    assert c.required_quarters == 2
+
+
+def test_stored_energy_exceeding_usable_capacity_is_rejected():
+    c = Charger(
+        "invalid", "coordinated", True, 50, 80, 40, 7.2,
+        T + timedelta(hours=1), current_battery_kwh=45,
+        target_battery_kwh=50,
+    )
+    with pytest.raises(ValueError, match="exceeds usable capacity"):
+        _ = c.required_battery_kwh
