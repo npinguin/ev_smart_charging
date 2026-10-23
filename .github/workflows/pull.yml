@@ -54,6 +54,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install requirements
         run: python3 -m pip install -r ${{ matrix.requirements }}
+      - name: Controller contract regression tests
+        run: |
+          pytest -qq --timeout=45 --asyncio-mode=auto tests/controller
       - name: Run tests
         run: |
           pytest \

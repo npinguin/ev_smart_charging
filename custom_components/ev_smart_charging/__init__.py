@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
 from homeassistant.helpers.device_registry import DeviceRegistry, DeviceEntry
@@ -57,6 +57,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
             entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             await hass.data[DOMAIN][entry.entry_id].async_start()
+
+            async def get_charge_plan(_call):
+                """Return immutable planning evidence; never send EVSE commands."""
+                return hass.data[DOMAIN][entry.entry_id].plan_response()
+
+            hass.services.async_register(
+                DOMAIN, "get_charge_plan", get_charge_plan,
+                supports_response=SupportsResponse.ONLY,
+            )
         except Exception:
             hass.data[DOMAIN].pop(entry.entry_id, None)
             raise
@@ -130,6 +139,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, Platform.SENSOR
         )
         if unloaded:
+            if hass.services.has_service(DOMAIN, "get_charge_plan"):
+                hass.services.async_remove(DOMAIN, "get_charge_plan")
             hass.data[DOMAIN][entry.entry_id].async_stop()
             hass.data[DOMAIN].pop(entry.entry_id, None)
         return unloaded

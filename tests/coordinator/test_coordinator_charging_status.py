@@ -34,7 +34,7 @@ async def test_periodic_check_charging_state_retries_when_entity_is_off(
 
     await coordinator.periodic_check_charging_state()
 
-    coordinator.turn_on_charging.assert_awaited_once_with()
+    coordinator.turn_on_charging.assert_awaited_once_with(reason="retry")
 
     # Unsubscribe to listeners
     coordinator.unsubscribe_listeners()

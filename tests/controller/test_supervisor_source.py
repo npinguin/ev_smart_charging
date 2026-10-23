@@ -19,7 +19,11 @@ def test_original_ha_charger_config_entry_version_and_options_remain():
     assert "VERSION = 8" in flow
     assert 'step_id="init"' in flow
     assert 'vol.Optional("participants"' in flow
-    assert 'self._draft["chargers"][id]' in flow
+    # Individual charger inputs are now optional on the charger config entry.
+    assert '"usable_capacity_kwh"' in flow
+    assert '"expected_power_kw"' in flow
+    assert '"actual_power_entity"' in flow
+    assert "async_step_charger" not in flow
 
 
 def test_single_controller_device_identity_across_entries():
