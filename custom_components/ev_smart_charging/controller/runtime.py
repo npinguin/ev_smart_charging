@@ -21,6 +21,7 @@ from homeassistant.helpers.storage import Store
 from ..const import DOMAIN
 from ..helpers.coordinator import get_ready_quarter_utc
 from .monitor import collect
+from .local_projection import local_plan_facts
 from .costs import ActualCostLedger
 from .admission import SupervisionGate
 from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
@@ -180,6 +181,7 @@ class ChargeSupervisor:
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
         self.price_horizons = {}
+        self.price_curves = {}
         # Transient peak pause; unlike an operator Stop this is never persisted
         # into paused_chargers. A restart still requires fresh live admission.
         self._peak_recovery_since = None
@@ -364,6 +366,7 @@ class ChargeSupervisor:
                     slots = []
             prices[key] = slots
         now = dt.utcnow()
+        self.price_curves = prices
         self.price_horizons = {}
         for key, slots in prices.items():
             frontier = now
@@ -610,54 +613,100 @@ class ChargeSupervisor:
         ):
             # Future household load is not known from today's site meter.
             status = "provisional"
-        local_plan = any(
-            key not in self.participants and obj.scheduler.get_charging_is_planned()
-            for key, obj in self.chargers().items()
-        )
-        totals_available = plan is not None and not local_plan
-        energy = plan.total_planned_grid_kwh if totals_available else None
-        cost = plan.expected_cost_eur if totals_available else None
-        required = None
-        if totals_available and all(
-            r.requested_battery_kwh is not None for r in plan.results
-        ):
-            member_by_id = {
-                c.id: c
-                for c in (
-                    self._charger(key, obj) for key, obj in self.chargers().items()
-                )
-            }
-            required = round(
+        all_chargers = self.chargers()
+        now = dt.utcnow()
+        today = dt.as_local(now).date()
+        tomorrow = today + timedelta(days=1)
+        local = {}
+        for key, obj in all_chargers.items():
+            if key in self.participants:
+                continue
+            power = _number(self._source_config(key, obj).get("power_kw"))
+            local[key] = local_plan_facts(
+                obj, power, self.price_curves.get(key, ()), now
+            )
+
+        # A controller plan covers Coordinated chargers only, while Local
+        # devices retain independent original schedule ownership.
+        coordinated_known = not self.participants or plan is not None
+        planned_parts = [
+            facts["planned_grid_kwh"] for facts in local.values()
+        ]
+        priced_parts = [facts["estimated_cost_eur"] for facts in local.values()]
+        if coordinated_known and (
+            plan is None or plan.total_planned_grid_kwh is not None
+        ) and all(value is not None for value in planned_parts):
+            energy = round(
+                (plan.total_planned_grid_kwh if plan is not None else 0)
+                + sum(planned_parts),
+                4,
+            )
+        else:
+            energy = None
+        if coordinated_known and (
+            plan is None or plan.expected_cost_eur is not None
+        ) and all(value is not None for value in priced_parts):
+            cost = round(
+                (plan.expected_cost_eur if plan is not None else 0)
+                + sum(priced_parts),
+                4,
+            )
+        else:
+            cost = None
+
+        # Required energy is a distinct notion from scheduled energy. A
+        # Local EVSC can have a charging need without any scheduled slots.
+        charging_needs = [
+            self._charger(key, obj) for key, obj in all_chargers.items()
+        ]
+        required = (
+            round(
                 sum(
-                    r.requested_battery_kwh / member_by_id[r.charger_id].efficiency
-                    for r in plan.results
+                    charger.required_battery_kwh / charger.efficiency
+                    for charger in charging_needs
                 ),
                 4,
             )
+            if charging_needs
+            and all(c.required_battery_kwh is not None for c in charging_needs)
+            else None
+        )
+
         start = None
         end = None
         today_energy = None
         tomorrow_energy = None
         today_cost = None
         tomorrow_cost = None
-        if totals_available and all(a.grid_kwh is not None for a in plan.assignments):
-            now_local = dt.as_local(dt.utcnow()).date()
-            from datetime import timedelta as _delta
-
-            today = [
-                a for a in plan.assignments if dt.as_local(a.start).date() == now_local
-            ]
-            tomorrow = [
-                a
-                for a in plan.assignments
-                if dt.as_local(a.start).date() == now_local + _delta(days=1)
-            ]
-            today_energy = round(sum(a.grid_kwh for a in today), 4)
-            tomorrow_energy = round(sum(a.grid_kwh for a in tomorrow), 4)
-            today_cost = round(sum(a.grid_kwh * a.price_eur_per_kwh for a in today), 4)
-            tomorrow_cost = round(
-                sum(a.grid_kwh * a.price_eur_per_kwh for a in tomorrow), 4
-            )
+        coordinated_assignments = plan.assignments if plan is not None else ()
+        if coordinated_known and all(
+            a.grid_kwh is not None for a in coordinated_assignments
+        ) and all(value is not None for value in planned_parts):
+            def energy_for(day):
+                return sum(
+                    a.grid_kwh
+                    for a in coordinated_assignments
+                    if dt.as_local(a.start).date() == day
+                ) + sum(
+                    facts["energy_by_day"].get(day.isoformat(), 0)
+                    for facts in local.values()
+                )
+            today_energy = round(energy_for(today), 4)
+            tomorrow_energy = round(energy_for(tomorrow), 4)
+        if coordinated_known and all(
+            a.grid_kwh is not None for a in coordinated_assignments
+        ) and all(value is not None for value in priced_parts):
+            def cost_for(day):
+                return sum(
+                    a.grid_kwh * a.price_eur_per_kwh
+                    for a in coordinated_assignments
+                    if dt.as_local(a.start).date() == day
+                ) + sum(
+                    facts["cost_by_day"].get(day.isoformat(), 0)
+                    for facts in local.values()
+                )
+            today_cost = round(cost_for(today), 4)
+            tomorrow_cost = round(cost_for(tomorrow), 4)
         horizons = [self.price_horizons.get(key) for key in self.participants]
         common_horizon = (
             min(horizons) if horizons and all(h is not None for h in horizons) else None
