@@ -349,8 +349,12 @@ def build_plan(
         if not c.enabled:
             results.append(
                 ChargerResult(
-                    c.id, required, 0.0, required,
-                    "BLOCKED", "EVSC disabled by operator",
+                    c.id,
+                    required,
+                    0.0,
+                    required,
+                    "BLOCKED",
+                    "EVSC disabled by operator",
                 )
             )
             continue
