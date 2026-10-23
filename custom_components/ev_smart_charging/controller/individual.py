@@ -31,29 +31,54 @@ def individual_facts(coordinator):
     )
     options = entry.options
     power_entity = options.get("evsc_actual_power_entity") or legacy.get("power_sensor")
-    capacity = _number(options.get("evsc_capacity_kwh") or legacy.get("capacity_kwh"))
+    capacity_source = options.get("evsc_capacity_entity")
+    current_energy_source = options.get("evsc_current_energy_entity")
+    target_energy_source = options.get("evsc_target_energy_entity")
+    capacity_direct = _meter(coordinator.hass, capacity_source, "energy")
+    capacity_fallback = _number(
+        options.get("evsc_capacity_kwh") or legacy.get("capacity_kwh")
+    )
+    capacity = (
+        capacity_direct
+        if capacity_direct is not None and capacity_direct > 0
+        else capacity_fallback
+    )
+    if capacity is not None and capacity <= 0:
+        capacity = None
     expected_kw = _number(
         options.get("evsc_expected_power_kw") or legacy.get("power_kw")
     )
     soc = _number(coordinator.ev_soc)
     target = _number(coordinator.ev_target_soc)
-    current = (
+    measured_current = _meter(
+        coordinator.hass, current_energy_source, "energy"
+    )
+    measured_target = _meter(
+        coordinator.hass, target_energy_source, "energy"
+    )
+    if capacity is not None and measured_current is not None:
+        if measured_current > capacity:
+            measured_current = None
+    if capacity is not None and measured_target is not None:
+        if measured_target > capacity:
+            measured_target = None
+    derived_current = (
         round(capacity * soc / 100, 4)
-        if capacity is not None and capacity > 0 and soc is not None and 0 <= soc <= 100
+        if capacity is not None and soc is not None and 0 <= soc <= 100
         else None
     )
-    goal = (
+    derived_target = (
         round(capacity * target / 100, 4)
-        if capacity is not None
-        and capacity > 0
-        and target is not None
-        and 0 <= target <= 100
+        if capacity is not None and target is not None and 0 <= target <= 100
         else None
     )
+    current = (
+        measured_current if measured_current is not None else derived_current
+    )
+    goal = measured_target if measured_target is not None else derived_target
     required = (
         round(max(0, goal - current) / 0.90, 4)
-        if goal is not None and current is not None
-        else None
+        if goal is not None and current is not None else None
     )
     # Indicative plan cost is only meaningful for validated, currently
     # coordinated grants. A legacy Local schedule is NOT a controller plan.
@@ -90,6 +115,23 @@ def individual_facts(coordinator):
         "energy_source_entity": options.get("evsc_actual_energy_entity") or None,
         "price_source_entity": getattr(coordinator, "price_entity_id", None),
         "expected_charging_power_kw": expected_kw,
+        "battery_capacity_source": (
+            capacity_source if capacity_direct is not None else None
+        ),
+        "battery_current_source": (
+            current_energy_source if measured_current is not None else None
+        ),
+        "battery_target_source": (
+            target_energy_source if measured_target is not None else None
+        ),
+        "battery_current_resolution": (
+            "direct" if measured_current is not None
+            else "derived" if derived_current is not None else "unavailable"
+        ),
+        "battery_target_resolution": (
+            "direct" if measured_target is not None
+            else "derived" if derived_target is not None else "unavailable"
+        ),
         "cost_quality": "validated_plan" if indicative is not None else "unavailable",
         "actual_cost_quality": (
             ledger.summary()["reason"] if ledger is not None else "unavailable"
