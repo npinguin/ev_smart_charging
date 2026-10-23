@@ -160,7 +160,10 @@ class ActualCostLedger:
 
     @property
     def actual_cost_today(self):
-        if self.complete and self.intervals:
+        # A valid restored yesterday snapshot can never masquerade as
+        # today's actual charge cost before the first new meter observation.
+        today = dt.as_local(dt.utcnow()).date()
+        if self.day == today and self.complete and self.intervals:
             return round(self.known_cost, 4)
         return None
 
@@ -170,10 +173,10 @@ class ActualCostLedger:
             "known_subtotal_eur": round(self.known_cost, 4) if self.intervals else None,
             "known_energy_kwh": round(self.known_energy, 4) if self.intervals else None,
             "covered_intervals": self.intervals,
-            "complete": self.complete and self.intervals > 0,
+            "complete": self.actual_cost_today is not None,
             "reason": (
                 "complete_time_aligned"
-                if self.complete and self.intervals
+                if self.actual_cost_today is not None
                 else "insufficient_daily_meter_price_coverage"
             ),
         }
