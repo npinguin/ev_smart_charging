@@ -32,34 +32,26 @@ from .const import (
 
 
 # pylint: disable=unused-argument
-# async def test_setup_unload_and_reload_entry(hass, bypass_get_data):
-async def test_setup_unload_and_reload_entry(hass, bypass_validate_input_and_control):
-    """Test entry setup and unload."""
-    # Create a mock entry so we don't have to go through config flow
-    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG_ALL, entry_id="test")
-    if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
-        config_entry.mock_state(hass=hass, state=ConfigEntryState.LOADED)
+# async def test_setup_unload_and_reload_entry(hass, bypass_validate_input_and_control):
+    """Test real HA-managed lifecycle, not direct mock-state setup/reload."""
+    config_entry = MockConfigEntry(
+        domain=DOMAIN, data=MOCK_CONFIG_ALL, entry_id="test", version=8
+    )
     config_entry.add_to_hass(hass)
 
-    # Set up the entry and assert that the values set during setup are where we expect
-    # them to be.
-    assert await async_setup_entry(hass, config_entry)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
-    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert isinstance(
         hass.data[DOMAIN][config_entry.entry_id], EVSmartChargingCoordinator
     )
 
-    # Reload the entry and assert that the data from above is still there
-    assert await async_reload_entry(hass, config_entry) is None
+    assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
-    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert isinstance(
         hass.data[DOMAIN][config_entry.entry_id], EVSmartChargingCoordinator
     )
 
-    # Unload the entry and verify that the data has been removed
-    assert await async_unload_entry(hass, config_entry)
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
     assert config_entry.entry_id not in hass.data[DOMAIN]
 
