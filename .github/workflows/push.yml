@@ -125,13 +125,17 @@ jobs:
             --asyncio-mode=auto \
             --cov-report=xml \
             --cov-report=term \
+            --cov-fail-under=90 \
             --cov custom_components.ev_smart_charging \
             -o console_output_style=count \
             -p no:sugar \
             tests
-      - name: "Upload coverage to Codecov"
+      # External Codecov reporting is optional. pytest coverage remains a
+      # required >=90% gate on every Python test matrix version.
+      - name: "Upload coverage to Codecov (optional)"
         if: ${{ matrix.python-version == '3.14' }}
+        continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
           use_oidc: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
