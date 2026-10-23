@@ -15,8 +15,7 @@ from math import isfinite
 
 from homeassistant.core import callback
 from homeassistant.helpers.event import (
-    async_track_state_change_event,
-    async_track_time_interval,
+    async_track_time_change,
 )
 from homeassistant.util import dt
 from homeassistant.helpers.storage import Store
@@ -1299,8 +1298,11 @@ class ChargeSupervisor:
             _LOGGER.exception("Cannot restore EVSC cost evidence")
             self._actual_cost_ledgers = {}
         # No HA source subscriptions; native readbacks cannot cause replans.
-        self._unsub = async_track_time_interval(
-            self.hass, self._poll_controller, timedelta(seconds=CONTROLLER_POLL_SECONDS)
+        # Align with native Local quarter boundaries (00/15/30/45:00).
+        self._unsub = async_track_time_change(
+            self.hass,
+            self._poll_controller,
+            second=list(range(0, 60, CONTROLLER_POLL_SECONDS)),
         )
         await self.async_refresh()
         self._plan_fingerprint = self._planning_inputs()
