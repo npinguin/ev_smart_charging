@@ -32,7 +32,7 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
         for index in range(4)
     ]
     original = {
-        entry.entry_id: (deepcopy(entry.data), deepcopy(entry.options), entry.version)
+        entry.entry_id: (dict(entry.data), dict(entry.options), entry.version)
         for entry in entries
     }
     for entry in entries:
@@ -66,7 +66,7 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
         )
         for entry in entries:
             expected = original[entry.entry_id]
-            assert (entry.data, entry.options, entry.version) == expected
+            assert (dict(entry.data), dict(entry.options), entry.version) == expected
             assert entry.entry_id in hass.data[DOMAIN]
             assert not is_supervised(hass, entry.entry_id)
     finally:
