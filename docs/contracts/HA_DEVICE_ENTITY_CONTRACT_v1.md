@@ -26,48 +26,48 @@ Bij Local behoudt EVSC volledig zijn bestaande planning en writer. Bij Coordinat
 
 De onderstaande naam is een **contract-key**, geen gegarandeerde door HA gegenereerde `entity_id`. De stabiele `unique_id` wordt `ev_smart_charging_charge_controller_<key>`. Voor bestaande RC1-sensoren blijven hun unieke IDs behouden. We gebruiken `_attr_has_entity_name=True` en HA-translaties.
 
-| HA-platform / key | Betekenis | Eenheid | Type | Contractfase |
+| HA-platform / key | Betekenis | Eenheid | Classificatie / standaard | Contractfase |
 |---|---|---|---|---|
-| `sensor.status` | Controller status — Monitoring / planning / active / degraded; explicit error reasons | — | enum | RC1 aanwezig |
-| `sensor.operation_mode` | Operation mode — local \| mixed \| coordinated | — | enum | Nieuw |
-| `sensor.chargers` | Chargers | count | measurement | RC1 aanwezig |
-| `sensor.connected` | Connected — Logical EVSC connection state; not physical proof | count | measurement | RC1 aanwezig |
-| `sensor.connection_unknown` | Unknown connections | count | diagnostic | RC1 aanwezig |
-| `sensor.planned_chargers` | Planned chargers — Must correct semantics: planning source included | count | measurement | RC1 aanwezig |
-| `sensor.scheduled_hours` | Scheduled charging hours — Sum of charger-hours, not group wall-clock span | h | measurement | RC1 aanwezig |
-| `sensor.physically_charging` | Physically charging — Known native charging state only | count | measurement | RC1 aanwezig |
-| `sensor.physical_state_unknown` | Unverified physical states | count | diagnostic | RC1 aanwezig |
-| `sensor.actual_power_kw` | Actual charging power — Total only if every included charger measured; else unavailable | kW | measurement | RC1 aanwezig |
-| `sensor.session_energy_kwh` | Measured session energy — No day/month semantic assumed | kWh | measurement | RC1 aanwezig |
-| `sensor.power_coverage` | Power meter coverage — Valid measured chargers over total; explicit denominator attribute | count | diagnostic | RC1 aanwezig |
-| `sensor.energy_coverage` | Energy meter coverage | count | diagnostic | RC1 aanwezig |
-| `sensor.planning_start` | Planning start — Earliest active or future assigned charging slot, across Local + Coordinated | — | timestamp | Nieuw |
-| `sensor.planning_end` | Planning end — End of latest active/future assigned slot; envelope may contain gaps | — | timestamp | Nieuw |
-| `sensor.planning_state` | Planning state — idle\|valid\|provisional\|pending_prices\|infeasible\|blocked | — | enum | Nieuw |
-| `sensor.plan_last_updated` | Plan last updated | — | timestamp | Nieuw |
-| `sensor.plan_revision` | Plan revision — Monotonic persisted revision, changes only when material plan changes | — | diagnostic | Nieuw |
-| `sensor.price_horizon_start` | Price horizon start — First instant of contiguous valid future price coverage | — | timestamp | Nieuw |
-| `sensor.price_horizon_end` | Price horizon end — Exclusive end of last contiguous valid priced interval | — | timestamp | Nieuw |
-| `sensor.price_status` | Price status — valid\|partial\|unavailable\|invalid\|stale | — | enum | Nieuw |
-| `sensor.energy_cost_price` | Energy cost price — Current effective variable import price; no raw spot-only fallback | EUR/kWh | measurement | Nieuw |
-| `sensor.energy_required` | Charging required — Grid-side charging need across included vehicles; unavailable if incomplete | kWh | measurement | Nieuw |
-| `sensor.energy_planned` | Charging planned — Grid-side AC planned energy, one assignment counted once | kWh | measurement | Nieuw |
-| `sensor.energy_unplanned` | Still to plan — Max(required-planned,0), not delivered/remaining SoC | kWh | measurement | Nieuw |
-| `sensor.planned_today` | Planned today — Local HA calendar day; never fixed 24h assumption | kWh | measurement | Nieuw |
-| `sensor.planned_tomorrow` | Planned tomorrow — Local HA calendar day; timezone and DST correct | kWh | measurement | Nieuw |
-| `sensor.indicative_charging_cost` | Indicative charging cost — Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage | EUR | measurement | Nieuw |
-| `sensor.actual_charging_cost_today` | Actual charging cost today — Requires native energy or sampled power + validated interval price history | EUR | measurement | Voorwaardelijk |
-| `sensor.remaining_charging_cost` | Remaining indicative cost — Unavailable for unpriced demand; avoid fake complete cost | EUR | measurement | Nieuw |
-| `sensor.next_ready_by` | Next Ready by | — | timestamp | Nieuw |
-| `sensor.participants` | Coordinated chargers | count | measurement | Nieuw |
-| `sensor.paused_chargers` | Paused chargers | count | diagnostic | Nieuw |
-| `sensor.unmet_deadlines` | Unmet deadlines | count | diagnostic | Nieuw |
-| `number.max_parallel` | Maximum parallel chargers — Integer >=1; default 1 | chargers | config | Nieuw |
-| `number.group_power_budget` | Group charger power budget — Only supervised EVSC charging; no electrical protective guarantee | kW | config | Nieuw |
-| `button.recalculate_plan` | Recalculate planning — Idempotent replanning, never direct physical command | — | action | Nieuw |
-| `sensor.indicative_cost_today` | Indicative charging cost today — Estimated cost of priced scheduled charging within current HA-local calendar day | EUR | measurement | Nieuw |
-| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow — Estimated cost of priced scheduled charging within next HA-local calendar day | EUR | measurement | Nieuw |
-| `sensor.actual_energy_today` | Measured charging energy today — Integrated metered AC energy since HA-local midnight | kWh | measurement | Voorwaardelijk |
+| `sensor.status` | Controller status — Monitoring / planning / active / degraded; explicit error reasons | — | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.operation_mode` | Operation mode — local \| mixed \| coordinated | — | primary · aan | Nieuw |
+| `sensor.chargers` | Chargers | count | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.connected` | Connected — Logical EVSC connection state; not physical proof | count | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.connection_unknown` | Unknown connections | count | diagnostic · bestaande instelling | RC1 aanwezig |
+| `sensor.planned_chargers` | Planned chargers — Must correct semantics: planning source included | count | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.scheduled_hours` | Scheduled charging hours — Sum of charger-hours, not group wall-clock span | h | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.physically_charging` | Physically charging — Known native charging state only | count | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.physical_state_unknown` | Unverified physical states | count | diagnostic · bestaande instelling | RC1 aanwezig |
+| `sensor.actual_power_kw` | Actual charging power — Total only if every included charger measured; else unavailable | kW | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.session_energy_kwh` | Measured session energy — No day/month semantic assumed | kWh | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.power_coverage` | Power meter coverage — Valid measured chargers over total; explicit denominator attribute | count | diagnostic · bestaande instelling | RC1 aanwezig |
+| `sensor.energy_coverage` | Energy meter coverage | count | diagnostic · bestaande instelling | RC1 aanwezig |
+| `sensor.planning_start` | Planning start — Earliest active or future assigned charging slot, across Local + Coordinated | — | primary · aan | Nieuw |
+| `sensor.planning_end` | Planning end — End of latest active/future assigned slot; envelope may contain gaps | — | primary · aan | Nieuw |
+| `sensor.planning_state` | Planning state — idle\|valid\|provisional\|pending_prices\|infeasible\|blocked | — | primary · aan | Nieuw |
+| `sensor.plan_last_updated` | Plan last updated | — | primary · standaard uit | Nieuw |
+| `sensor.plan_revision` | Plan revision — Monotonic persisted revision, changes only when material plan changes | — | diagnostic · standaard uit | Nieuw |
+| `sensor.price_horizon_start` | Price horizon start — First instant of contiguous valid future price coverage | — | primary · standaard uit | Nieuw |
+| `sensor.price_horizon_end` | Price horizon end — Exclusive end of last contiguous valid priced interval | — | primary · aan | Nieuw |
+| `sensor.price_status` | Price status — valid\|partial\|unavailable\|invalid\|stale | — | primary · standaard uit | Nieuw |
+| `sensor.energy_cost_price` | Energy cost price — Current effective variable import price; no raw spot-only fallback | EUR/kWh | primary · aan | Nieuw |
+| `sensor.energy_required` | Charging required — Grid-side charging need across included vehicles; unavailable if incomplete | kWh | primary · aan | Nieuw |
+| `sensor.energy_planned` | Charging planned — Grid-side AC planned energy, one assignment counted once | kWh | primary · aan | Nieuw |
+| `sensor.energy_unplanned` | Still to plan — Max(required-planned,0), not delivered/remaining SoC | kWh | primary · aan | Nieuw |
+| `sensor.planned_today` | Planned today — Local HA calendar day; never fixed 24h assumption | kWh | primary · aan | Nieuw |
+| `sensor.planned_tomorrow` | Planned tomorrow — Local HA calendar day; timezone and DST correct | kWh | primary · aan | Nieuw |
+| `sensor.indicative_charging_cost` | Indicative charging cost — Expected cost for priced scheduled grid energy only; complete cost only with complete price coverage | EUR | primary · aan | Nieuw |
+| `sensor.actual_charging_cost_today` | Actual charging cost today — Requires native energy or sampled power + validated interval price history | EUR | primary · aan | Bronafhankelijk |
+| `sensor.remaining_charging_cost` | Remaining indicative cost — Unavailable for unpriced demand; avoid fake complete cost | EUR | primary · standaard uit | Nieuw |
+| `sensor.next_ready_by` | Next Ready by | — | primary · aan | Nieuw |
+| `sensor.participants` | Coordinated chargers | count | primary · standaard uit | Nieuw |
+| `sensor.paused_chargers` | Paused chargers | count | diagnostic · standaard uit | Nieuw |
+| `sensor.unmet_deadlines` | Unmet deadlines | count | diagnostic · standaard uit | Nieuw |
+| `number.max_parallel` | Maximum parallel chargers — Integer >=1; default 1 | chargers | config · aan | Nieuw |
+| `number.group_power_budget` | Group charger power budget — Only supervised EVSC charging; no electrical protective guarantee | kW | config · aan | Nieuw |
+| `button.recalculate_plan` | Recalculate planning — Idempotent replanning, never direct physical command | — | primary · aan | Nieuw |
+| `sensor.indicative_cost_today` | Indicative charging cost today — Estimated cost of priced scheduled charging within current HA-local calendar day | EUR | primary · standaard uit | Nieuw |
+| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow — Estimated cost of priced scheduled charging within next HA-local calendar day | EUR | primary · standaard uit | Nieuw |
+| `sensor.actual_energy_today` | Measured charging energy today — Integrated metered AC energy since HA-local midnight | kWh | primary · standaard uit | Bronafhankelijk |
 
 **Belangrijkste nieuwe timestamp-sensoren**
 
@@ -88,38 +88,38 @@ Beide zijn **read-only `SensorEntity` met `SensorDeviceClass.TIMESTAMP`** en `na
 
 De bestaande EVSC-device krijgt deze aanvullende readbacks/configuratie/acties; er wordt **geen extra charger-device** gecreëerd. Behalve bestaande RC1-exceptions krijgen nieuw toegevoegde entiteiten stabiele unieke IDs `<config_entry_id>.<platform>.<key>`.
 
-| HA-platform / key | Betekenis | Eenheid | Type | Contractfase |
+| HA-platform / key | Betekenis | Eenheid | Classificatie / standaard | Contractfase |
 |---|---|---|---|---|
-| `sensor.planning_start` | Planning start — Earliest current/future assigned slot for this charger | — | timestamp | Nieuw |
-| `sensor.planning_end` | Planning end — Latest current/future assigned slot end for this charger | — | timestamp | Nieuw |
-| `sensor.planning_state` | Planning state — local\|planned\|charging\|paused\|pending_prices\|infeasible\|unavailable | — | enum | Nieuw |
-| `sensor.effective_ready_by` | Effective Ready by | — | timestamp | Nieuw |
-| `sensor.charging_required` | Charging required — Grid AC energy required to reach target | kWh | measurement | Nieuw |
-| `sensor.charging_planned` | Charging planned | kWh | measurement | Nieuw |
-| `sensor.still_to_plan` | Still to plan | kWh | measurement | Nieuw |
-| `sensor.planned_today` | Planned today | kWh | measurement | Nieuw |
-| `sensor.planned_tomorrow` | Planned tomorrow | kWh | measurement | Nieuw |
-| `sensor.indicative_charging_cost` | Indicative charging cost | EUR | measurement | Nieuw |
-| `sensor.actual_charging_cost` | Actual session charging cost — Current session; no costs when metering or price time coverage is missing | EUR | measurement | Voorwaardelijk |
-| `sensor.actual_charging_power` | Actual charging power — Proxy/derived read-only; do not copy native EVSE device identity | kW | measurement | Voorwaardelijk |
-| `sensor.actual_session_energy` | Actual session energy — No invented daily stats | kWh | measurement | Voorwaardelijk |
-| `sensor.energy_cost_price` | Energy cost price | EUR/kWh | measurement | Nieuw |
-| `sensor.metering_status` | Metering status — complete\|power_only\|energy_only\|missing\|invalid | — | enum | Nieuw |
-| `sensor.schedule_source` | Schedule source — local\|charge_controller | — | enum | Nieuw |
-| `sensor.schedule_last_updated` | Schedule last updated | — | timestamp | Nieuw |
-| `select.control_mode` | Charging control mode — local\|coordinated; transfer is deliberate, never a fallback | — | config | Nieuw |
-| `datetime.absolute_ready_by` | Absolute Ready by — Existing RC1 unique_id retained; optional; unset means legacy recurring time | — | config | RC1 aanwezig |
-| `number.usable_battery_capacity` | Usable battery capacity — Use bound current vehicle capability when available; no fixed-assignment assumption | kWh | config | Nieuw |
-| `number.expected_charging_power` | Expected charging power — Not a physical current limit nor measured power | kW | config | Nieuw |
-| `number.charging_efficiency` | Expected charging efficiency — Planning only; measured AC power prevails for actual cost | % | config | Nieuw |
-| `number.planning_priority` | Planning priority — Range 0..100, default 50; secondary to hard deadlines | — | config | Nieuw |
-| `button.pause_coordinated` | Pause coordinated charging — Persistent inhibit via existing EVSC writer; never direct EVSE command | — | action | Nieuw |
-| `button.resume_coordinated` | Resume coordinated charging — Clears pause, requires fresh group plan before ON | — | action | Nieuw |
-| `button.clear_absolute_ready_by` | Clear absolute Ready by — Existing RC1 unique_id retained | — | action | RC1 aanwezig |
-| `sensor.indicative_cost_today` | Indicative charging cost today | EUR | measurement | Nieuw |
-| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow | EUR | measurement | Nieuw |
-| `sensor.actual_charging_cost_today` | Actual charging cost today | EUR | measurement | Voorwaardelijk |
-| `sensor.actual_energy_today` | Measured charging energy today | kWh | measurement | Voorwaardelijk |
+| `sensor.planning_start` | Planning start — Earliest current/future assigned slot for this charger | — | primary · aan | Nieuw |
+| `sensor.planning_end` | Planning end — Latest current/future assigned slot end for this charger | — | primary · aan | Nieuw |
+| `sensor.planning_state` | Planning state — local\|planned\|charging\|paused\|pending_prices\|infeasible\|unavailable | — | primary · aan | Nieuw |
+| `sensor.effective_ready_by` | Effective Ready by | — | primary · aan | Nieuw |
+| `sensor.charging_required` | Charging required — Grid AC energy required to reach target | kWh | primary · aan | Nieuw |
+| `sensor.charging_planned` | Charging planned | kWh | primary · aan | Nieuw |
+| `sensor.still_to_plan` | Still to plan | kWh | primary · aan | Nieuw |
+| `sensor.planned_today` | Planned today | kWh | primary · aan | Nieuw |
+| `sensor.planned_tomorrow` | Planned tomorrow | kWh | primary · aan | Nieuw |
+| `sensor.indicative_charging_cost` | Indicative charging cost | EUR | primary · aan | Nieuw |
+| `sensor.actual_charging_cost` | Actual session charging cost — Current session; no costs when metering or price time coverage is missing | EUR | primary · aan | Bronafhankelijk |
+| `sensor.actual_charging_power` | Actual charging power — Proxy/derived read-only; do not copy native EVSE device identity | kW | primary · aan | Bronafhankelijk |
+| `sensor.actual_session_energy` | Actual session energy — No invented daily stats | kWh | primary · standaard uit | Bronafhankelijk |
+| `sensor.energy_cost_price` | Energy cost price | EUR/kWh | primary · standaard uit | Nieuw |
+| `sensor.metering_status` | Metering status — complete\|power_only\|energy_only\|missing\|invalid | — | primary · standaard uit | Nieuw |
+| `sensor.schedule_source` | Schedule source — local\|charge_controller | — | primary · standaard uit | Nieuw |
+| `sensor.schedule_last_updated` | Schedule last updated | — | primary · standaard uit | Nieuw |
+| `select.control_mode` | Charging control mode — local\|coordinated; transfer is deliberate, never a fallback | — | config · aan | Nieuw |
+| `datetime.absolute_ready_by` | Absolute Ready by — Existing RC1 unique_id retained; optional; unset means legacy recurring time | — | config · bestaande instelling | RC1 aanwezig |
+| `number.usable_battery_capacity` | Usable battery capacity — Use bound current vehicle capability when available; no fixed-assignment assumption | kWh | config · aan | Nieuw |
+| `number.expected_charging_power` | Expected charging power — Not a physical current limit nor measured power | kW | config · aan | Nieuw |
+| `number.charging_efficiency` | Expected charging efficiency — Planning only; measured AC power prevails for actual cost | % | config · aan | Nieuw |
+| `number.planning_priority` | Planning priority — Range 0..100, default 50; secondary to hard deadlines | — | config · aan | Nieuw |
+| `button.pause_coordinated` | Pause coordinated charging — Persistent inhibit via existing EVSC writer; never direct EVSE command | — | primary · aan | Nieuw |
+| `button.resume_coordinated` | Resume coordinated charging — Clears pause, requires fresh group plan before ON | — | primary · aan | Nieuw |
+| `button.clear_absolute_ready_by` | Clear absolute Ready by — Existing RC1 unique_id retained | — | primary · bestaande instelling | RC1 aanwezig |
+| `sensor.indicative_cost_today` | Indicative charging cost today | EUR | primary · standaard uit | Nieuw |
+| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow | EUR | primary · standaard uit | Nieuw |
+| `sensor.actual_charging_cost_today` | Actual charging cost today | EUR | primary · standaard uit | Bronafhankelijk |
+| `sensor.actual_energy_today` | Measured charging energy today | kWh | primary · standaard uit | Bronafhankelijk |
 
 **Vereiste modeoverdracht**
 
@@ -173,7 +173,9 @@ De Energy Cost Price is **één gevalideerde tijdlijn** van de werkelijke toepas
 
 **Group scope:** De controller observeert en aggregeert **alle** EVSC-laders. Het authoritatieve schedule is de disjuncte samenvoeging van Local-plannen en centrale grants. Gecoördineerde vermogensbeperkingen gelden **alleen** voor deelnemers en mogen de belasting van Local-laders en overige huisverbruikers **niet** stilzwijgend als nul beschouwen. In diagnostiek onderscheiden we `all_chargers`, `coordinated_participants` en `source_coverage`.
 
-**Entity-aanwezigheid:** `Voorwaardelijk` in de tabellen betekent dat **de meet- of berekeningscapability voorwaardelijk beschikbaar is**, niet dat de entity identity wordt verwijderd. De entity wordt met dezelfde unieke ID aangeboden en krijgt `unknown`/`unavailable` zolang de vereiste bron ontbreekt. Geen nieuwe device of unique ID wanneer later een meter wordt aangesloten.
+**Presentatie in HA:** De catalogus specificeert voor alle nieuwe entiteiten `entity_category` (`primary`, `config`, `diagnostic`) en of ze standaard ingeschakeld zijn. Zo blijven operationele kernwaarden vooraan zichtbaar zonder tientallen secundaire sensoren op het primaire device-overzicht. Bestaande door de gebruiker ingeschakelde of aangepaste entiteiten worden **niet** gemigreerd naar een nieuwe default; de eigen HA-registryinstelling blijft leidend.
+
+**Entity-aanwezigheid:** `Bronafhankelijk` in de tabellen betekent dat **de meet- of berekeningscapability voorwaardelijk beschikbaar is**, niet dat de entity identity wordt verwijderd. De entity wordt met dezelfde unieke ID aangeboden en krijgt `unknown`/`unavailable` zolang de vereiste bron ontbreekt. Geen nieuwe device of unique ID wanneer later een meter wordt aangesloten.
 
 **Voertuigwissel:** Een EVSC-device staat voor een laadpunt, niet voor een permanent toegewezen voertuig. Huidige SoC/capacity/target uit een actueel voertuigprofiel hebben voorrang op een expliciet geconfigureerde fallback. Bij voertuigwissel wordt de planning ongeldig en vernieuwd; geschiedenis blijft bij de vorige sessie. Geen default-batterijcapaciteit als de bron ontbreekt.
 
