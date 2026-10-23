@@ -126,36 +126,37 @@ async def test_persisted_coordinated_participant_is_passive_at_restart(hass):
     manager.async_stop()
 
 
-async def test_coordinated_selection_is_rejected_without_writing_options(hass):
-    manager = supervisor(hass)
-    charger_entry = SimpleNamespace(
-        entry_id="peblar", data={}, options={}, domain=DOMAIN
-    )
-    manager.config_entry = SimpleNamespace(
+def test_coordinated_selection_is_rejected_without_writing_options():
+    controller_entry = SimpleNamespace(
         entry_id="controller",
         data={"__evsc_entry_type": "charge_controller"},
         options={"participants": []},
-        domain=DOMAIN,
     )
-    hass.config_entries.async_entries = MagicMock(
-        return_value=[manager.config_entry, charger_entry]
+    charger_entry = SimpleNamespace(entry_id="peblar", data={}, options={})
+    entries = SimpleNamespace(
+        async_entries=lambda _domain: [controller_entry, charger_entry],
+        async_update_entry=MagicMock(),
     )
-    hass.config_entries.async_update_entry = MagicMock()
+    fake_hass = SimpleNamespace(config_entries=entries, data={})
     with pytest.raises(ValueError, match="suspended"):
-        set_control_mode(hass, "peblar", "coordinated")
-    hass.config_entries.async_update_entry.assert_not_called()
+        set_control_mode(fake_hass, "peblar", "coordinated")
+    entries.async_update_entry.assert_not_called()
 
 
-async def test_native_coordinator_cannot_write_when_persisted_supervised(hass):
+async def test_native_coordinator_cannot_write_when_persisted_supervised():
     controller_entry = SimpleNamespace(
         entry_id="controller",
         data={"__evsc_entry_type": "charge_controller"},
         options={"participants": ["peblar"]},
     )
-    hass.config_entries.async_entries = MagicMock(return_value=[controller_entry])
-    assert is_supervised(hass, "peblar")
+    fake_hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [controller_entry]
+        )
+    )
+    assert is_supervised(fake_hass, "peblar")
     native = object.__new__(EVSmartChargingCoordinator)
-    native.hass = hass
+    native.hass = fake_hass
     native.config_entry = SimpleNamespace(entry_id="peblar")
     native._update_coordinated_state = AsyncMock()
     await native.update_state()
