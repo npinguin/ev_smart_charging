@@ -9,7 +9,7 @@ from custom_components.ev_smart_charging.controller.planner import PriceSlot
 
 
 def midnight():
-    local = dt.as_local(datetime(2026, 10, 23, 12, tzinfo=timezone.utc))
+    local = dt.as_local(datetime.now(timezone.utc))
     return local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(
         timezone.utc
     )
@@ -113,3 +113,17 @@ def test_corrupt_persisted_evidence_does_not_claim_a_historical_bill():
     bad = ledger.to_storage()
     bad["known_cost"] = float("nan")
     assert ActualCostLedger.from_storage(bad).complete is False
+
+
+def test_restored_yesterday_total_is_not_falsely_reported_today():
+    start = midnight() - timedelta(days=1)
+    # The source was genuinely complete yesterday. Loading its snapshot
+    # today must not publish yesterday's euros as today's charging cost.
+    ledger = ActualCostLedger()
+    ledger.observe(start, 0.0, "sensor.native_kwh", interval(start))
+    ledger.observe(
+        start + timedelta(minutes=5), 1.0, "sensor.native_kwh", interval(start)
+    )
+    restored = ActualCostLedger.from_storage(ledger.to_storage())
+    assert restored.actual_cost_today is None
+    assert restored.summary()["complete"] is False
