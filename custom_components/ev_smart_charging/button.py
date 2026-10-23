@@ -13,7 +13,7 @@ from .const import (
     ICON_STOP,
 )
 from .coordinator import EVSmartChargingCoordinator
-from .controller.runtime import is_supervised, pause_supervised
+from .controller.runtime import is_supervised, pause_supervised, resume_supervised
 from .entity import EVSmartChargingEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     buttons.append(EVSmartChargingButtonStart(entry, coordinator))
     buttons.append(EVSmartChargingButtonStop(entry, coordinator))
     buttons.append(EVSmartChargingButtonClearReadyBy(entry, coordinator))
+    buttons.append(EVSmartChargingButtonResumeCoordinated(entry, coordinator))
     async_add_devices(buttons)
 
 
@@ -79,3 +80,16 @@ class EVSmartChargingButtonClearReadyBy(EVSmartChargingButton):
         if self.coordinator.absolute_ready_by_entity is not None:
             self.coordinator.absolute_ready_by_entity.clear()
         await self.coordinator.update_configuration()
+
+
+class EVSmartChargingButtonResumeCoordinated(EVSmartChargingButton):
+    """Clear only an explicit operator stop; never issue a physical Start."""
+
+    _entity_key = "resume_coordinated"
+    _attr_name = "Resume coordinated charging"
+    _attr_icon = "mdi:play-circle-outline"
+
+    async def async_press(self):
+        resume_supervised(
+            self.coordinator.hass, self.coordinator.config_entry.entry_id
+        )

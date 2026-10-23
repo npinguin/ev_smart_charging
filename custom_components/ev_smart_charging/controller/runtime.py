@@ -5,11 +5,12 @@ charger silently becomes Local during startup or controller failure.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from math import isfinite
 
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt
 
 from ..const import DOMAIN
@@ -47,10 +48,10 @@ def _meter(hass, entity_id, quantity):
     if state is None or state.state in ("unknown", "unavailable"):
         return None
     value = _number(state.state)
-    if value is None or value < 0:
+    if value is None or (value < 0 and quantity != "site_power"):
         return None
     unit = state.attributes.get("unit_of_measurement")
-    if quantity == "power":
+    if quantity in ("power", "site_power"):
         return value / 1000 if unit == "W" else value if unit == "kW" else None
     return value / 1000 if unit == "Wh" else value if unit == "kWh" else None
 
@@ -137,6 +138,8 @@ class ChargeSupervisor:
         self.plan = None
         self.reason = "LOCAL_MONITORING"
         self._unsub = None
+        self._unsub_peak = None
+        self._refresh_lock = asyncio.Lock()
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
 
@@ -224,7 +227,7 @@ class ChargeSupervisor:
             self.peak_status = "disabled"
             self.available_ev_power_kw = None
             return None, True
-        site = _meter(self.hass, opts.get("site_power_sensor"), "power")
+        site = _meter(self.hass, opts.get("site_power_sensor"), "site_power")
         target = _number(opts.get("peak_target_kw"))
         reserve = _number(opts.get("peak_reserve_kw", 0))
         if site is None or target is None or target <= 0 or reserve is None:
@@ -337,22 +340,39 @@ class ChargeSupervisor:
         return _charger_switch_readback(self.hass, coordinator)
 
     async def async_refresh(self, _now=None):
-        self.rebuild()
-        for key in self.participants:
-            obj = self.chargers().get(key)
-            if obj is not None:
-                try:
-                    await obj.update_state()
-                except Exception:
-                    _LOGGER.exception("Could not synchronize supervised charger %s", key)
+        """Serialize peak events, planned grants, and native Start/Stop."""
+        async with self._refresh_lock:
+            self.rebuild()
+            for key in self.participants:
+                obj = self.chargers().get(key)
+                if obj is not None:
+                    try:
+                        await obj.update_state()
+                    except Exception:
+                        _LOGGER.exception(
+                            "Could not synchronize supervised charger %s", key
+                        )
+
+    def _peak_meter_changed(self, _event):
+        # Immediate re-evaluation on live site meter updates. Native EVSC
+        # coordinators remain the only physical writers.
+        self.hass.async_create_task(self.async_refresh())
 
     async def async_start(self):
         self._unsub = async_track_time_interval(
             self.hass, self.async_refresh, timedelta(minutes=1)
         )
+        sensor_id = self.config_entry.options.get("site_power_sensor")
+        if self.config_entry.options.get("peak_shaving_enabled") and sensor_id:
+            self._unsub_peak = async_track_state_change_event(
+                self.hass, [sensor_id], self._peak_meter_changed
+            )
         await self.async_refresh()
 
     def async_stop(self):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        if self._unsub_peak:
+            self._unsub_peak()
+            self._unsub_peak = None
