@@ -271,6 +271,18 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
         facts = individual_facts(self.coordinator)
         if self._entity_key == "current_charging_power":
             return {"source_entity": facts["power_source_entity"]}
+        if self._entity_key == "battery_capacity":
+            return {"source_entity": facts["battery_capacity_source"]}
+        if self._entity_key == "battery_energy_current":
+            return {
+                "source_entity": facts["battery_current_source"],
+                "resolution": facts["battery_current_resolution"],
+            }
+        if self._entity_key == "battery_energy_target":
+            return {
+                "source_entity": facts["battery_target_source"],
+                "resolution": facts["battery_target_resolution"],
+            }
         if self._entity_key in ("indicative_charging_cost", "actual_charging_cost"):
             return {
                 "price_source_entity": facts["price_source_entity"],
@@ -294,6 +306,10 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
                 self.coordinator.ev_target_soc_entity_id,
                 self.coordinator.config_entry.options.get("evsc_actual_power_entity"),
                 self.coordinator.config_entry.options.get("evsc_actual_energy_entity"),
+                self.coordinator.config_entry.options.get("evsc_capacity_entity"),
+                self.coordinator.config_entry.options.get("evsc_current_energy_entity"),
+                self.coordinator.config_entry.options.get("evsc_target_energy_entity"),
+                self.coordinator.config_entry.options.get("evsc_effective_price_entity"),
             )
             if value
         }
