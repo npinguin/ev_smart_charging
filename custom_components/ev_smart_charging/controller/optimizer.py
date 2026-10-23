@@ -46,11 +46,25 @@ def optimize_future(
         demand[assignment.charger_id] = demand.get(assignment.charger_id, 0) + 1
 
     rates = {by_id[key].charge_power_kw for key in demand}
-    if policy.effective_budget is not None and len(rates) != 1:
-        return assignments
     capacity = policy.max_parallel
     if policy.effective_budget is not None:
-        capacity = min(capacity, int(policy.effective_budget // next(iter(rates))))
+        budget = policy.effective_budget
+        if any(power > budget for power in rates):
+            return assignments
+        if len(rates) == 1:
+            capacity = min(capacity, int(budget // next(iter(rates))))
+        elif capacity > 1 and sum(sorted(rates)[:2]) > budget:
+            # No two participating EVSEs can fit simultaneously, even at
+            # different full-rate powers. A one-slot flow is still EXACT.
+            capacity = 1
+        elif capacity == 1:
+            # Different AC kW is safe in a single active position as long as
+            # every charger fits by itself; actual cost uses each own kWh.
+            pass
+        else:
+            # A genuinely mixed-power >1-at-once envelope is an integer
+            # knapsack; flow would split native whole-charger demand.
+            return assignments
     if capacity < 1:
         return assignments
 
