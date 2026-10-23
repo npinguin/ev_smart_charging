@@ -1138,11 +1138,13 @@ class ChargeSupervisor:
         ]
         powers = [power for power in powers if power is not None and power > 0]
         if len(powers) <= 6:
-            thresholds = sorted({
-                round(sum(group), 4)
-                for count in range(1, len(powers) + 1)
-                for group in combinations(powers, count)
-            })
+            thresholds = sorted(
+                {
+                    round(sum(group), 4)
+                    for count in range(1, len(powers) + 1)
+                    for group in combinations(powers, count)
+                }
+            )
             feasible = tuple(headroom + 1e-9 >= limit for limit in thresholds)
         else:
             feasible = (int(headroom * 2),)
@@ -1168,22 +1170,24 @@ class ChargeSupervisor:
                 cfg.get("effective_price_sensor"),
             )
             switch_state = self._sample_state(obj.charger_switch.entity_id)
-            sources.append((
-                key,
-                obj.switch_active,
-                obj.switch_ev_connected,
-                obj.ev_soc,
-                obj.ev_target_soc,
-                obj.absolute_ready_by,
-                obj.ready_quarter_local,
-                obj.charging_pct_per_hour,
-                repr(dict(obj.config_entry.options)),
-                tuple(
-                    (entity, self._sample_state(entity, include_attributes=True))
-                    for entity in input_ids
-                ),
-                switch_state is not None and switch_state[0] in ("on", "off"),
-            ))
+            sources.append(
+                (
+                    key,
+                    obj.switch_active,
+                    obj.switch_ev_connected,
+                    obj.ev_soc,
+                    obj.ev_target_soc,
+                    obj.absolute_ready_by,
+                    obj.ready_quarter_local,
+                    obj.charging_pct_per_hour,
+                    repr(dict(obj.config_entry.options)),
+                    tuple(
+                        (entity, self._sample_state(entity, include_attributes=True))
+                        for entity in input_ids
+                    ),
+                    switch_state is not None and switch_state[0] in ("on", "off"),
+                )
+            )
         return (
             int(dt.utcnow().timestamp() // QUARTER.total_seconds()),
             repr(dict(self.config_entry.options)),
