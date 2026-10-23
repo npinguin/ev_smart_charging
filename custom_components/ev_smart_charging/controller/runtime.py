@@ -681,10 +681,18 @@ class ChargeSupervisor:
             return False
         if coordinator.switch_ev_connected is not True:
             return False
-        if coordinator.ev_soc is None or coordinator.ev_target_soc is None:
-            return False
-        if coordinator.ev_soc >= coordinator.ev_target_soc:
-            return False
+        facts = self._charger(charger_id, coordinator)
+        if (
+            facts.current_battery_kwh is not None
+            and facts.target_battery_kwh is not None
+        ):
+            if facts.target_battery_kwh <= facts.current_battery_kwh:
+                return False
+        else:
+            if coordinator.ev_soc is None or coordinator.ev_target_soc is None:
+                return False
+            if coordinator.ev_soc >= coordinator.ev_target_soc:
+                return False
         return _charger_switch_readback(self.hass, coordinator)
 
     def planning_summary(self):
