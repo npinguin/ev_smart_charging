@@ -79,6 +79,7 @@ from .const import (
     SWITCH,
 )
 from .controller.deadlines import effective_deadline, price_coverage_reaches_deadline
+from .controller import safety
 from .controller.runtime import is_supervised, physical_grant
 from .helpers.coordinator import (
     Scheduler,
@@ -324,6 +325,10 @@ class EVSmartChargingCoordinator:
         """Called every quarter"""
         _LOGGER.debug("EVSmartChargingCoordinator.update_state()")
         if is_supervised(self.hass, self.config_entry.entry_id):
+            # P0 containment: persisted Coordinated membership must not send
+            # a new physical ON or OFF command after HA restart/reload.
+            if not safety.COORDINATED_ACTUATION_ENABLED:
+                return
             await self._update_coordinated_state()
             return
         if self._charging_schedule is not None:
@@ -490,6 +495,8 @@ class EVSmartChargingCoordinator:
 
     async def _update_coordinated_state(self):
         """Execute only current group permits; stop if permission is absent."""
+        if not safety.COORDINATED_ACTUATION_ENABLED:
+            return
         admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
         state = (
             self.hass.states.get(self.charger_switch.entity_id)
