@@ -331,6 +331,7 @@ class ChargeSupervisor:
             self.plan = build_plan(
                 members, prices, dt.utcnow(), policy, committed=previous
             )
+            self.gate.update_plan(self.plan)
             self.reason = (
                 "COORDINATED_PLAN"
                 if any(prices.values()) else "PRICE_NOT_VALIDATED"
@@ -341,15 +342,11 @@ class ChargeSupervisor:
 
     def allowed(self, charger_id, reason):
         """A manual start must first explicitly transfer the charger to Local."""
-        if reason == "manual" or self.plan is None:
+        if charger_id not in self.participants or self.plan is None:
+            return False
+        if not self.gate.start(charger_id, dt.utcnow(), reason).granted:
             return False
         if charger_id in self.config_entry.options.get("paused_chargers", []):
-            return False
-        now = dt.utcnow()
-        age = now - self.plan.created_at
-        if not timedelta(0) <= age <= timedelta(minutes=5):
-            return False
-        if not grant_for(self.plan, charger_id, now):
             return False
         coordinator = self.chargers().get(charger_id)
         if coordinator is None or coordinator.switch_active is not True:
