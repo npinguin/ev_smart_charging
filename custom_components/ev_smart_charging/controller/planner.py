@@ -275,7 +275,7 @@ def build_plan(
         if c.connected is not True:
             results.append(ChargerResult(c.id, required, 0., required, "BLOCKED", "Physical connection not confirmed"))
             continue
-        needed_quarters = c.required_quarters()
+        needed_quarters = c.required_quarters
         if needed_quarters is None or c.ready_by is None:
             results.append(ChargerResult(c.id, required, None, required, "UNKNOWN", "Missing charging duration/deadline"))
             continue
@@ -297,6 +297,9 @@ def build_plan(
             p for p in by_charger[c.id]
             if utc(p.end) > t
             and utc(p.end) <= utc(c.ready_by)
+            and not any(
+                a.start == utc(p.start) for a in current_grants
+            )
             and used[utc(p.start)] < policy.max_parallel
             and (remaining_kw[utc(p.start)] is None
                  or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
