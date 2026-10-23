@@ -75,11 +75,12 @@ def pause_supervised(hass, charger_id):
 
 
 def physical_grant(hass, charger_id, reason):
+    # A paused supervised charger must be able to return explicitly to Local.
+    if not is_supervised(hass, charger_id):
+        return True
     entry = controller_entry(hass)
     if entry is not None and charger_id in entry.options.get("paused_chargers", []):
         return False
-    if not is_supervised(hass, charger_id):
-        return True
     entry = controller_entry(hass)
     controller = hass.data.get(DOMAIN, {}).get(entry.entry_id) if entry else None
     return isinstance(controller, ChargeSupervisor) and controller.allowed(charger_id, reason)
