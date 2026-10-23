@@ -194,6 +194,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
             "actual_power_entity": cv.string,
             "actual_energy_entity": cv.string,
+            # Confirmed effective rate (not merely an arbitrary market index).
+            "effective_price_confirmed": cv.boolean,
+            "effective_price_unit": vol.In(
+                ["EUR/kWh", "EUR/MWh", "cent/kWh"]
+            ),
+            "effective_price_markup_eur_kwh": vol.All(
+                vol.Coerce(float), vol.Range(min=-10, max=10)
+            ),
         }.items():
             if key in self.config_entry.options:
                 user_schema[vol.Optional(

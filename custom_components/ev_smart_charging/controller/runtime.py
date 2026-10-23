@@ -266,17 +266,31 @@ class ChargeSupervisor:
             "session_energy_coverage": sum(v is not None for v in energy),
         }
 
-    def _prices(self, objects):
-        """Keep each participant's original EVSC price curve independent.
 
-        The legacy price adaptor currently exposes only today/tomorrow. Its
-        monetary units and variable fees are not automatically proven to be
-        final cost: a financial API must validate them separately.
+    def _prices(self, objects):
+        """Read independent verified effective EUR/kWh curves per EVSC.
+
+        The legacy price adaptor remains untouched for Local mode. An operator
+        must confirm that the source and optional markup represent the actual
+        effective variable cost; a raw market index is not automatically one.
         """
+        factors = {"EUR/kWh": 1.0, "EUR/MWh": 0.001, "cent/kWh": 0.01}
         curves = {}
         issues = {}
         for obj in objects:
             id = obj.config_entry.entry_id
+            config = self._source_config(id, obj)
+            unit = config.get("effective_price_unit")
+            if (config.get("effective_price_confirmed") is not True
+                    or unit not in factors):
+                curves[id] = []
+                issues[id] = "PRICE_BASIS_UNCONFIRMED"
+                continue
+            markup = _number(config.get("effective_price_markup_eur_kwh", 0))
+            if markup is None:
+                curves[id] = []
+                issues[id] = "PRICE_MARKUP_INVALID"
+                continue
             raw = getattr(obj, "raw_two_days", None)
             if raw is None:
                 curves[id] = []
@@ -288,7 +302,8 @@ class ChargeSupervisor:
                     value = _number(item["value"])
                     if value is None:
                         raise ValueError("Invalid interval price")
-                    slots.append(PriceSlot(item["start"], item["end"], value))
+                    rate = value * factors[unit] + markup
+                    slots.append(PriceSlot(item["start"], item["end"], rate))
             except (KeyError, ValueError, TypeError, AttributeError):
                 slots = []
                 issues[id] = "PRICE_SOURCE_INVALID"

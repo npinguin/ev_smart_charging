@@ -63,11 +63,21 @@ def test_independent_charger_price_source_in_supervisor():
     ]
     prices = [
         SimpleNamespace(
-            config_entry=SimpleNamespace(entry_id="charger_a"),
+            config_entry=SimpleNamespace(
+                entry_id="charger_a", options={
+                    "effective_price_confirmed": True,
+                    "effective_price_unit": "EUR/kWh",
+                },
+            ),
             raw_two_days=SimpleNamespace(get_raw=lambda: times),
         ),
         SimpleNamespace(
-            config_entry=SimpleNamespace(entry_id="charger_b"),
+            config_entry=SimpleNamespace(
+                entry_id="charger_b", options={
+                    "effective_price_confirmed": True,
+                    "effective_price_unit": "EUR/kWh",
+                },
+            ),
             raw_two_days=SimpleNamespace(get_raw=lambda: [
                 {**times[0], "value": .27},
             ]),
@@ -95,3 +105,39 @@ def test_controller_timestamp_sensor_identity_and_class():
     # Runtime clocks are later than a synthetic October fixture in future
     # executions; directly test the committed contract classification.
     assert end.device_class == SensorDeviceClass.TIMESTAMP
+
+
+def test_unverified_price_source_is_not_used_as_eur():
+    hass, entries = ha()
+    manager = ChargeSupervisor(hass, entries.controller)
+    obj = SimpleNamespace(
+        config_entry=SimpleNamespace(
+            entry_id="charger_a", options={}
+        ),
+        raw_two_days=SimpleNamespace(get_raw=lambda: [
+            {"start": NOW, "end": NOW + timedelta(minutes=15), "value": .1}
+        ]),
+    )
+    curves, issues = manager._prices([obj])
+    assert curves["charger_a"] == []
+    assert issues["charger_a"] == "PRICE_BASIS_UNCONFIRMED"
+
+
+def test_unit_normalization_and_effective_markup():
+    hass, entries = ha()
+    manager = ChargeSupervisor(hass, entries.controller)
+    obj = SimpleNamespace(
+        config_entry=SimpleNamespace(
+            entry_id="charger_a", options={
+                "effective_price_confirmed": True,
+                "effective_price_unit": "EUR/MWh",
+                "effective_price_markup_eur_kwh": .03,
+            }
+        ),
+        raw_two_days=SimpleNamespace(get_raw=lambda: [
+            {"start": NOW, "end": NOW + timedelta(minutes=15), "value": 180}
+        ]),
+    )
+    curves, issues = manager._prices([obj])
+    assert not issues
+    assert abs(curves["charger_a"][0].eur_per_kwh - .21) < 1e-9
