@@ -6,6 +6,10 @@ import logging
 from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
 from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+try:
+    from homeassistant.core import SupportsResponse
+except ImportError:
+    SupportsResponse = None  # Original Local EVSC works on older HA versions.
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
 from homeassistant.helpers.device_registry import DeviceRegistry, DeviceEntry
@@ -55,6 +59,26 @@ async def async_setup(hass: HomeAssistant, _config) -> bool:
                 DOMAIN, context={"source": SOURCE_IMPORT},
                 data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
             )
+
+    if SupportsResponse is not None:
+        async def get_charge_plan(_call):
+            controller = next(
+                (obj for obj in hass.data.get(DOMAIN, {}).values()
+                 if isinstance(obj, ChargeSupervisor)),
+                None,
+            )
+            if controller is None:
+                return {
+                    "schema_version": "1.0",
+                    "status": "CONTROLLER_NOT_READY",
+                    "chargers": [],
+                }
+            return controller.plan_payload()
+
+        hass.services.async_register(
+            DOMAIN, "get_charge_plan", get_charge_plan,
+            supports_response=SupportsResponse.ONLY,
+        )
 
     if not hass.is_running:
         # When EVSC is installed into an already-running HA instance, its
