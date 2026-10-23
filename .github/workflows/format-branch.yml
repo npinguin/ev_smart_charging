@@ -1,0 +1,30 @@
+name: One-time isolated Black formatting
+
+on:
+  push:
+    branches:
+      - chore/black-formatting
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Format Python source without changing runtime semantics
+        run: |
+          python -m pip install black
+          black .
+          git diff --stat
+          git add -u
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style: format Python files using Black"
+            git push origin HEAD:chore/black-formatting
+          fi
