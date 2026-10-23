@@ -57,14 +57,16 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
         assert manager.plan is None
         assert manager.reason == "LOCAL_MONITORING"
         assert set(manager.chargers()) == {entry.entry_id for entry in entries}
-        assert {item["evsc_entry_id"] for item in manager.plan_payload()["chargers"]} == {
-            entry.entry_id for entry in entries
+        observed = {
+            item["evsc_entry_id"] for item in manager.plan_payload()["chargers"]
         }
+        assert observed == {entry.entry_id for entry in entries}
         assert all(
             item["mode"] == "local" for item in manager.plan_payload()["chargers"]
         )
         for entry in entries:
-            assert (entry.data, entry.options, entry.version) == original[entry.entry_id]
+            expected = original[entry.entry_id]
+            assert (entry.data, entry.options, entry.version) == expected
             assert entry.entry_id in hass.data[DOMAIN]
             assert not is_supervised(hass, entry.entry_id)
     finally:
