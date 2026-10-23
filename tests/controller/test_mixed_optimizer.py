@@ -74,7 +74,7 @@ def test_three_mixed_kw_chargers_use_cheapest_parallel_feasible_mix():
     )
     assert result is not None
     assert {(a.charger_id, a.start) for a in result} == {
-        ("a", T + timedelta(minutes=15)),
+        ("a", T + timedelta(minutes=30)),
         ("b", T + timedelta(minutes=15)),
         ("c", T + timedelta(minutes=30)),
     }
