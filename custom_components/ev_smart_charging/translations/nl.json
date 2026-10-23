@@ -30,6 +30,26 @@
   "options": {
     "step": {
       "init": {
+        "description": "Configuratie van de gekoppelde entities.",
+        "data": {
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
+        }
+      },
+      "charger": {
+        "title": "Laadgegevens voor {charger}",
+        "data": {
+          "capacity_kwh": "Bruikbare batterijcapaciteit voertuig (kWh)",
+          "power_kw": "Verwacht laadvermogen (kW)",
+          "power_sensor": "Native laadsensor vermogen",
+          "energy_sensor": "Native sessie-energiemeter"
+        }
+      },
+      "controller": {
         "description": "Selecteer laadpunten voor centrale planning. Niet geselecteerde laders behouden hun Local-planning. Vink gepauzeerde laders uit om ze opnieuw te starten.",
         "data": {
           "price_sensor": "Electriciteit prijs template entity",
@@ -44,15 +64,6 @@
           "paused_chargers": "Handmatig gepauzeerde laadpunten"
         },
         "title": "Instellingen Charge Controller"
-      },
-      "charger": {
-        "title": "Laadgegevens voor {charger}",
-        "data": {
-          "capacity_kwh": "Bruikbare batterijcapaciteit voertuig (kWh)",
-          "power_kw": "Verwacht laadvermogen (kW)",
-          "power_sensor": "Native laadsensor vermogen",
-          "energy_sensor": "Native sessie-energiemeter"
-        }
       }
     },
     "error": {
