@@ -103,7 +103,7 @@ class Charger:
         energy = self.required_battery_kwh
         direct = (
             self.current_battery_kwh is not None
-            and self.target_battery_kwh is not None
+            or self.target_battery_kwh is not None
         )
         if direct:
             if energy == 0:
@@ -129,21 +129,21 @@ class Charger:
 
     @property
     def required_battery_kwh(self) -> float | None:
-        if (
-            self.current_battery_kwh is not None
-            and self.target_battery_kwh is not None
-        ):
-            return max(0.0, self.target_battery_kwh - self.current_battery_kwh)
-        if (
-            self.current_soc is None
-            or self.target_soc is None
-            or self.usable_capacity_kwh is None
-        ):
+        current = self.current_battery_kwh
+        target = self.target_battery_kwh
+        if self.usable_capacity_kwh is not None:
+            if current is None and self.current_soc is not None:
+                current = self.usable_capacity_kwh * self.current_soc / 100
+            if target is None and self.target_soc is not None:
+                target = self.usable_capacity_kwh * self.target_soc / 100
+        if current is None or target is None:
             return None
-        return max(
-            0.0, (self.target_soc - self.current_soc)
-            * self.usable_capacity_kwh / 100
-        )
+        if self.usable_capacity_kwh is not None and (
+            current > self.usable_capacity_kwh
+            or target > self.usable_capacity_kwh
+        ):
+            raise ValueError("Stored battery energy exceeds usable capacity")
+        return max(0.0, target - current)
 
 
 @dataclass(frozen=True)
