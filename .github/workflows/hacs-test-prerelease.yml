@@ -1,0 +1,80 @@
+name: HACS Phase 1 field-test prerelease
+
+# Explicitly requested test packaging only. Never publish from main or
+# from an ordinary source-code push; a request-file change triggers this.
+on:
+  push:
+    branches:
+      - fix/local-bootstrap-lifecycle
+    paths:
+      - docs/controller/HACS_TEST_RELEASE_REQUEST.md
+
+permissions:
+  contents: read
+
+jobs:
+  full_ci_gate:
+    name: Require full Gate A regression
+    uses: ./.github/workflows/pull.yml
+
+  publish_test_prerelease:
+    name: Publish isolated HACS test prerelease
+    needs: full_ci_gate
+    if: ${{ github.repository == 'npinguin/ev_smart_charging' && github.ref == 'refs/heads/fix/local-bootstrap-lifecycle' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: 2.6.0-rc.2
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify exact tested package and version
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          manifest = json.loads(Path("custom_components/ev_smart_charging/manifest.json").read_text())
+          hacs = json.loads(Path("hacs.json").read_text())
+          const = Path("custom_components/ev_smart_charging/const.py").read_text()
+          assert manifest["version"] == version, "Mismatch: manifest version"
+          assert f'VERSION = "{version}"' in const, "Mismatch: const.py version"
+          assert hacs["zip_release"] is True, "HACS must use a release zip"
+          assert hacs["filename"] == "ev_smart_charging.zip", "HACS filename mismatch"
+          assert Path("custom_components/ev_smart_charging/services.yaml").exists()
+          print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
+          PY
+
+      - name: Package integration in HACS expected ZIP layout
+        run: |
+          mkdir -p "$RUNNER_TEMP/hacs-dist"
+          (
+            cd custom_components/ev_smart_charging
+            zip -q -r "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" . -x '*/__pycache__/*' '*.pyc'
+          )
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^manifest.json$'
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml$'
+          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+
+      - name: Create prerelease without changing main or stable versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          gh release create "$tag" "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — HA field-test ONLY" \
+            --notes "TEST PRERELEASE ONLY. Validated software Gate A. First field upgrade must preserve all four existing EVSC Local entries, Options, entity/device IDs and native source bindings. Backup and rollback required. Initial controller has zero coordinated participants and must issue no charger commands. NOT physically validated, not a stable release, not production approved. Source: $GITHUB_SHA. PR #3."
