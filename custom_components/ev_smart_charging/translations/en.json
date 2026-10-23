@@ -30,6 +30,26 @@
   "options": {
     "step": {
       "init": {
+        "description": "Configuration of external entities.",
+        "data": {
+          "price_sensor": "Electricity price sensor",
+          "ev_soc_sensor": "EV SOC entity",
+          "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
+          "charger_entity": "Charger control entity (single space to remove)",
+          "charging_state_entity": "Charging state entity (single space to remove)",
+          "ev_controlled": "An EV integration will control start/stop of charging"
+        }
+      },
+      "charger": {
+        "title": "Charging inputs for {charger}",
+        "data": {
+          "capacity_kwh": "Usable vehicle battery (kWh)",
+          "power_kw": "Expected EVSE charging power (kW)",
+          "power_sensor": "Native charger power sensor",
+          "energy_sensor": "Native charger session-energy sensor"
+        }
+      },
+      "controller": {
         "description": "Select chargers whose schedules are coordinated. Unselected chargers keep their original Local schedule. Uncheck paused chargers to resume.",
         "data": {
           "price_sensor": "Electricity price sensor",
@@ -44,15 +64,6 @@
           "paused_chargers": "Manually paused chargers"
         },
         "title": "Charge Controller settings"
-      },
-      "charger": {
-        "title": "Charging inputs for {charger}",
-        "data": {
-          "capacity_kwh": "Usable vehicle battery (kWh)",
-          "power_kw": "Expected EVSE charging power (kW)",
-          "power_sensor": "Native charger power sensor",
-          "energy_sensor": "Native charger session-energy sensor"
-        }
       }
     },
     "error": {
