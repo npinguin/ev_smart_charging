@@ -258,3 +258,21 @@ def test_initial_peak_admission_does_not_require_an_unrelated_cooldown():
         == 8
     )
     assert not controller._peak_latched
+
+
+def test_controller_watches_authoritative_native_source_updates():
+    controller, charger = supervisor()
+    ids = controller._source_entity_ids()
+    assert "sensor.ev" in ids
+    assert "sensor.price_a" in ids
+    assert "sensor.site" not in ids
+    assert not any(
+        entity.startswith("sensor.evsc_charge_controller_") for entity in ids
+    )
+
+
+def test_dynamic_watch_source_set_tracks_new_native_source_binding():
+    controller, charger = supervisor()
+    assert "sensor.new_meter" not in controller._source_entity_ids()
+    charger.config_entry.options["evsc_actual_energy_entity"] = "sensor.new_meter"
+    assert "sensor.new_meter" in controller._source_entity_ids()
