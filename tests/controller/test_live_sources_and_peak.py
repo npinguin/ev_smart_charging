@@ -199,7 +199,9 @@ def test_invalid_tariff_of_one_evsc_does_not_drop_another_evsc_price_stream():
         ),
         price_entity_id="sensor.price_b",
         raw_two_days=SimpleNamespace(
-            get_raw=lambda: [{"start": T, "end": T + timedelta(minutes=15), "value": 0.4}]
+            get_raw=lambda: [
+                {"start": T, "end": T + timedelta(minutes=15), "value": 0.4}
+            ]
         ),
     )
     controller.hass.states.values["sensor.price_b"] = state(0.4, "EUR/kWh")
