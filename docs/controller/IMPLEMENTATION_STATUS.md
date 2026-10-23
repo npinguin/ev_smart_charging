@@ -1,5 +1,15 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Current CI decision — 2026-10-23: Codecov OPTIONAL
+
+The operator explicitly approved optional external Codecov reporting. Both `.github/workflows/pull.yml` and `.github/workflows/push.yml` now enforce a **required local pytest minimum coverage of 90%** on Python 3.11–3.14, in addition to full test success. A failing or unavailable external Codecov report must **not** fail the CI job. OIDC reporting is retained as a best-effort integration.
+
+The observed baseline was approximately **91% coverage** on all four Python versions before this CI change. The updated workflow still requires verification on its exact branch HEAD.
+
+**HACS remains a separate mandatory release gate.** GitHub Issues is enabled; valid repository topics have not yet been configured. No field installation, release or main/feature branch merge is authorized. Historical entries below describe the earlier mandatory-Codecov policy and should not be read as the current gate.
+
+---
+
 ## Engineering completion pass — 2026-10-23 (final code integration still requires CI)
 
 **Scope:** This checkpoint covers *implementation source* on the isolated `fix/local-bootstrap-lifecycle` branch, not approval to deploy, release, or change an existing installation. **The first field test must be a zero-configuration drop-in upgrade on four real EVSC entries** after the code gate closes. `main`, frozen RC1, and `feature/charge-controller` are still protected.
@@ -16,7 +26,7 @@
 | Phase 1 peak policy | Native-only binary Stop/Resume, stale site/EVSE meter fail closed, 90-second stable recovery and margin, manual pause persistence, observed peak price impact only for equal energy plans | Not circuit/phase overload protection; variable native throttling belongs to Phase 2 |
 | Reactive runtime / device identity | Lifecycle-managed read-only source watchers, one controller HA device, additive original-entry individual read-only entities, provider device unchanged | Upgrade/rollback and physical four-charger tests not yet run |
 
-**Exact-head CI gate still OPEN.** Every new source change must pass strict Black, original Local smoke, upstream baseline, focused controller and full Python 3.11–3.14 tests. The first hardware test remains **after** this gate. HACS requires GitHub Issues enabled and at least one valid repository topic; Codecov requires its authorized `CODECOV_TOKEN` GitHub Actions secret. These are not Python source failures and cannot legitimately be bypassed by weakening workflow checks.
+**Exact-head CI gate still OPEN.** Every new source change must pass strict Black, original Local smoke, upstream baseline, focused controller and full Python 3.11–3.14 tests. The first hardware test remains **after** this gate. HACS requires enabled Issues and at least one valid repository topic. Local coverage is a mandatory >=90% pytest gate; optional Codecov upload failures do not block CI.
 
 **Qualification outcome: NOT RELEASE APPROVED.** No tag, no feature/main merge, no demand to change configuration. Source-code coverage and measured physical acceptance are deliberately separate.
 
@@ -37,7 +47,7 @@
 
 **Automation evidence:** [PR #3 run 39976972066](https://github.com/npinguin/ev_smart_charging/actions/runs/39976972066) reports focused controller PASS, unchanged Local smoke PASS, upstream baseline PASS, full Python 3.11/3.12/3.13 test jobs PASS and Python 3.14 pytest PASS (only subsequent Codecov token upload fails). HACS repo metadata remains FAIL. This run precedes the final format/docs changes; do not use it as proof of latest HEAD.
 
-**Latest incremental implementation superseding the previous gaps:** exact bounded mixed-kW optimizer (`mixed_optimizer.py`), Local/Coordinated financial projections (`local_projection.py`) with explicit partial-coverage subtotals, optional native stored-kWh/effective-tariff source bindings, reactive source listeners and active-grant revocation on operator disable. These **code paths exist**, but successful exact-head CI and on-target HA lifecycle/rollback proof remain mandatory. The general optimum is not claimed when bounded fallback is used. HACS and Codecov remain external repository-administration gates. Physical four-charger acceptance is Gate B/C **after** feature complete and is not claimed.
+**Latest incremental implementation superseding the previous gaps:** exact bounded mixed-kW optimizer (`mixed_optimizer.py`), Local/Coordinated financial projections (`local_projection.py`) with explicit partial-coverage subtotals, optional native stored-kWh/effective-tariff source bindings, reactive source listeners and active-grant revocation on operator disable. These **code paths exist**, but successful exact-head CI and on-target HA lifecycle/rollback proof remain mandatory. The general optimum is not claimed when bounded fallback is used. HACS topics remain an external repository-administration gate; optional Codecov reporting does not block CI. Physical four-charger acceptance is Gate B/C **after** feature complete and is not claimed.
 
 **Decision: FEATURE-INCOMPLETE / NO RELEASE / NO FIELD INSTALL.** Do not tag, merge feature or instruct the operator to change Home Assistant configuration.
 
