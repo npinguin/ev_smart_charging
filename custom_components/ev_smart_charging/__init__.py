@@ -56,9 +56,10 @@ async def async_setup(hass: HomeAssistant, _config) -> bool:
                 data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
             )
 
-    if hass.is_running:
-        hass.async_create_task(ensure_controller())
-    else:
+    if not hass.is_running:
+        # When EVSC is installed into an already-running HA instance, its
+        # singleton is bootstrapped at the next normal HA start. Reentering
+        # config-entry setup here would race existing platform forwarding.
         hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED,
             lambda _event: hass.async_create_task(ensure_controller()),
