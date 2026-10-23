@@ -122,7 +122,15 @@ async def test_successful_config_flow_option(
     # Check that the option flow is complete and a new entry is created with
     # the input data
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"] == MOCK_CONFIG_USER
+    # Default source bindings are explicit per-EVSC Options, not group policy.
+    assert result["data"] == {
+        **MOCK_CONFIG_USER,
+        "evsc_capacity_kwh": 0.0,
+        "evsc_expected_power_kw": 0.0,
+        "evsc_actual_power_entity": "",
+        "evsc_actual_energy_entity": "",
+        "evsc_price_validated": False,
+    }
     if "errors" in result.keys():
         assert len(result["errors"]) == 0
 
