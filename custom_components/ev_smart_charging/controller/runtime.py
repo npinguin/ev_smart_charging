@@ -263,6 +263,7 @@ class ChargeSupervisor:
             target_battery_kwh=_meter(
                 self.hass, attrs.get("target_battery_sensor"), "energy"
             ),
+            enabled=obj.switch_active is True,
         )
 
     def meters(self):
