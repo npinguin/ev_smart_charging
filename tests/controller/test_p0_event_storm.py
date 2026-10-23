@@ -102,7 +102,9 @@ async def test_identical_ha_state_content_does_not_trigger_replan(hass):
     try:
         hass.states.async_set("sensor.peblar_live", "idle", {"power": 0})
         await hass.async_block_till_done()
-        hass.states.async_set("sensor.peblar_live", "idle", {"power": 0}, force_update=True)
+        hass.states.async_set(
+            "sensor.peblar_live", "idle", {"power": 0}, force_update=True
+        )
         await hass.async_block_till_done()
         assert controller.async_refresh.await_count == 1
     finally:
