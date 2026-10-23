@@ -1,5 +1,8 @@
 # EV Smart Charging
 
+> **Fork engineering status (not an approved release):** The active Charge Controller extension is under repair and the current CI is red. The single authoritative engineering handover, exact implementation baseline, known gaps, ownership boundaries, and next acceptance gates are in [Charge Controller Implementation Status](docs/controller/IMPLEMENTATION_STATUS.md). Use [Test Acceptance](docs/controller/TEST_ACCEPTANCE.md) for evidence and [Working Roadmap](docs/controller/IMPLEMENTATION_ROADMAP.md) for task order. The original EV Smart Charging behavior documented below remains the backward-compatibility baseline.
+
+
 [![GitHub Release][releases-shield]][releases]
 [![Codecov][coverage-shield]][coverage]
 [![License][license-shield]][license]
