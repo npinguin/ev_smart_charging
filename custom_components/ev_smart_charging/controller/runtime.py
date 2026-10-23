@@ -1119,7 +1119,7 @@ class ChargeSupervisor:
             return None
         return (
             state.state,
-            deepcopy(state.attributes) if include_attributes else None,
+            deepcopy(dict(state.attributes)) if include_attributes else None,
         )
 
     def _peak_plan_fingerprint(self):
