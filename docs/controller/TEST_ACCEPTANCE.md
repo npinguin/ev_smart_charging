@@ -1,5 +1,11 @@
 # Charge Controller — qualification and acceptance evidence
 
+## Guarded HACS Local-only prerelease exception — 2026-10-24
+
+**User-requested software distribution, not physical Coordinated acceptance.** A v2.6.0-rc.4 release may be published from the isolated branch after the same exact-head 9-job CI (HACS/Hassfest/Black/Local/upstream/controller + four Python versions >=90% coverage) and explicit non-configurable `COORDINATED_ACTUATION_ENABLED = False` check. Existing Local behavior, all four entries/Options/IDs and Phase 1 features remain intact; previously persisted Coordinated participants must be physically inert. No Coordinated retest, merge, stable release or unattended deployment is authorized. P0 incident #5 remains open. Native OEM readback and field acceptance remain outstanding. See `IMPLEMENTATION_STATUS.md` for full exception scope.
+
+---
+
 ## HACS field-test candidate — 2026-10-23
 
 After full Gate A success on source commit `e3611a2`, the operator requested a HACS-installable **test** prerelease. A strictly isolated `v2.6.0-rc.2` prerelease is allowed **only after a fresh all-green exact-head full CI gate**; HACS must receive a correctly laid-out `ev_smart_charging.zip` release asset. This is an explicit one-time exception to the earlier prohibition on all tags: **production/stable release, any main/feature merge, and physical acceptance remain blocked**.
