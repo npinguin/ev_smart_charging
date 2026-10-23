@@ -1,5 +1,5 @@
 """Date-time behavior must preserve old select behavior when not configured."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import pytest
 from custom_components.ev_smart_charging.controller.deadlines import (
@@ -37,3 +37,34 @@ def test_dst_conversion(month, day):
 def test_reject_naive_datetime():
     with pytest.raises(ValueError):
         effective_deadline(datetime(2026, 10, 24, 8), datetime(2026,10,24,8,tzinfo=UTC))
+
+
+def test_missing_internal_price_quarter_is_not_covered():
+    start = datetime(2026, 10, 23, 10, tzinfo=UTC)
+    end = datetime(2026, 10, 23, 11, tzinfo=UTC)
+    data = [
+        {"start": start, "end": start + timedelta(minutes=15), "value": 0.2},
+        {"start": start + timedelta(minutes=30),
+         "end": start + timedelta(minutes=45), "value": 0.1},
+        {"start": start + timedelta(minutes=45), "end": end, "value": 0.1},
+    ]
+    assert not price_coverage_reaches_deadline(end, end, data, start)
+
+
+def test_contiguous_complete_price_quarters():
+    start = datetime(2026, 10, 23, 10, tzinfo=UTC)
+    end = start + timedelta(hours=1)
+    data = [
+        {"start": start + timedelta(minutes=15 * i),
+         "end": start + timedelta(minutes=15 * (i + 1)),
+         "value": 0.2}
+        for i in range(4)
+    ]
+    assert price_coverage_reaches_deadline(end, end, data, start)
+
+
+def test_unknown_price_value_is_not_valid_coverage():
+    start = datetime(2026, 10, 23, 10, tzinfo=UTC)
+    end = start + timedelta(minutes=15)
+    slots = [{"start": start, "end": end, "value": None}]
+    assert not price_coverage_reaches_deadline(end, end, slots, start)

@@ -1,20 +1,55 @@
 """Explicit calendar deadline helpers; legacy EVSC ready-quarter is unchanged."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from math import isfinite
+
+
+def _utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("Expected timezone-aware instant")
+    return value.astimezone(timezone.utc)
 
 
 def effective_deadline(absolute: datetime | None, legacy: datetime) -> datetime:
     """Return UTC explicit ready-by, else the original already-resolved value."""
-    if absolute is None:
-        return legacy
-    if absolute.tzinfo is None or absolute.utcoffset() is None:
-        raise ValueError("Ready-by must contain a timezone")
-    return absolute.astimezone(timezone.utc)
+    return legacy if absolute is None else _utc(absolute)
 
 
-def price_coverage_reaches_deadline(absolute: datetime | None, priced_until: datetime | None) -> bool:
-    """Don't schedule an explicit future date using shorter historical price data."""
+def price_coverage_reaches_deadline(
+    absolute: datetime | None,
+    priced_until: datetime | None,
+    slots: list | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """Fail closed on incomplete price horizon or any quarter-slot gap.
+
+    slots/now are optional for pure range calls. EVSC runtime supplies both,
+    so an internal gap cannot masquerade as a complete priced calendar plan.
+    """
     if absolute is None:
         return True
-    if priced_until is None or priced_until.tzinfo is None or priced_until.utcoffset() is None:
+    try:
+        deadline = _utc(absolute)
+        if priced_until is None or _utc(priced_until) < deadline:
+            return False
+        if slots is None:
+            return True
+        if not slots or now is None:
+            return False
+        frontier = _utc(now)
+        for slot in sorted(slots, key=lambda item: _utc(item["start"])):
+            start = _utc(slot["start"])
+            end = _utc(slot["end"])
+            if end <= frontier:
+                continue
+            if end - start != timedelta(minutes=15):
+                return False
+            if not isfinite(float(slot["value"])):
+                return False
+            if start > frontier:
+                return False
+            frontier = max(frontier, end)
+            if frontier >= deadline:
+                return True
+        return frontier >= deadline
+    except (ValueError, TypeError, KeyError, OverflowError):
         return False
-    return priced_until.astimezone(timezone.utc) >= absolute.astimezone(timezone.utc)

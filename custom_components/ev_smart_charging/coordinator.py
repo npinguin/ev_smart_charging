@@ -1009,7 +1009,9 @@ class EVSmartChargingCoordinator:
         if self.absolute_ready_by is not None:
             raw = self.raw_two_days.get_raw() if self.raw_two_days else []
             priced_until = raw[-1]["end"] if raw else None
-            if not price_coverage_reaches_deadline(self.absolute_ready_by, priced_until):
+            if not price_coverage_reaches_deadline(
+                self.absolute_ready_by, priced_until, raw, dt.utcnow()
+            ):
                 self.absolute_ready_by_pending = True
                 self.scheduler.set_empty_schedule()
                 self._charging_schedule = Scheduler.get_empty_schedule()
