@@ -1048,7 +1048,9 @@ class ChargeSupervisor:
             else:
                 self.rebuild()
             cost_changed = self._record_actual_costs()
-            for key in self.participants if safety.COORDINATED_ACTUATION_ENABLED else ():
+            for key in (
+                self.participants if safety.COORDINATED_ACTUATION_ENABLED else ()
+            ):
                 obj = self.chargers().get(key)
                 if obj is not None:
                     try:
