@@ -1,43 +1,11 @@
-# Charge Controller feature-complete roadmap
+# Charge Controller — Working roadmap
 
-## Implemented in branch source (not all runtime-qualified)
+**One live status/handover:** [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). This document is deliberately short; do not duplicate current version claims or acceptance results here.
 
-- P0: original upstream code retained as parent; isolated compatibility changes.
-- P1: one automatically imported, stable read-only Charge Controller HA device.
-- P2: scalar **counts/planned-hours** aggregation. Physical kW/kWh/cost coverage
-  is deliberately not faked and is still open.
-- P3: optional native calendar Ready-by and return-to-recurring-time button,
-  with price-horizon gap check. Full HA/DST acceptance remains open.
-- P5 preparatory: pure deterministic scheduler for multiple vehicles, deadlines
-  and known price slots. **Not wired to HA/physical commands**.
-- P4 preparatory: pure supervised admission policy. **Not activated**.
-- CI: fork-only branch added to push validation workflow, but GitHub Actions
-  availability and all job results still require verification.
+**Target behavior:** [Individual EVSC](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/contracts/INDIVIDUAL_EVSC.md), [Charge Controller](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/contracts/CHARGE_CONTROLLER.md), [machine catalog](https://github.com/npinguin/ev_smart_charging/blob/design/ha-device-contract-v1/docs/contracts/HA_CONTRACT.json). Target is not runtime evidence.
 
-## Not feature complete; unresolved release blockers
+**Delivery order:** (1) red CI and teardown, (2) real single-writer admission and failure paths, (3) source-aware quarter/price correctness, (4) Phase 1 binary peak Stop/Resume, (5) individual Options / HA states / plan-response and costs, (6) four-charger Advanced Home physical acceptance and upgrade/rollback, (7) small upstream contribution PRs.
 
-- Native physical meter bindings and data coverage for kW, kWh and financials.
-- User-configurable per-charger Local/Coordinated ownership with **persisted
-  fail-closed restart** and complete manual/low-price/low-SoC/retry gate.
-- Real jointly generated HA planning and supervised per-charger execution.
-- Safe concurrent charging, observed unmanaged Local load and optional peak
-  constraints. No claim of electrical current limiting from advisory kW.
-- Controller configuration and visual UX on mobile/tablet/desktop.
-- Target HA installation, restart, upgrades, physical readback, four-charger
-  pilot, rollback and release packaging.
+**Non-negotiable boundaries:** preserve original Local EVSC v8 entries and unique IDs; existing individual EVSC coordinator is sole physical EVSE writer; controller never writes OCPP/Peblar/Fibaro directly; individual EVSC owns charger/vehicle/tariff source bindings, controller owns group policy; no assumption of one common tariff. Peak restriction precedes cheaper-price preference. Peak Phase 1 is whole-charger pause/resume, **not** adjustable charging current. No RHI dependency or second framework.
 
-## Engineering rules
-
-Always keep one native service writer in each original EVSC charger coordinator.
-A central scheduler grants time slots; it does not issue native physical commands.
-In Local mode preserve all original behavior. Coordinated mode must never silently
-fall back to Local after restart, communication loss or missing price evidence.
-Protective STOP is always allowed.
-
-Avoid new mandatory EVSC config/options or Home-specific IDs. Contributions should
-remain reviewable and upstream-friendly. Do not tag a stable or feature-complete
-release before all required acceptance evidence exists.
-
-## Current integration notes
-
-Controller options now list participating EVSC config entries, maximum parallel slots, and configured charging power/capacity per EVSC entry. All supervised native ON calls, including retry, pass the persisted participant gate. Actual controller load and upgrade still require target-HA proof. A duplicate physical target (same native switch across config entries) blocks coordination. Cost accounting is explicitly unavailable until units/metering are verified.
+Update the handover/acceptance gates in the **same PR** as code fixes; never infer release quality from a draft document or isolated source test.
