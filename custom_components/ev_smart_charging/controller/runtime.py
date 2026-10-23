@@ -273,9 +273,7 @@ class ChargeSupervisor:
         complete = bool(chargers) and covered == len(chargers)
         return {
             "actual_cost_today": (
-                round(
-                    sum(ledgers[key].actual_cost_today for key in chargers), 4
-                )
+                round(sum(ledgers[key].actual_cost_today for key in chargers), 4)
                 if complete
                 else None
             ),
@@ -290,14 +288,10 @@ class ChargeSupervisor:
         for key, obj in objs.items():
             cfg = self._source_config(key, obj)
             entity = cfg.get("energy_sensor")
-            ledger = self._actual_cost_ledgers.setdefault(
-                key, ActualCostLedger()
-            )
+            ledger = self._actual_cost_ledgers.setdefault(key, ActualCostLedger())
             state = self.hass.states.get(entity) if entity else None
             reading = _meter(self.hass, entity, "energy")
-            stamp = (
-                getattr(state, "last_updated", None) if state is not None else None
-            )
+            stamp = getattr(state, "last_updated", None) if state is not None else None
             if (
                 reading is None
                 or not isinstance(stamp, datetime)

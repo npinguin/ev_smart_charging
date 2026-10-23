@@ -10,9 +10,9 @@ from custom_components.ev_smart_charging.controller.planner import PriceSlot
 
 def midnight():
     local = dt.as_local(datetime(2026, 10, 23, 12, tzinfo=timezone.utc))
-    return local.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(timezone.utc)
+    return local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(
+        timezone.utc
+    )
 
 
 def interval(start, value=0.2):
@@ -69,12 +69,8 @@ def test_crossing_price_change_without_quarter_meter_data_fails_closed():
             0.4,
         ),
     ]
-    ledger.observe(
-        start + timedelta(minutes=10), 10.0, "sensor.native_kwh", rates
-    )
-    ledger.observe(
-        start + timedelta(minutes=20), 11.0, "sensor.native_kwh", rates
-    )
+    ledger.observe(start + timedelta(minutes=10), 10.0, "sensor.native_kwh", rates)
+    ledger.observe(start + timedelta(minutes=20), 11.0, "sensor.native_kwh", rates)
     assert ledger.actual_cost_today is None
     assert ledger.summary()["known_subtotal_eur"] is None
 
@@ -83,8 +79,6 @@ def test_unknown_energy_interval_is_never_a_zero_euro_actual():
     start = midnight()
     ledger = ActualCostLedger()
     ledger.observe(start, 0.0, "sensor.native_kwh", [])
-    ledger.observe(
-        start + timedelta(minutes=5), 2.0, "sensor.native_kwh", []
-    )
+    ledger.observe(start + timedelta(minutes=5), 2.0, "sensor.native_kwh", [])
     assert ledger.actual_cost_today is None
     assert ledger.summary()["known_subtotal_eur"] is None
