@@ -1,7 +1,7 @@
 name: HACS Phase 1 field-test prerelease
 
-# Explicitly requested test packaging only. Never publish from main or
-# from an ordinary source-code push; a request-file change triggers this.
+# Explicitly operator-requested guarded Local-capable test packaging only.
+# Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
@@ -22,10 +22,9 @@ jobs:
   publish_test_prerelease:
     name: Publish isolated HACS test prerelease
     needs: full_ci_gate
-    # P0: first real Coordinated switch hung Home Assistant. Hardware test
-    # prereleases are disabled until incident #5 and real rollback are closed.
-    # An explicitly reviewed release workflow revision must lift this hold.
-    if: ${{ false }}
+    # Operator explicitly requested another HACS build. P0 stays OPEN:
+    # publish only a Local-capable quarantine build; no Coordinated actuation.
+    if: ${{ github.ref == 'refs/heads/fix/local-bootstrap-lifecycle' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,6 +49,16 @@ jobs:
           assert not hacs.get("zip_release", False), "HACS must install from source tree"
           assert "filename" not in hacs, "HACS must not require a release asset"
           assert Path("custom_components/ev_smart_charging/services.yaml").exists()
+          safety = Path("custom_components/ev_smart_charging/controller/safety.py").read_text()
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
+              "P0: release must not enable coordinated physical Start/Stop"
+          )
+          runtime = Path("custom_components/ev_smart_charging/controller/runtime.py").read_text()
+          assert "CONTROLLER_POLL_SECONDS = 5" in runtime, "Expected guarded 5-second sampler"
+          assert "async_track_time_change(" in runtime, "Expected HA native sampling timer"
+          assert Path("tests/controller/test_unified_poll_lifecycle.py").exists(), (
+              "No mode/reload/feedback regression guard"
+          )
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -81,5 +90,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — HA field-test ONLY" \
-            --notes "TEST PRERELEASE ONLY. HACS SOURCE INSTALL: repository tree custom_components/ev_smart_charging/; attached ZIP is only a manual fallback, not required by HACS. Validated software Gate A. First field upgrade must preserve all four existing EVSC Local entries, Options, entity/device IDs and native source bindings. Backup and rollback required. Initial controller has zero coordinated participants and must issue no charger commands. NOT physically validated, not a stable release, not production approved. Source: $GITHUB_SHA. PR #3."
+            --title "EV Smart Charging $tag — Local-only guarded HACS prerelease" \
+            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; attached ZIP is an optional manual recovery asset only. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
