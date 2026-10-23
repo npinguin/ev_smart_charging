@@ -9,6 +9,8 @@ These files are the **single source of truth** on this design branch:
 2. [CHARGE_CONTROLLER.md](CHARGE_CONTROLLER.md): aggregated capabilities, per-EVSC price curves, cross-charger optimization, controller device/entities, supervision boundary.
 3. [HA_CONTRACT.json](HA_CONTRACT.json): machine-readable device identity, source owners, core entity names/classes, original-entity preservation rules and controller policy inputs.
 
+**Delivery staging:** Phase 1 peak management uses **binary pause/resume only** with the original EVSC physical writer. Peak restrictions may block cheapest intervals, so financial optimization selects the lowest-cost *feasible* schedule using individual per-charger prices. Native flexible charging-power control is deferred to Phase 2. These remain contract designs, not RC1 runtime claims.
+
 **Contract maintenance rules:**
 - Change the semantic Markdown and catalog **together in one commit**. Schema/unique ID diffs must be intentional.
 - Do not create another `_v1_1_FINAL_NEW` document. Edit these canonical files and use Git history for previous versions.

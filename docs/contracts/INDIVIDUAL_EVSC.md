@@ -97,28 +97,26 @@ The controller reads **a normalized, read-only per-entry planning view**, not ea
 The controller **must not write** to this normalized API. It sends a versioned *schedule proposal/grant* to the existing EVSC scheduling interface; each EVSC coordinator retains the only physical writer.
 
 
-## Optional adjustable EVSE power — precise individual ownership
 
-This section complements the controller's [dynamic peak shaving contract](CHARGE_CONTROLLER.md#8-optional-dynamic-peak-shaving-and-changing-power-limits). **Not an RC1 implementation claim.**
+## Phase 1 peak participation: binary Stop/Resume only
 
-| Value | Source and owner | Writable? | Interpretation |
-|---|---|---|---|
-| \`requested_charging_power\` | Operator setting or native EVSE's supported charger setpoint, bound on this **individual EVSC entry** | Optional, via existing EVSC writer if supported | Desired maximum, **preserved** across temporary peak control |
-| \`effective_charging_power_limit\` | Derived from group allocation, optional site peak headroom, operator requested limit and verified EVSE capabilities | Controller decision → existing EVSC writer | Temporary allowed limit; **not** a replacement of user preference |
-| \`applied_native_setpoint\` | Native EVSE command/readback, verified by individual EVSC adapter | Individual EVSC writer only | Last confirmed physical requested setting; A and kW units never conflated |
-| \`actual_charging_power\` | Native EVSE/meter | Read-only | Delivered power; can be lower than requested/allowed |
-| \`minimum_controllable_power\`, \`maximum_controllable_power\` | Native EVSE capability, phase/current configuration and validated adapter | Read-only capability | Determines whether dynamic reduction is physically possible |
-| \`power_control_state\` | Individual EVSC diagnostic derivation | Read-only | \`unsupported|idle|applied|paused_below_minimum|below_requested|setpoint_unconfirmed|unavailable\` |
+**Owner:** The Charge Controller owns admission decisions and aggregate site/group headroom. **The original individual EVSC coordinator alone owns the native physical Start/Stop writer.** This is an optional Coordinated capability, not a new required Local input. See [Charge Controller Phase 1 peak contract](CHARGE_CONTROLLER.md#8-peak-shaving--staged-delivery-and-impact-on-price-optimization).
 
-**Control flow:** the Charge Controller allocates a time slot **and an optional live power envelope**; this existing EVSC coordinator retains exclusive native Start/Stop/current/power-setpoint execution. No duplicate native \`number\` entity should appear on EVSC when it would create competing physical controls; a verified adapter-backed proxy may be exposed only after write ownership and readback semantics are defined.
+| Fact | Owner/source | Phase 1 behavior |
+|---|---|---|
+| Operator requested/preferred charging power | Native EVSE setpoint if available, or individual EVSC user setting | Preserve, **never change** because of peak pause |
+| Expected full-rate AC charging demand | Individual EVSC estimate, validated capability or explicit fallback | Used for **whole-charger admission**; not a command |
+| Actual charging power | Native EVSE/meter W/kW | Observed only; may be below expected/requested |
+| Peak admission / peak pause | Charge Controller decision delivered to this EVSC | Binary permitted/paused; a transient **peak** reason, not a persistent user Manual Stop |
+| Native charging state and Start/Stop | Existing EVSC physical writer to native EVSE | Execute approved ON or protective OFF and verify physical readback |
+| Manual Stop / Resume | Existing EVSC user controls and persistent manual pause | Manual pause cannot be cleared by recovered peak headroom |
 
-**Power smaller than requested:** The operator's original desired charging power remains intact. If physically supported, apply the lower effective limit through the existing EVSC writer; otherwise Pause/Stop (with a reason distinguishable from persistent **manual** pause). Headroom recovery restores only within the granted schedule and up to the original operator preference.
+If headroom is less than the **full expected/start charging power**, the individual EVSC remains OFF or is stopped. Phase 1 never sends a smaller native current/power setpoint, never edits `number.charging_speed`, and never treats observed low power as a new requested setpoint. For example, with a 7.2 kW charger and 3.5 kW available, **Pause**, not 3.5 kW throttle.
 
-**Actual smaller than requested:** a measured low rate is not proof that the peak controller requested throttling. Preserve user settings, revise remaining time/energy/cost and report source/constraint status. Do not automatically increase a native setpoint in response.
+If measured house import or actual EVSE power becomes unavailable while enforced Coordinated site-peak policy is active, deny an unverified ON and use the original EVSC protective Stop route where necessary. Local entries retain original behavior. Report actual reason and coverage; do not claim enforceable site protection.
 
-**Minimum native control and fault response:** Min/max and writable units come from the physical EVSE/adapter. Never assume a universal minimum current, invent a 0 A setpoint, or translate A→kW without validated electrical configuration. On missing/failed native limit application during active supervised peak control, use the existing EVSC protective Stop path and mark the control state unavailable rather than claiming peak compliance.
+**Phase 2 only (deferred):** Native `set_charging_power` control, variable amperage/kW envelope, minimum/current-phase capability validation, power setpoint acknowledgment and feedback. None of those are required to deliver Phase 1.
 
-**Backward compatibility:** original Local EVSC keeps existing charging-speed %/hour, source options and command behavior. All new power/peak constraints are optional Coordinated capabilities; no additional required inputs for Local or Start/Stop-only chargers.
 
 ## Compatibility and release gates
 

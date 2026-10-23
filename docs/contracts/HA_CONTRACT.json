@@ -483,50 +483,91 @@
     "Input capability requirements do not imply mandatory fields for every EVSC instance.",
     "Optional site peak shaving is distinct from planned group charging kW budget; it is not a safety-rated electrical protection.",
     "The individual EVSC writer alone may apply native charger power limits; peak control never overwrites operator requested power.",
-    "A dynamic power envelope below physical EVSE minimum must pause supervised charging through its original EVSC writer, not command unsupported current.",
-    "If site baseline demand already exceeds peak target, controller must report not_achievable; it cannot guarantee control of other loads."
+    "If site baseline demand already exceeds peak target, controller must report not_achievable; it cannot guarantee control of other loads.",
+    "Phase 1 peak shaving controls whole Coordinated EVSC chargers by original-writer Pause/Resume; no adjustable power setpoint is applied.",
+    "Peak constraints precede per-charger price optimization, and may prohibit the cheapest interval; report infeasible deadlines and cost differences.",
+    "Peak-induced pause is transient and auto-releasable; operator Manual Stop is persistent and never auto-resumed.",
+    "Dynamic site headroom for future intervals is unknown without a trusted forecast; never guarantee tomorrow's lowest price."
   ],
   "peak_shaving": {
-    "status": "CONTRACT_ONLY_NOT_IMPLEMENTED_IN_RC1",
-    "mode": "disabled_by_default",
-    "policy_modes": [
-      "instantaneous_import_target",
-      "quarter_hour_average_target"
-    ],
-    "policy_owner": "charge_controller_config_entry_only",
-    "site_grid_import_source": "optional_controller_source_binding_separate_from_individual_evsc_source_bindings",
-    "power_owner": "existing_individual_evsc_physical_writer_only",
-    "scope": "opted_in_coordinated_chargers_only",
-    "relationship_to_group_power_budget": "separate_constraint_more_restrictive_valid_envelope_governs",
-    "non_ev_baseline": "derive from fresh whole-site net import minus measured controllable EV load; avoid double-count",
-    "limits": "operator_requested_limit_remains_unchanged; effective_limit_is_ephemeral",
-    "minimum_controllable_power": "physical EVSE-provided, no universal guess",
-    "controllable_charger": "reduce_native_limit_via_individual_evsc_writer_then_confirm_readback",
-    "binary_charger": "pause_via_individual_evsc_writer_when_headroom_below_required_power",
-    "uncontrollable_baseload_exceeds_target": "pause_coordinated_charging_report_not_achievable",
-    "meter_failure": "no_new_supervised_on; protective_stop_active_controllable_evsc_where_required",
-    "measured_power_below_requested": "report_and_replan_achievable_rate_without_raising_requested_setpoint",
-    "resume": "only_with_new_valid_schedule_and_headroom; honor_manual_stop_latch_and_hysteresis",
-    "future_entities": [
+    "status": "PHASE_1_PAUSE_ONLY_CONTRACT_NOT_IMPLEMENTED",
+    "phase_1": {
+      "control_type": "binary_charger_stop_resume",
+      "ownership": "controller_admission_individual_evsc_native_writer_only",
+      "applies_to": "coordinated_participants_only",
+      "default_enabled": false,
+      "policy_modes": [
+        "instantaneous_site_import_target"
+      ],
+      "quarter_hour_average_target": "not claimed without time-aligned site energy and predictive quarter integration tests",
+      "group_budget_distinct_from_site_peak_target": true,
+      "priority_order": [
+        "native_safety_and_manual_stop",
+        "peak_and_group_limits",
+        "feasible_deadline_delivery",
+        "minimize_sum_individual_charger_cost_eur"
+      ],
+      "full_rate_admission_required": true,
+      "headroom_estimate": "fresh site_import minus measured_controllable_ev once, plus configured reserve; fail closed if topology/source incomplete",
+      "peak_pause": "transient_auto_releasable_reason_peak",
+      "manual_pause": "persistent_manual_stop_never_auto_released",
+      "effective_binary_state": [
+        "allowed_on",
+        "peak_paused",
+        "unknown_blocked"
+      ],
+      "start_stop_owner": "individual_evsc_existing_native_writer",
+      "auto_resume_requirements": [
+        "fresh_site_measurement",
+        "headroom_for_entire_start_power",
+        "hysteresis",
+        "cooldown",
+        "current_valid_scheduled_grant",
+        "not_manually_paused"
+      ],
+      "operator_requested_power_unchanged": true,
+      "actual_power_below_request": "report_and_replan; never command flexible power in Phase 1",
+      "uncontrolled_baseline_over_target": "stop_coordinated_and_report_not_achievable",
+      "on_missing_meter": "no_new_coordinated_on_and_protective_stop_through_individual_evsc",
+      "prices": "unique_validated_per_evsc_effective_eur_kwh_curve",
+      "peak_tradeoff": "exclude_currently_peak_blocked_slots_replan_to_next_cheapest_feasible_charger_slot",
+      "price_best_without_peak_comparison": "optional_only_when_counterfactual_data_complete",
+      "future_peak_headroom": "unknown_without_trusted_forecast; planning remains_provisional",
+      "manual_deadline_override": false
+    },
+    "phase_2": {
+      "status": "DEFERRED_NO_IMPLEMENTATION",
+      "control_type": "adjustable_native_evse_power_or_current",
+      "requirements": [
+        "native_setpoint_min_max",
+        "unit_phase_voltage_validation",
+        "acknowledgement",
+        "measured_readback",
+        "hysteresis",
+        "stop_below_minimum"
+      ],
+      "writer": "individual_evsc_only"
+    },
+    "controller_optional_entities": [
       {
         "platform": "switch",
         "key": "peak_shaving_enabled",
-        "entity_category": "config",
         "default": false,
-        "conditional": true
+        "category": "config",
+        "phase": 1
       },
       {
         "platform": "number",
         "key": "peak_target",
         "unit": "kW",
-        "entity_category": "config",
-        "conditional": true
+        "category": "config",
+        "phase": 1
       },
       {
         "platform": "sensor",
         "key": "peak_control_status",
         "kind": "enum",
-        "entity_category": "diagnostic",
+        "category": "diagnostic",
         "options": [
           "disabled",
           "active",
@@ -536,28 +577,29 @@
           "power_control_unavailable",
           "not_achievable"
         ],
-        "conditional": true
+        "phase": 1
       },
       {
         "platform": "sensor",
         "key": "available_ev_power",
-        "kind": "power",
         "unit": "kW",
-        "conditional": true
+        "kind": "power",
+        "phase": 1
       }
     ],
-    "release_gates": [
-      "live_reduction_while_charging",
-      "below_minimum_fallback_to_stop",
-      "binary_only_fallback",
-      "native_write_readback",
-      "site_meter_freshness_and_topology",
-      "phase_constraints_when_claimed",
-      "15_min_average_not_hard_safety",
-      "constrained_ready_by_replan",
-      "low_measured_power_no_unwanted_increase",
-      "safe_resume_after_headroom",
-      "no_Local_regression"
+    "acceptance": [
+      "operator_7_2kw_headroom_3_5kw_must_pause",
+      "changing_peak_target_while_active_stops_through_existing_evsc_writer",
+      "cheap_interval_peak_blocked_next_eligible_interval_may_cost_more",
+      "distinct_charger_prices_optimize_delay_cost_not_absolute_current_rate",
+      "no_automatic_native_setpoint_changes",
+      "manual_stop_latch_not_auto_resumed",
+      "transient_peak_pause_auto_resumable_after_hysteresis",
+      "recovery_in_same_cheap_quarter_if_safe",
+      "missing_meter_fail_closed_without_affecting_Local",
+      "unknown_future_headroom_not_reported_as_guaranteed",
+      "15_min_average_not_claimed_from_instantaneous_measurement",
+      "physical_readback_and_all_old_config_unique_ids_preserved"
     ]
   }
 }

@@ -82,6 +82,18 @@ require("Per-charger price curves" in controller, "Per-charger pricing section m
 
 for doc in ("INDIVIDUAL_EVSC.md", "CHARGE_CONTROLLER.md", "HA_CONTRACT.json"):
     require(doc in readme, f"{doc} not listed in contract index")
+require(data["peak_shaving"]["status"] == "PHASE_1_PAUSE_ONLY_CONTRACT_NOT_IMPLEMENTED",
+        "Peak implementation staging drift")
+require(data["peak_shaving"]["phase_1"]["control_type"] == "binary_charger_stop_resume",
+        "Phase 1 must not implement flexible power setpoints")
+require(data["peak_shaving"]["phase_2"]["status"] == "DEFERRED_NO_IMPLEMENTATION",
+        "Variable charging-power control is out of Phase 1 scope")
+require("Peak constraints precede" in " ".join(data["global_rules"]),
+        "Peak restriction must alter feasible cheap slots")
+require("## 8. Peak shaving" in controller and "Phase 2" in controller,
+        "Peak policy must be specified with later phase explicitly deferred")
+require("## Phase 1 peak participation" in individual,
+        "Individual EVSC native writer ownership missing")
 require("not implemented" in controller.lower() and "not implemented" in individual.lower(),
         "Proposal must not imply implementation evidence")
 
