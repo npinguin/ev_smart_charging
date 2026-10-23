@@ -40,6 +40,13 @@ class SupervisionGate:
         self._mode[charger_id] = mode
         self._plan = None
 
+    def set_membership(self, participants):
+        """Restore authoritative membership from persisted controller Options."""
+        selected = {key: "coordinated" for key in participants}
+        if selected != self._mode:
+            self._mode = selected
+            self._plan = None
+
     def update_plan(self, plan: GroupPlan | None):
         self._plan = plan
 
