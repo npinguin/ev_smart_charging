@@ -65,6 +65,9 @@ De onderstaande naam is een **contract-key**, geen gegarandeerde door HA gegener
 | `number.max_parallel` | Maximum parallel chargers — Integer >=1; default 1 | chargers | config | Nieuw |
 | `number.group_power_budget` | Group charger power budget — Only supervised EVSC charging; no electrical protective guarantee | kW | config | Nieuw |
 | `button.recalculate_plan` | Recalculate planning — Idempotent replanning, never direct physical command | — | action | Nieuw |
+| `sensor.indicative_cost_today` | Indicative charging cost today — Estimated cost of priced scheduled charging within current HA-local calendar day | EUR | measurement | Nieuw |
+| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow — Estimated cost of priced scheduled charging within next HA-local calendar day | EUR | measurement | Nieuw |
+| `sensor.actual_energy_today` | Measured charging energy today — Integrated metered AC energy since HA-local midnight | kWh | measurement | Voorwaardelijk |
 
 **Belangrijkste nieuwe timestamp-sensoren**
 
@@ -113,6 +116,10 @@ De bestaande EVSC-device krijgt deze aanvullende readbacks/configuratie/acties; 
 | `button.pause_coordinated` | Pause coordinated charging — Persistent inhibit via existing EVSC writer; never direct EVSE command | — | action | Nieuw |
 | `button.resume_coordinated` | Resume coordinated charging — Clears pause, requires fresh group plan before ON | — | action | Nieuw |
 | `button.clear_absolute_ready_by` | Clear absolute Ready by — Existing RC1 unique_id retained | — | action | RC1 aanwezig |
+| `sensor.indicative_cost_today` | Indicative charging cost today | EUR | measurement | Nieuw |
+| `sensor.indicative_cost_tomorrow` | Indicative charging cost tomorrow | EUR | measurement | Nieuw |
+| `sensor.actual_charging_cost_today` | Actual charging cost today | EUR | measurement | Voorwaardelijk |
+| `sensor.actual_energy_today` | Measured charging energy today | kWh | measurement | Voorwaardelijk |
 
 **Vereiste modeoverdracht**
 
@@ -161,8 +168,12 @@ De Energy Cost Price is **één gevalideerde tijdlijn** van de werkelijke toepas
 | `Remaining indicative cost` | Toekomstig nog te plannen of nog uit te voeren geprijsd AC-volume | Alleen te tonen bij toereikende price/energy coverage; vermeld altijd `priced/total` dekking |
 | `Actual power` | Native gemeten EVSE-vermogen | Som uitsluitend indien alle inbegrepen EVSC-laders geldige powerreadback hebben; bij deels bekend `unknown` voor volledige totaalsensor, plus `power_coverage` |
 | `Actual charging cost today` | HA-lokale dag, timestamped energieprijsvakken | Som intervalkosten vanaf lokale middernacht. **Niet** sessietellers optellen en als dagkosten presenteren |
+| `Indicative cost today/tomorrow` | Geprijsde tijdsloten binnen respectievelijke HA-lokale kalenderdag | Per dag uit hetzelfde effectieve plan en dezelfde effectieve kostprijs; bij partiële prijsdekking geen totaal claimen |
+| `Actual energy today` | Betrouwbare native kWh of geïntegreerde W/kW tijdreeks | Werkelijk geladen AC-kWh sinds HA-lokale middernacht, niet één losse EVSE-sessieteller |
 
 **Group scope:** De controller observeert en aggregeert **alle** EVSC-laders. Het authoritatieve schedule is de disjuncte samenvoeging van Local-plannen en centrale grants. Gecoördineerde vermogensbeperkingen gelden **alleen** voor deelnemers en mogen de belasting van Local-laders en overige huisverbruikers **niet** stilzwijgend als nul beschouwen. In diagnostiek onderscheiden we `all_chargers`, `coordinated_participants` en `source_coverage`.
+
+**Entity-aanwezigheid:** `Voorwaardelijk` in de tabellen betekent dat **de meet- of berekeningscapability voorwaardelijk beschikbaar is**, niet dat de entity identity wordt verwijderd. De entity wordt met dezelfde unieke ID aangeboden en krijgt `unknown`/`unavailable` zolang de vereiste bron ontbreekt. Geen nieuwe device of unique ID wanneer later een meter wordt aangesloten.
 
 **Voertuigwissel:** Een EVSC-device staat voor een laadpunt, niet voor een permanent toegewezen voertuig. Huidige SoC/capacity/target uit een actueel voertuigprofiel hebben voorrang op een expliciet geconfigureerde fallback. Bij voertuigwissel wordt de planning ongeldig en vernieuwd; geschiedenis blijft bij de vorige sessie. Geen default-batterijcapaciteit als de bron ontbreekt.
 
