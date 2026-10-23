@@ -1,7 +1,7 @@
 """Persistent controller device with passive, bounded HA sensor projections."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.helpers.event import async_track_time_interval
 
 from ..const import DOMAIN, NAME
@@ -43,6 +43,8 @@ class ControllerSensor(SensorEntity):
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{DOMAIN}_charge_controller_{key}"
+        if key in ("planning_start", "planning_end"):
+            self._attr_device_class = SensorDeviceClass.TIMESTAMP
 
     @property
     def device_info(self):
@@ -55,6 +57,36 @@ class ControllerSensor(SensorEntity):
 
     @property
     def native_value(self):
+        if self.key in ("planning_start", "planning_end"):
+            # Effective Coordinated grants and independent Local schedules.
+            now = datetime.now(timezone.utc)
+            intervals = []
+            plan = self.manager.plan
+            if plan is not None:
+                intervals.extend(
+                    (a.start, a.end) for a in plan.assignments if a.end > now
+                )
+            for entry_id, coordinator in self.manager.chargers().items():
+                if entry_id in self.manager.participants:
+                    continue
+                scheduler = getattr(coordinator, "scheduler", None)
+                if scheduler is None or not scheduler.get_charging_is_planned():
+                    continue
+                start = scheduler.get_charging_start_time()
+                end = scheduler.get_charging_stop_time()
+                if (
+                    isinstance(start, datetime) and isinstance(end, datetime)
+                    and start.tzinfo is not None and end.tzinfo is not None
+                    and end > now
+                ):
+                    intervals.append((start, end))
+            if not intervals:
+                return None
+            return (
+                min(start for start, _ in intervals)
+                if self.key == "planning_start"
+                else max(end for _, end in intervals)
+            )
         snapshot = self.manager.snapshot()
         return {
             "status": self.manager.reason,
@@ -103,6 +135,8 @@ class ControllerSensor(SensorEntity):
 def controller_sensors(manager):
     return [
         ControllerSensor(manager, "status", "Status", "mdi:view-dashboard-outline"),
+        ControllerSensor(manager, "planning_start", "Planning start", "mdi:calendar-start"),
+        ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
         ControllerSensor(manager, "chargers", "Chargers", "mdi:ev-station"),
         ControllerSensor(manager, "connected", "Connected chargers", "mdi:connection"),
         ControllerSensor(manager, "connection_unknown", "Unknown connections", "mdi:help-circle-outline"),
