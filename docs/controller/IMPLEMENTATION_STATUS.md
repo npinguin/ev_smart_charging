@@ -1,5 +1,24 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Follow-up checkpoint — 2026-10-23 — isolated P0 Local lifecycle fix
+
+**Status: release still BLOCKED; neither main nor RC1 nor feature/charge-controller has been modified by this checkpoint.**
+
+- Functional review branch: `fix/local-bootstrap-lifecycle`, [draft PR #3](https://github.com/npinguin/ev_smart_charging/pull/3). The new top-level `async_setup` had made the original directly-invoked Local setup reentrant during platform forwarding. Import of the singleton has been moved after an HA-managed config-entry transition, and plan service registration remains idempotent. **The original selected Local smoke cases were not changed.**
+- Evidence: [PR #3 run 39969458373](https://github.com/npinguin/ev_smart_charging/actions/runs/39969458373) reports **PASS** for selected upstream Local baseline, feature Local smoke, controller behavior, and full Python **3.11, 3.12 and 3.13** test jobs.
+- Python **3.14 test step PASS**; the job fails only on the subsequent Codecov upload, which reports `Token required - not valid tokenless upload`. `CODECOV_TOKEN` must be configured as a real GitHub Actions secret / Codecov authorization. Do not suppress the coverage-upload failure to fake a green gate.
+- Two legitimate contract-test expectation updates accompany the functional fix: the coordinator's native retry now specifies `reason="retry"`, and EVSC Options persist five new individual source defaults. Exact expectations remain asserted; no functional assertions were skipped.
+- Added `tests/controller/test_ha_managed_bootstrap.py` to prove that a normal HA-managed Local setup imports only one persistent controller and that reload preserves the singleton. This is a synthetic HA fixture, **not physical EVSE acceptance**.
+- CI test matrix explicitly uses `fail-fast: false`, so an external upload failure cannot cancel untested Python versions.
+- Independent mechanical formatting branch: `chore/black-formatting`, [draft PR #4](https://github.com/npinguin/ev_smart_charging/pull/4). A one-time isolated action generated Black formatting for 33 Python files; the formatter action has been removed. [PR #4 run 39969754549](https://github.com/npinguin/ev_smart_charging/actions/runs/39969754549) shows **strict Black check PASS**. Review and merge separately after its tests; preserve immutable upstream/RC1.
+- HACS remains **FAIL** because repository Issues are disabled and GitHub topics are absent. The repository administrator must enable Issues and add valid topics via GitHub settings; do not weaken HACS validation. Integration categories produce a nonfatal warning.
+- Mandatory **not proved**: physical Advanced Home four-EVSE admission/readback, Home Assistant native upgrade and rollback, final financial price-unit evidence, peak protection under stale meters/interruption, and full release acceptance.
+
+**Next step:** Review PR #4 test outcomes, reconcile the mechanical formatting onto PR #3 only after checking unchanged behavior, resolve HACS and Codecov repository administration, then proceed with remaining physical admission and field validation. Do not merge PR #1 or tag a release from either work branch until acceptance is complete.
+
+---
+
+
 **Status:** WORK IN PROGRESS — **NO RELEASE / NO PHYSICAL PRODUCTION APPROVAL**  
 **Reviewed:** 2026-10-23 (Europe/Brussels)  
 **Original source review baseline (historical):** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` on `feature/charge-controller`  
