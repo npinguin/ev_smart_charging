@@ -57,9 +57,7 @@ def test_local_power_and_own_prices_contribute_actual_future_forecast():
 
 
 def test_missing_local_eur_prices_leave_financial_totals_unknown_not_zero():
-    result = local_plan_facts(
-        local([0, 1, 0, 1]), 4, [], T + timedelta(minutes=1)
-    )
+    result = local_plan_facts(local([0, 1, 0, 1]), 4, [], T + timedelta(minutes=1))
     assert result["planned_grid_kwh"] == 2.0
     assert result["estimated_cost_eur"] is None
     assert result["cost_by_day"] == {}

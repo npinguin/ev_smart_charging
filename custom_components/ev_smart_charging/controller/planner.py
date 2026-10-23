@@ -289,7 +289,8 @@ def build_plan(
         remaining_hours = (utc(old.end) - t).total_seconds() / 3600
         remaining_ac = (
             c.charge_power_kw * remaining_hours
-            if c.charge_power_kw is not None else None
+            if c.charge_power_kw is not None
+            else None
         )
         assignments.append(
             replace(
@@ -297,8 +298,7 @@ def build_plan(
                 price_eur_per_kwh=current.eur_per_kwh,
                 grid_kwh=remaining_ac,
                 delivered_battery_kwh=(
-                    remaining_ac * c.efficiency
-                    if remaining_ac is not None else None
+                    remaining_ac * c.efficiency if remaining_ac is not None else None
                 ),
             )
         )
@@ -385,14 +385,10 @@ def build_plan(
                 for a in current_grants
                 if a.delivered_battery_kwh is not None
             )
-            if all(
-                a.delivered_battery_kwh is not None for a in current_grants
-            ):
+            if all(a.delivered_battery_kwh is not None for a in current_grants):
                 remaining_battery = max(0.0, required - committed_battery)
                 outstanding = ceil(
-                    remaining_battery
-                    / (c.charge_power_kw * 0.25 * c.efficiency)
-                    - 1e-9
+                    remaining_battery / (c.charge_power_kw * 0.25 * c.efficiency) - 1e-9
                 )
         eligible = [
             p

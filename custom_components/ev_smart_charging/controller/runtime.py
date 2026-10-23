@@ -629,13 +629,13 @@ class ChargeSupervisor:
         # A controller plan covers Coordinated chargers only, while Local
         # devices retain independent original schedule ownership.
         coordinated_known = not self.participants or plan is not None
-        planned_parts = [
-            facts["planned_grid_kwh"] for facts in local.values()
-        ]
+        planned_parts = [facts["planned_grid_kwh"] for facts in local.values()]
         priced_parts = [facts["estimated_cost_eur"] for facts in local.values()]
-        if coordinated_known and (
-            plan is None or plan.total_planned_grid_kwh is not None
-        ) and all(value is not None for value in planned_parts):
+        if (
+            coordinated_known
+            and (plan is None or plan.total_planned_grid_kwh is not None)
+            and all(value is not None for value in planned_parts)
+        ):
             energy = round(
                 (plan.total_planned_grid_kwh if plan is not None else 0)
                 + sum(planned_parts),
@@ -643,12 +643,13 @@ class ChargeSupervisor:
             )
         else:
             energy = None
-        if coordinated_known and (
-            plan is None or plan.expected_cost_eur is not None
-        ) and all(value is not None for value in priced_parts):
+        if (
+            coordinated_known
+            and (plan is None or plan.expected_cost_eur is not None)
+            and all(value is not None for value in priced_parts)
+        ):
             cost = round(
-                (plan.expected_cost_eur if plan is not None else 0)
-                + sum(priced_parts),
+                (plan.expected_cost_eur if plan is not None else 0) + sum(priced_parts),
                 4,
             )
         else:
@@ -656,9 +657,7 @@ class ChargeSupervisor:
 
         # Required energy is a distinct notion from scheduled energy. A
         # Local EVSC can have a charging need without any scheduled slots.
-        charging_needs = [
-            self._charger(key, obj) for key, obj in all_chargers.items()
-        ]
+        charging_needs = [self._charger(key, obj) for key, obj in all_chargers.items()]
         required = (
             round(
                 sum(
@@ -679,9 +678,12 @@ class ChargeSupervisor:
         today_cost = None
         tomorrow_cost = None
         coordinated_assignments = plan.assignments if plan is not None else ()
-        if coordinated_known and all(
-            a.grid_kwh is not None for a in coordinated_assignments
-        ) and all(value is not None for value in planned_parts):
+        if (
+            coordinated_known
+            and all(a.grid_kwh is not None for a in coordinated_assignments)
+            and all(value is not None for value in planned_parts)
+        ):
+
             def energy_for(day):
                 return sum(
                     a.grid_kwh
@@ -691,11 +693,15 @@ class ChargeSupervisor:
                     facts["energy_by_day"].get(day.isoformat(), 0)
                     for facts in local.values()
                 )
+
             today_energy = round(energy_for(today), 4)
             tomorrow_energy = round(energy_for(tomorrow), 4)
-        if coordinated_known and all(
-            a.grid_kwh is not None for a in coordinated_assignments
-        ) and all(value is not None for value in priced_parts):
+        if (
+            coordinated_known
+            and all(a.grid_kwh is not None for a in coordinated_assignments)
+            and all(value is not None for value in priced_parts)
+        ):
+
             def cost_for(day):
                 return sum(
                     a.grid_kwh * a.price_eur_per_kwh
@@ -705,6 +711,7 @@ class ChargeSupervisor:
                     facts["cost_by_day"].get(day.isoformat(), 0)
                     for facts in local.values()
                 )
+
             today_cost = round(cost_for(today), 4)
             tomorrow_cost = round(cost_for(tomorrow), 4)
         horizons = [self.price_horizons.get(key) for key in self.participants]
@@ -727,18 +734,30 @@ class ChargeSupervisor:
             "indicative_cost_today": today_cost,
             "indicative_cost_tomorrow": tomorrow_cost,
             "actual_cost_today": self.actual_cost_summary()["actual_cost_today"],
-            "local_planned_grid_kwh_known_subtotal": round(
-                sum(
-                    facts["planned_grid_kwh"] for facts in local.values()
-                    if facts["planned_grid_kwh"] is not None
-                ), 4
-            ) if local else 0.0,
-            "local_indicative_cost_known_subtotal": round(
-                sum(
-                    facts["estimated_cost_eur"] for facts in local.values()
-                    if facts["estimated_cost_eur"] is not None
-                ), 4
-            ) if local else 0.0,
+            "local_planned_grid_kwh_known_subtotal": (
+                round(
+                    sum(
+                        facts["planned_grid_kwh"]
+                        for facts in local.values()
+                        if facts["planned_grid_kwh"] is not None
+                    ),
+                    4,
+                )
+                if local
+                else 0.0
+            ),
+            "local_indicative_cost_known_subtotal": (
+                round(
+                    sum(
+                        facts["estimated_cost_eur"]
+                        for facts in local.values()
+                        if facts["estimated_cost_eur"] is not None
+                    ),
+                    4,
+                )
+                if local
+                else 0.0
+            ),
             "local_energy_coverage": sum(
                 facts["planned_grid_kwh"] is not None for facts in local.values()
             ),
@@ -854,7 +873,8 @@ class ChargeSupervisor:
                             self.price_curves.get(key, ()),
                             dt.utcnow(),
                         )
-                        if key not in self.participants else None
+                        if key not in self.participants
+                        else None
                     ),
                     "slots": per_charger[key],
                 }

@@ -315,7 +315,13 @@ def test_static_group_budget_remains_valid_for_future_quarters():
 
 def test_mid_quarter_replan_does_not_double_count_committed_energy():
     c = Charger(
-        "a", "coordinated", True, 50, 52.25, 40, 4,
+        "a",
+        "coordinated",
+        True,
+        50,
+        52.25,
+        40,
+        4,
         T + timedelta(minutes=45),
     )
     prices = {"a": slots(4)}
@@ -328,9 +334,7 @@ def test_mid_quarter_replan_does_not_double_count_committed_energy():
         T + timedelta(minutes=1),
         committed=first.assignments,
     )
-    current = [
-        slot for slot in after_one_minute.assignments if slot.start == T
-    ]
+    current = [slot for slot in after_one_minute.assignments if slot.start == T]
     assert len(current) == 1
     assert round(current[0].grid_kwh, 4) == 0.9333
     assert after_one_minute.total_planned_grid_kwh is not None
@@ -341,7 +345,13 @@ def test_mid_quarter_replan_does_not_double_count_committed_energy():
 
 def test_partial_current_quarter_allocates_future_quarter_if_target_requires_it():
     c = Charger(
-        "a", "coordinated", True, 50, 52.25, 40, 4,
+        "a",
+        "coordinated",
+        True,
+        50,
+        52.25,
+        40,
+        4,
         T + timedelta(minutes=45),
     )
     first = build_plan([c], {"a": slots(4)}, T)
@@ -353,8 +363,6 @@ def test_partial_current_quarter_allocates_future_quarter_if_target_requires_it(
         T + timedelta(minutes=1),
         committed=first.assignments,
     )
-    assert any(
-        a.start >= T + timedelta(minutes=15) for a in later.assignments
-    )
+    assert any(a.start >= T + timedelta(minutes=15) for a in later.assignments)
     assert later.results[0].status in ("PLANNED", "PROVISIONAL")
     assert later.results[0].remaining_battery_kwh == 0

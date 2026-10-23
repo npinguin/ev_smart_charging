@@ -80,8 +80,11 @@ def test_three_mixed_kw_chargers_use_cheapest_parallel_feasible_mix():
     }
     for stamp in {a.start for a in result}:
         assert (
-            sum(next(c.charge_power_kw for c in cars if c.id == a.charger_id)
-                for a in result if a.start == stamp)
+            sum(
+                next(c.charge_power_kw for c in cars if c.id == a.charger_id)
+                for a in result
+                if a.start == stamp
+            )
             <= 11
         )
 
@@ -104,12 +107,8 @@ def test_negative_prices_and_committed_current_slot_remain_protected():
     )
     assert result is not None
     assert committed in result
-    assert ("a", T + timedelta(minutes=15)) in {
-        (a.charger_id, a.start) for a in result
-    }
-    assert ("b", T + timedelta(minutes=30)) in {
-        (a.charger_id, a.start) for a in result
-    }
+    assert ("a", T + timedelta(minutes=15)) in {(a.charger_id, a.start) for a in result}
+    assert ("b", T + timedelta(minutes=30)) in {(a.charger_id, a.start) for a in result}
 
 
 def test_unsafe_kw_parallel_is_not_scheduled():

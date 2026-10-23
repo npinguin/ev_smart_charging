@@ -67,9 +67,7 @@ def optimize_future(
             # allocations within deterministic complexity bounds.
             from .mixed_optimizer import optimize_mixed
 
-            solution = optimize_mixed(
-                chargers, price_map, assignments, t, policy
-            )
+            solution = optimize_mixed(chargers, price_map, assignments, t, policy)
             return solution if solution is not None else assignments
     if capacity < 1:
         return assignments

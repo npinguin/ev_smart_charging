@@ -101,12 +101,11 @@ def local_plan_facts(coordinator, power_kw, prices, now):
         "planned_quarters": len(entries),
         "planned_grid_kwh": round(grid, 4),
         "estimated_cost_eur": round(cost, 4) if seen_price else None,
-        "energy_by_day": {
-            key: round(value, 4) for key, value in energy_day.items()
-        },
+        "energy_by_day": {key: round(value, 4) for key, value in energy_day.items()},
         "cost_by_day": (
             {key: round(value, 4) for key, value in cost_day.items()}
-            if seen_price else {}
+            if seen_price
+            else {}
         ),
         "quality": "complete" if seen_price else "local_effective_prices_unavailable",
     }

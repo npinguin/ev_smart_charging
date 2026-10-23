@@ -101,9 +101,7 @@ def test_mixed_local_and_coordinated_counts_effective_plan_once():
 def test_supervised_outage_does_not_fall_back_to_cached_local_plan():
     coordinated = fake(True, True, 8)
     coordinated.config_entry = SimpleNamespace(entry_id="coordinated")
-    result = collect(
-        [coordinated], [None], participants={"coordinated"}, plan=None
-    )
+    result = collect([coordinated], [None], participants={"coordinated"}, plan=None)
     assert result.planned_chargers == 0
     assert result.scheduled_hours == 0
     assert result.physical_state_unknown == 1

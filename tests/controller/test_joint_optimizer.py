@@ -115,8 +115,12 @@ def test_heterogeneous_kw_budget_forces_safe_one_at_a_time_global_cost():
 def test_mixed_kw_parallel_budget_finds_lower_total_cost_safely():
     now = T + timedelta(minutes=1)
     original = [
-        Assignment("a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9),
-        Assignment("b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62),
+        Assignment(
+            "a", T + timedelta(minutes=15), T + timedelta(minutes=30), 2, 1.0, 0.9
+        ),
+        Assignment(
+            "b", T + timedelta(minutes=30), T + timedelta(minutes=45), 3, 1.8, 1.62
+        ),
     ]
     optimized = optimize_future(
         [car("a", power=4), car("b", power=7.2)],

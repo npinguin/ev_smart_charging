@@ -46,18 +46,11 @@ def optimize_mixed(chargers, price_map, assignments, now, policy):
         key: {
             utc(price.start): price
             for price in price_map.get(key, ())
-            if utc(price.start) > at
-            and utc(price.end) <= utc(by_id[key].ready_by)
+            if utc(price.start) > at and utc(price.end) <= utc(by_id[key].ready_by)
         }
         for key in ids
     }
-    quarters = sorted(
-        {
-            stamp
-            for prices in price_lookup.values()
-            for stamp in prices
-        }
-    )
+    quarters = sorted({stamp for prices in price_lookup.values() for stamp in prices})
     if not quarters:
         return None
 
@@ -66,8 +59,7 @@ def optimize_mixed(chargers, price_map, assignments, now, policy):
     subsets_by_quarter = []
     for start in quarters:
         eligible = [
-            position for position, key in enumerate(ids)
-            if start in price_lookup[key]
+            position for position, key in enumerate(ids) if start in price_lookup[key]
         ]
         subsets = [(0, tuple(0 for _ in ids), 0)]
         for mask in range(1, 1 << len(eligible)):
@@ -79,7 +71,9 @@ def optimize_mixed(chargers, price_map, assignments, now, policy):
                 > policy.effective_budget + 1e-9
             ):
                 continue
-            inc = tuple(1 if position in selected else 0 for position in range(len(ids)))
+            inc = tuple(
+                1 if position in selected else 0 for position in range(len(ids))
+            )
             cost = sum(
                 round(
                     price_lookup[ids[position]][start].eur_per_kwh
@@ -111,10 +105,7 @@ def optimize_mixed(chargers, price_map, assignments, now, policy):
                 if any(value > limit for value, limit in zip(new_counts, limits)):
                     continue
                 price = cost_so_far + delta
-                if (
-                    new_counts not in next_states
-                    or price < next_states[new_counts]
-                ):
+                if new_counts not in next_states or price < next_states[new_counts]:
                     next_states[new_counts] = price
                     parents[new_counts] = (counts_so_far, mask)
         if len(next_states) > MAX_STATES:
@@ -126,8 +117,7 @@ def optimize_mixed(chargers, price_map, assignments, now, policy):
         return None
 
     old_cost = sum(
-        round(slot.grid_kwh * slot.price_eur_per_kwh * 1_000_000)
-        for slot in future
+        round(slot.grid_kwh * slot.price_eur_per_kwh * 1_000_000) for slot in future
     )
     if states[limits] >= old_cost:
         return assignments
