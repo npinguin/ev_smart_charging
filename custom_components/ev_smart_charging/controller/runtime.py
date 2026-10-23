@@ -94,6 +94,7 @@ class ChargeSupervisor:
         self.config_entry = config_entry
         self.plan = None
         self.reason = "LOCAL_MONITORING"
+        self.price_issues = {}
         self._unsub = None
 
     @property
@@ -114,56 +115,90 @@ class ChargeSupervisor:
             physical.append(st.state == "on" if st is not None and st.state in ("on", "off") else None)
         return collect(coordinators, physical)
 
+    def _source_config(self, key, obj):
+        """Per-entry optional sources; read legacy controller fields for upgrades.
+
+        No source mapping is created or copied into another HA device.
+        """
+        old = self.config_entry.options.get("chargers", {}).get(key, {})
+        return {**old, **obj.config_entry.options}
+
     def _charger(self, key, obj):
-        attrs = self.config_entry.options.get("chargers", {}).get(key, {})
+        attrs = self._source_config(key, obj)
         ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
         return Charger(
             id=key, mode="coordinated" if key in self.participants else "local",
-            connected=obj.switch_ev_connected,
+            connected=(False if key in self.config_entry.options.get("paused_chargers", [])
+                       else obj.switch_ev_connected),
             current_soc=_number(obj.ev_soc), target_soc=_number(obj.ev_target_soc),
-            usable_capacity_kwh=_number(attrs.get("capacity_kwh")) or None,
-            charge_power_kw=_number(attrs.get("power_kw")) or None,
+            usable_capacity_kwh=(_number(attrs.get("usable_capacity_kwh"))
+                                 or _number(attrs.get("capacity_kwh")) or None),
+            charge_power_kw=(_number(attrs.get("expected_power_kw"))
+                             or _number(attrs.get("power_kw")) or None),
+            charging_speed_pct_per_hour=_number(obj.charging_pct_per_hour),
             ready_by=ready,
-            actual_power_kw=_meter(self.hass, attrs.get("power_sensor"), "power"),
-            session_energy_kwh=_meter(self.hass, attrs.get("energy_sensor"), "energy"),
+            actual_power_kw=_meter(
+                self.hass, attrs.get("actual_power_entity")
+                or attrs.get("power_sensor"), "power"
+            ),
+            session_energy_kwh=_meter(
+                self.hass, attrs.get("actual_energy_entity")
+                or attrs.get("energy_sensor"), "energy"
+            ),
         )
 
     def meters(self):
         known = []
         energy = []
-        for key in self.chargers():
-            cfg = self.config_entry.options.get("chargers", {}).get(key, {})
-            known.append(_meter(self.hass, cfg.get("power_sensor"), "power"))
-            energy.append(_meter(self.hass, cfg.get("energy_sensor"), "energy"))
+        for key, obj in self.chargers().items():
+            cfg = self._source_config(key, obj)
+            known.append(_meter(
+                self.hass, cfg.get("actual_power_entity")
+                or cfg.get("power_sensor"), "power"
+            ))
+            energy.append(_meter(
+                self.hass, cfg.get("actual_energy_entity")
+                or cfg.get("energy_sensor"), "energy"
+            ))
         return {
-            "actual_power_kw": round(sum(v for v in known if v is not None), 3) if known and all(v is not None for v in known) else None,
+            "actual_power_kw": round(sum(v for v in known if v is not None), 3)
+                if known and all(v is not None for v in known) else None,
             "actual_power_coverage": sum(v is not None for v in known),
-            "session_energy_kwh": round(sum(v for v in energy if v is not None), 3) if energy and all(v is not None for v in energy) else None,
+            "session_energy_kwh": round(sum(v for v in energy if v is not None), 3)
+                if energy and all(v is not None for v in energy) else None,
             "session_energy_coverage": sum(v is not None for v in energy),
         }
 
     def _prices(self, objects):
-        """Require matching source and quarter chronology across participants."""
-        reference = None
+        """Keep each participant's original EVSC price curve independent.
+
+        The legacy price adaptor currently exposes only today/tomorrow. Its
+        monetary units and variable fees are not automatically proven to be
+        final cost: a financial API must validate them separately.
+        """
+        curves = {}
+        issues = {}
         for obj in objects:
+            id = obj.config_entry.entry_id
             raw = getattr(obj, "raw_two_days", None)
             if raw is None:
-                return None, "PRICE_SOURCE_MISSING"
+                curves[id] = []
+                issues[id] = "PRICE_SOURCE_MISSING"
+                continue
             slots = []
             try:
                 for item in raw.get_raw():
                     value = _number(item["value"])
-                    if value is not None:
-                        slots.append(PriceSlot(item["start"], item["end"], value))
-            except (KeyError, ValueError, TypeError):
-                return None, "PRICE_SOURCE_INVALID"
+                    if value is None:
+                        raise ValueError("Invalid interval price")
+                    slots.append(PriceSlot(item["start"], item["end"], value))
+            except (KeyError, ValueError, TypeError, AttributeError):
+                slots = []
+                issues[id] = "PRICE_SOURCE_INVALID"
             if not slots:
-                return None, "PRICE_SLOTS_MISSING"
-            signature = [(p.start, p.end, round(p.eur_per_kwh, 6)) for p in slots]
-            if reference is not None and reference[1] != signature:
-                return None, "PRICE_SOURCE_CONFLICT"
-            reference = (slots, signature)
-        return reference[0] if reference else [], None
+                issues.setdefault(id, "PRICE_SLOTS_MISSING")
+            curves[id] = slots
+        return curves, issues
 
     def rebuild(self):
         if not self.participants:
@@ -191,10 +226,7 @@ class ChargeSupervisor:
         if not all(_charger_switch_readback(self.hass, obj) for obj in selected):
             self.reason, self.plan = "NATIVE_CONTROL_UNAVAILABLE", None
             return
-        prices, error = self._prices(selected)
-        if error:
-            self.reason, self.plan = error, None
-            return
+        prices, price_issues = self._prices(selected)
         try:
             opts = self.config_entry.options
             budget = _number(opts.get("power_budget_kw", 0))
@@ -203,8 +235,16 @@ class ChargeSupervisor:
                 group_power_budget_kw=budget if budget and budget > 0 else None,
             )
             members = [self._charger(k, obj) for k, obj in sorted(objs.items())]
-            self.plan = build_plan(members, prices, dt.utcnow(), policy)
-            self.reason = "COORDINATED_PLAN"
+            now = dt.utcnow()
+            active = self.plan.assignments if self.plan is not None else ()
+            self.plan = build_plan(
+                members, prices, now, policy, committed=active
+            )
+            self.price_issues = price_issues
+            self.reason = (
+                "COORDINATED_PRICE_PARTIAL" if price_issues
+                else "COORDINATED_PLAN"
+            )
         except (ValueError, TypeError, OverflowError) as exc:
             _LOGGER.warning("EVSC joint planner rejected source inputs: %s", exc)
             self.reason, self.plan = "PLANNING_INPUT_INVALID", None

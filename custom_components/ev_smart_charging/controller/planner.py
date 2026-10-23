@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from math import ceil, isfinite
+from collections.abc import Mapping
 from typing import Literal
 
 QUARTER = timedelta(minutes=15)
@@ -50,6 +51,7 @@ class Charger:
     efficiency: float = 0.90
     actual_power_kw: float | None = None
     session_energy_kwh: float | None = None
+    charging_speed_pct_per_hour: float | None = None
 
     def __post_init__(self):
         if not self.id.strip() or self.mode not in ("local", "coordinated"):
@@ -67,6 +69,11 @@ class Charger:
             not isfinite(self.charge_power_kw) or self.charge_power_kw <= 0
         ):
             raise ValueError("Invalid charge power")
+        if self.charging_speed_pct_per_hour is not None and (
+            not isfinite(self.charging_speed_pct_per_hour)
+            or self.charging_speed_pct_per_hour <= 0
+        ):
+            raise ValueError("Invalid charging speed")
         if not 0 < self.efficiency <= 1:
             raise ValueError("Invalid efficiency")
         if self.actual_power_kw is not None and (
@@ -95,8 +102,8 @@ class Assignment:
     start: datetime
     end: datetime
     price_eur_per_kwh: float
-    grid_kwh: float
-    delivered_battery_kwh: float
+    grid_kwh: float | None
+    delivered_battery_kwh: float | None
 
 
 @dataclass(frozen=True)
@@ -116,8 +123,8 @@ class GroupPlan:
     results: tuple[ChargerResult, ...]
     coverage: Coverage
     priced_until: datetime | None
-    total_planned_grid_kwh: float
-    expected_cost_eur: float
+    total_planned_grid_kwh: float | None
+    expected_cost_eur: float | None
     warnings: tuple[str, ...]
 
 
@@ -160,87 +167,220 @@ def aggregate_actual(chargers: list[Charger]) -> dict:
     }
 
 
-def build_plan(chargers: list[Charger], prices: list[PriceSlot], now: datetime, policy: Policy = Policy()) -> GroupPlan:
-    """Schedule by deadline/priority then lowest known price, one common plan."""
+def build_plan(
+    chargers: list[Charger],
+    prices: Mapping[str, list[PriceSlot]] | list[PriceSlot],
+    now: datetime,
+    policy: Policy = Policy(),
+    committed: tuple[Assignment, ...] = (),
+) -> GroupPlan:
+    """Assign whole charging quarters with independent prices per EVSC instance.
+
+    This is a deterministic, deadline-aware cost-of-delay heuristic, not a proof
+    of the global EUR optimum under all combinations of kW constraints.
+    Previously active slots remain granted to their exclusive end unless the
+    participant or its constraints are no longer valid. No HA calls here.
+    """
     t = utc(now)
-    ids = [c.id for c in chargers]
-    if len(ids) != len(set(ids)):
+    by_id = {c.id: c for c in chargers}
+    if len(by_id) != len(chargers):
         raise ValueError("Duplicate charger IDs")
-    slots = sorted(prices, key=lambda p: utc(p.start))
-    if len({utc(s.start) for s in slots}) != len(slots):
-        raise ValueError("Duplicate price slots")
-    slots = [p for p in slots if utc(p.start) >= t]
-    priced_until = max((utc(p.end) for p in slots), default=None)
-    coverage: Coverage = "UNAVAILABLE" if not slots else "COMPLETE"
-    if slots and any(utc(a.end) != utc(b.start) for a, b in zip(slots, slots[1:])):
-        coverage = "PARTIAL"
+    raw_curves = (
+        prices if isinstance(prices, Mapping)
+        else {c.id: prices for c in chargers if c.mode == "coordinated"}
+    )
+    curves: dict[str, list[PriceSlot]] = {}
+    coverage_by_id = {}
+    horizon_by_id = {}
+    for c in chargers:
+        if c.mode == "local":
+            continue
+        slots = sorted(raw_curves.get(c.id, []), key=lambda p: utc(p.start))
+        if len({utc(p.start) for p in slots}) != len(slots):
+            raise ValueError(f"Duplicate price intervals for {c.id}")
+        slots = [p for p in slots if utc(p.end) > t]
+        curves[c.id] = slots
+        if not slots:
+            coverage_by_id[c.id] = "UNAVAILABLE"
+            horizon_by_id[c.id] = None
+            continue
+        # The contiguous usable horizon ends at the first gap, not at the
+        # latest isolated future price.
+        frontier = t
+        for slot in slots:
+            if utc(slot.start) > frontier:
+                break
+            frontier = max(frontier, utc(slot.end))
+        horizon_by_id[c.id] = frontier if frontier > t else None
+        coverage_by_id[c.id] = (
+            "COMPLETE" if frontier >= utc(slots[-1].end) else "PARTIAL"
+        )
+    states = set(coverage_by_id.values())
+    coverage: Coverage = (
+        "UNAVAILABLE" if not states or states == {"UNAVAILABLE"}
+        else "COMPLETE" if states == {"COMPLETE"} else "PARTIAL"
+    )
+    horizons = list(horizon_by_id.values())
+    common_horizon = min(horizons) if horizons and all(horizons) else None
     warnings = [] if coverage == "COMPLETE" else [f"PRICE_{coverage}"]
     if policy.effective_budget is not None and any(
         c.mode == "local" and c.actual_power_kw is None for c in chargers
     ):
         warnings.append("LOCAL_LOAD_UNMEASURED_CAPACITY_NOT_GUARANTEED")
-    remaining_kw = {utc(p.start): policy.effective_budget for p in slots}
-    used = {utc(p.start): 0 for p in slots}
-    assignments = []
+
+    used: dict[datetime, int] = {}
+    used_kw: dict[datetime, float] = {}
+    assignments: list[Assignment] = []
+    selected: set[tuple[str, datetime]] = set()
+
+    def can_fit(c: Charger, slot: PriceSlot) -> bool:
+        key = utc(slot.start)
+        if (c.id, key) in selected or used.get(key, 0) >= policy.max_parallel:
+            return False
+        limit = policy.effective_budget
+        if limit is not None and (
+            c.charge_power_kw is None
+            or used_kw.get(key, 0.0) + c.charge_power_kw > limit + 1e-9
+        ):
+            return False
+        return c.ready_by is not None and utc(slot.end) <= utc(c.ready_by)
+
+    def record(c: Charger, slot: PriceSlot) -> None:
+        key = utc(slot.start)
+        # A mid-quarter replan accounts for only the *remaining* time.
+        remaining_hours = (utc(slot.end) - max(t, key)).total_seconds() / 3600
+        grid = (
+            round(c.charge_power_kw * remaining_hours, 6)
+            if c.charge_power_kw is not None else None
+        )
+        battery = round(grid * c.efficiency, 6) if grid is not None else None
+        assignments.append(Assignment(
+            c.id, key, utc(slot.end), slot.eur_per_kwh, grid, battery
+        ))
+        selected.add((c.id, key))
+        used[key] = used.get(key, 0) + 1
+        used_kw[key] = used_kw.get(key, 0.0) + (c.charge_power_kw or 0.0)
+
+    def required_slots(c: Charger) -> int | None:
+        if c.required_battery_kwh is not None and c.charge_power_kw is not None:
+            return ceil(max(0, c.required_battery_kwh - 1e-9)
+                        / (c.charge_power_kw * 0.25 * c.efficiency))
+        if (c.current_soc is not None and c.target_soc is not None
+                and c.charging_speed_pct_per_hour is not None):
+            return ceil(max(0, c.target_soc - c.current_soc - 1e-9)
+                        / (c.charging_speed_pct_per_hour * 0.25))
+        return None
+
+    remaining = {}
+    for c in chargers:
+        if c.mode != "coordinated":
+            continue
+        need = required_slots(c)
+        remaining[c.id] = need
+
+    # Retain only actually active, valid grants. A tightened power budget,
+    # disconnection, reached target or missing current price can revoke them.
+    for a in committed:
+        c = by_id.get(a.charger_id)
+        if (c is None or c.mode != "coordinated"
+                or c.connected is not True or not remaining.get(c.id)
+                or not (utc(a.start) <= t < utc(a.end))):
+            continue
+        slot = next((
+            p for p in curves.get(c.id, [])
+            if utc(p.start) == utc(a.start) and utc(p.end) == utc(a.end)
+        ), None)
+        if slot is not None and can_fit(c, slot):
+            record(c, slot)
+            remaining[c.id] -= 1
+
+    # Allocate one whole quarter at a time. Protect low-slack deadlines;
+    # otherwise prefer the charger with the highest cost of deferral.
+    while True:
+        candidates = []
+        for c in chargers:
+            if c.mode != "coordinated" or c.connected is not True:
+                continue
+            need = remaining.get(c.id)
+            if not need or c.ready_by is None or utc(c.ready_by) <= t:
+                continue
+            eligible = [p for p in curves.get(c.id, []) if can_fit(c, p)]
+            if not eligible:
+                continue
+            # Price per delivered AC kWh; same-demand comparison uses expected
+            # slot energy when known, else price ranking only.
+            weight = c.charge_power_kw or 1.0
+            eligible.sort(key=lambda p: (
+                p.eur_per_kwh * weight, utc(p.start)
+            ))
+            best = eligible[0]
+            second_cost = (
+                eligible[1].eur_per_kwh * weight if len(eligible) > 1
+                else float("inf")
+            )
+            regret = second_cost - best.eur_per_kwh * weight
+            slack = len(eligible) - need
+            candidates.append((
+                slack, -regret, utc(c.ready_by), -c.priority, c.id, c, best
+            ))
+        if not candidates:
+            break
+        _, _, _, _, _, chosen, slot = min(candidates, key=lambda x: x[:5])
+        record(chosen, slot)
+        remaining[chosen.id] -= 1
+
     results = []
-    ordered = sorted(chargers, key=lambda c: (
-        utc(c.ready_by) if c.ready_by else datetime.max.replace(tzinfo=timezone.utc),
-        -c.priority, c.id,
-    ))
-    for c in ordered:
-        required = c.required_battery_kwh
+    for c in chargers:
+        needed = required_slots(c)
+        required_kwh = c.required_battery_kwh
         if c.mode == "local":
-            results.append(ChargerResult(c.id, required, 0., required, "LOCAL", "Independent charging"))
+            results.append(ChargerResult(
+                c.id, required_kwh, 0.0, required_kwh,
+                "LOCAL", "Independent charging"
+            ))
             continue
         if c.connected is not True:
-            results.append(ChargerResult(c.id, required, 0., required, "BLOCKED", "Physical connection not confirmed"))
-            continue
-        if required is None or c.charge_power_kw is None or c.ready_by is None:
-            results.append(ChargerResult(c.id, required, 0., required, "UNKNOWN", "Missing vehicle/charger facts"))
-            continue
-        if utc(c.ready_by) <= t:
-            results.append(ChargerResult(c.id, required, 0., required, "EXPIRED", "Deadline elapsed"))
-            continue
-        if required == 0:
-            results.append(ChargerResult(c.id, 0., 0., 0., "COMPLETE", "Target already met"))
-            continue
-        eligible = [
-            p for p in slots
-            if utc(p.end) <= utc(c.ready_by)
-            and used[utc(p.start)] < policy.max_parallel
-            and (remaining_kw[utc(p.start)] is None or remaining_kw[utc(p.start)] + 1e-9 >= c.charge_power_kw)
-        ]
-        eligible.sort(key=lambda p: (p.eur_per_kwh, utc(p.start)))
-        battery_per_slot = c.charge_power_kw * .25 * c.efficiency
-        count = min(len(eligible), ceil((required - 1e-9) / battery_per_slot))
-        for p in eligible[:count]:
-            start = utc(p.start)
-            used[start] += 1
-            if remaining_kw[start] is not None:
-                remaining_kw[start] -= c.charge_power_kw
-            assignments.append(Assignment(
-                c.id, start, utc(p.end), p.eur_per_kwh,
-                c.charge_power_kw * .25, battery_per_slot,
-            ))
-        planned = min(required, count * battery_per_slot)
-        short = max(0., required - planned)
-        complete_horizon = priced_until is not None and priced_until >= utc(c.ready_by) and coverage == "COMPLETE"
-        if short <= 1e-6:
-            status = "PLANNED" if complete_horizon else "PROVISIONAL"
-            reason = "Demand scheduled" if complete_horizon else "Incomplete future price coverage"
-        elif complete_horizon:
-            status, reason = "INFEASIBLE", "Deadline cannot be met with capacity and price slots"
+            status, reason = "BLOCKED", "Physical connection not confirmed"
+        elif needed is None:
+            status, reason = "UNKNOWN", "Missing charging duration input"
+        elif c.ready_by is None or utc(c.ready_by) <= t:
+            status, reason = "EXPIRED", "Deadline unavailable or elapsed"
         else:
-            status, reason = "PENDING_PRICES", "Price coverage incomplete"
-        results.append(ChargerResult(c.id, required, round(planned, 4), round(short, 4), status, reason))
-    assignments.sort(key=lambda a: (a.start, a.charger_id))
-    return GroupPlan(
-        t, tuple(assignments), tuple(results), coverage, priced_until,
-        round(sum(a.grid_kwh for a in assignments), 4),
-        round(sum(a.grid_kwh * a.price_eur_per_kwh for a in assignments), 4),
-        tuple(warnings),
-    )
+            gap = remaining.get(c.id, needed)
+            horizon = horizon_by_id.get(c.id)
+            complete = horizon is not None and horizon >= utc(c.ready_by)
+            if gap == 0:
+                status = "PLANNED" if complete else "PROVISIONAL"
+                reason = "Demand scheduled" if complete else "Future prices incomplete"
+            elif complete:
+                status, reason = "INFEASIBLE", "Not enough feasible charger slots"
+            else:
+                status, reason = "PENDING_PRICES", "Future prices incomplete"
+        booked = [a for a in assignments if a.charger_id == c.id]
+        planned_battery = sum(a.delivered_battery_kwh or 0 for a in booked)
+        results.append(ChargerResult(
+            c.id, required_kwh, round(planned_battery, 4),
+            (round(max(0.0, required_kwh - planned_battery), 4)
+             if required_kwh is not None and all(
+                 a.delivered_battery_kwh is not None for a in booked
+             ) else None),
+            status, reason,
+        ))
 
+    assignments.sort(key=lambda a: (a.start, a.charger_id))
+    complete_energy = all(a.grid_kwh is not None for a in assignments)
+    grid_total = (
+        round(sum(a.grid_kwh for a in assignments), 4)
+        if complete_energy else None
+    )
+    cost_total = (
+        round(sum(a.grid_kwh * a.price_eur_per_kwh for a in assignments), 4)
+        if complete_energy else None
+    )
+    return GroupPlan(
+        t, tuple(assignments), tuple(results), coverage, common_horizon,
+        grid_total, cost_total, tuple(warnings),
+    )
 
 def grant_for(plan: GroupPlan, charger_id: str, at: datetime) -> bool:
     point = utc(at)
