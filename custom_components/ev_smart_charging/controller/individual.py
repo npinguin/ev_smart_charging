@@ -113,7 +113,10 @@ def individual_facts(coordinator):
         ),
         "power_source_entity": power_entity or None,
         "energy_source_entity": options.get("evsc_actual_energy_entity") or None,
-        "price_source_entity": getattr(coordinator, "price_entity_id", None),
+        "price_source_entity": (
+            options.get("evsc_effective_price_entity")
+            or getattr(coordinator, "price_entity_id", None)
+        ),
         "expected_charging_power_kw": expected_kw,
         "battery_capacity_source": (
             capacity_source if capacity_direct is not None else None
