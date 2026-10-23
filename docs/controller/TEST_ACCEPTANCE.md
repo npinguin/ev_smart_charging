@@ -1,5 +1,25 @@
 # Charge Controller — qualification and acceptance evidence
 
+## Incremental Phase 1 implementation acceptance — 2026-10-23
+
+**Contract gate A is still OPEN — no release/test package.** Additional source and synthetic CI checks are not physical acceptance.
+
+| Requirement | Code evidence | Gate |
+|---|---|---|
+| Zero configuration drop-in, existing four v8 entries and options unchanged | `tests/controller/test_drop_in_four_local.py`; managed bootstrap regression | Automated synthetic PASS; **real first drop-in NOT RUN** |
+| Peak fresh input, immediate whole-charger STOP, stable recovery, separate manual latch | `controller/runtime.py`; `test_live_sources_and_peak.py` | Implemented with regression; physical behavior NOT RUN |
+| Distinct own EUR/kWh curves, quarter normalization, cost of delay | `controller/planner.py`, `controller/optimizer.py`, `test_joint_optimizer.py` | Homogeneous-kW joint optimum supported; heterogeneous power-budget optimum NOT COMPLETE |
+| Additive individual facts without altering original Local entities | `controller/individual.py`, `sensor.py`, `test_individual_projection.py` | Source-dependent projection implemented, full optional source taxonomy NOT COMPLETE |
+| Actual observed EUR with no fake timestamped deltas | `controller/costs.py`, `test_actual_costs.py`, native and group cost sensors | In-memory qualified intervals implemented; across-restart complete-day history NOT COMPLETE |
+| Detailed per charger price/energy/cost/peak reason API | `controller/runtime.py` `plan_payload` | Implemented; end-to-end consumer acceptance still required |
+| Full original Local, Python 3.11–3.14 and strict formatting | GitHub PR #3 workflow, verify exact latest HEAD | Prior Python tests PASS; latest full-head CI must be checked |
+| HACS and Codecov | Repo Issues/topics, `CODECOV_TOKEN` | FAILED external administration gates |
+| Four native EVSE readback, physical writes, rollback | None | NOT RUN. Only after Gate A complete |
+
+**First field test remains one drop-in upgrade of untouched Home Assistant configuration.** Do not use new Options, new YAML, manual migration, modified entity IDs or per-charger remapping to make the installation work. No tag or merge to `main` under this open gate.
+
+---
+
 ## Non-negotiable qualification sequence — 2026-10-23
 
 **Gate A — Feature complete BEFORE the first field test.** All agreed Phase 1 requirements must be implemented, integration and entity/Options contract matched, and automated compatibility/regression gates passed. A partial feature build is not a release candidate. No tag or promotion on a passing synthetic fixture alone.
