@@ -126,6 +126,10 @@ async def test_successful_config_flow_option(
     assert result["data"] == {
         **MOCK_CONFIG_USER,
         "evsc_capacity_kwh": 0.0,
+        "evsc_capacity_entity": "",
+        "evsc_current_energy_entity": "",
+        "evsc_target_energy_entity": "",
+        "evsc_effective_price_entity": "",
         "evsc_expected_power_kw": 0.0,
         "evsc_actual_power_entity": "",
         "evsc_actual_energy_entity": "",
