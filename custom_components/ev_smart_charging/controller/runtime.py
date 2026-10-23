@@ -146,6 +146,7 @@ class ChargeSupervisor:
         self._refresh_lock = asyncio.Lock()
         self.peak_status = "disabled"
         self.available_ev_power_kw = None
+        self.price_horizons = {}
 
     @property
     def participants(self):
@@ -237,6 +238,17 @@ class ChargeSupervisor:
                     _LOGGER.warning("Invalid EVSC price intervals for %s", key)
                     slots = []
             prices[key] = slots
+        now = dt.utcnow()
+        self.price_horizons = {}
+        for key, slots in prices.items():
+            frontier = now
+            for slot in sorted(slots, key=lambda item: item.start):
+                if slot.end <= frontier:
+                    continue
+                if slot.start > frontier:
+                    break
+                frontier = slot.end
+            self.price_horizons[key] = frontier if frontier > now else None
         return prices
 
     def _peak_headroom(self, chargers):
@@ -359,6 +371,99 @@ class ChargeSupervisor:
         if coordinator.ev_soc >= coordinator.ev_target_soc:
             return False
         return _charger_switch_readback(self.hass, coordinator)
+
+    def planning_summary(self):
+        """Bounded HA projections from one effective supervised schedule.
+
+        Local chargers remain independent. If they have planned work, group
+        kWh/EUR totals must not masquerade as complete.
+        """
+        plan = self.plan
+        status = "idle" if not self.participants else "blocked"
+        if plan is not None:
+            result_states = {r.status for r in plan.results if r.charger_id in self.participants}
+            if "INFEASIBLE" in result_states:
+                status = "infeasible"
+            elif "PENDING_PRICES" in result_states or "UNKNOWN" in result_states:
+                status = "pending_prices"
+            elif "PROVISIONAL" in result_states:
+                status = "provisional"
+            elif result_states <= {"COMPLETE", "PLANNED"}:
+                status = "valid"
+        local_plan = any(
+            key not in self.participants
+            and obj.scheduler.get_charging_is_planned()
+            for key, obj in self.chargers().items()
+        )
+        totals_available = plan is not None and not local_plan
+        energy = (
+            plan.total_planned_grid_kwh if totals_available else None
+        )
+        cost = plan.expected_cost_eur if totals_available else None
+        required = None
+        if totals_available and all(
+            r.requested_battery_kwh is not None
+            for r in plan.results
+        ):
+            member_by_id = {
+                c.id: c for c in (
+                    self._charger(key, obj)
+                    for key, obj in self.chargers().items()
+                )
+            }
+            required = round(sum(
+                r.requested_battery_kwh / member_by_id[r.charger_id].efficiency
+                for r in plan.results
+            ), 4)
+        start = None
+        end = None
+        today_energy = None
+        tomorrow_energy = None
+        today_cost = None
+        tomorrow_cost = None
+        if totals_available and all(
+            a.grid_kwh is not None for a in plan.assignments
+        ):
+            now_local = dt.as_local(dt.utcnow()).date()
+            from datetime import timedelta as _delta
+            today = [
+                a for a in plan.assignments
+                if dt.as_local(a.start).date() == now_local
+            ]
+            tomorrow = [
+                a for a in plan.assignments
+                if dt.as_local(a.start).date() == now_local + _delta(days=1)
+            ]
+            today_energy = round(sum(a.grid_kwh for a in today), 4)
+            tomorrow_energy = round(sum(a.grid_kwh for a in tomorrow), 4)
+            today_cost = round(sum(
+                a.grid_kwh * a.price_eur_per_kwh for a in today
+            ), 4)
+            tomorrow_cost = round(sum(
+                a.grid_kwh * a.price_eur_per_kwh for a in tomorrow
+            ), 4)
+        horizons = [
+            self.price_horizons.get(key) for key in self.participants
+        ]
+        common_horizon = (
+            min(horizons) if horizons and all(h is not None for h in horizons)
+            else None
+        )
+        return {
+            "planning_status": status,
+            "price_horizon_end": common_horizon,
+            "required_energy": required,
+            "planned_energy": energy,
+            "unplanned_energy": round(max(0, required - energy), 4)
+                if required is not None and energy is not None else None,
+            "planned_today": today_energy,
+            "planned_tomorrow": tomorrow_energy,
+            "indicative_cost": cost,
+            "indicative_cost_today": today_cost,
+            "indicative_cost_tomorrow": tomorrow_cost,
+            "peak_control_status": self.peak_status,
+            "available_ev_power": self.available_ev_power_kw,
+        }
 
     def subscribe(self, callback):
         """One shared controller refresh; HA sensors do not each poll."""
