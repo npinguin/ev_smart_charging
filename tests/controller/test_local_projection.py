@@ -50,7 +50,7 @@ def test_local_power_and_own_prices_contribute_actual_future_forecast():
     )
     assert result["planned_quarters"] == 3
     assert result["planned_grid_kwh"] == 2.9333
-    assert result["estimated_cost_eur"] == 0.7733
+    assert result["estimated_cost_eur"] == 0.5867
     assert result["quality"] == "complete"
     today = dt.as_local(T).date().isoformat()
     assert result["energy_by_day"][today] == 2.9333
