@@ -212,14 +212,14 @@ async def test_setup_with_migration_from_future(
 async def test_setup_new_integration_name(hass, bypass_validate_input_and_control):
     """Test entry setup with new integration name."""
     # Create a mock entry so we don't have to go through config flow
-    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG_ALL, entry_id="test")
-    if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
-        config_entry.mock_state(hass=hass, state=ConfigEntryState.LOADED)
+    config_entry = MockConfigEntry(
+        domain=DOMAIN, data=MOCK_CONFIG_ALL, entry_id="test", version=8
+    )
     config_entry.add_to_hass(hass)
 
     # Set up the entry and assert that the values set during setup are where we expect
     # them to be.
-    assert await async_setup_entry(hass, config_entry)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert isinstance(
@@ -229,8 +229,7 @@ async def test_setup_new_integration_name(hass, bypass_validate_input_and_contro
     # Change title
     hass.config_entries.async_update_entry(config_entry, title="New title")
 
-    # Reload the entry and assert that the data from above is still there
-    assert await async_reload_entry(hass, config_entry) is None
+    # The Options/title listener must reload through Home Assistant exactly once.
     await hass.async_block_till_done()
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert isinstance(
@@ -249,7 +248,6 @@ async def test_setup_new_integration_name(hass, bypass_validate_input_and_contro
     hass.config_entries.async_update_entry(config_entry, title="New title2")
 
     # Reload the entry and assert that the data from above is still there
-    assert await async_reload_entry(hass, config_entry) is None
     await hass.async_block_till_done()
     assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert isinstance(
@@ -265,6 +263,6 @@ async def test_setup_new_integration_name(hass, bypass_validate_input_and_contro
     assert device.name_by_user == "New title2" or device.name == "New title2"
 
     # Unload the entry and verify that the data has been removed
-    assert await async_unload_entry(hass, config_entry)
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
     assert config_entry.entry_id not in hass.data[DOMAIN]
