@@ -22,13 +22,14 @@ async def test_local_planned_quarter_dispatches_native_start_once_and_stop(hass)
     native.charger_switch = SimpleNamespace(
         entity_id="switch.test_wallbox", domain="switch"
     )
-    native.sensor = SimpleNamespace(
-        current_price=0.15, set_state=MagicMock()
-    )
+    native.sensor = SimpleNamespace(current_price=0.15, set_state=MagicMock())
     native.sensor_status = None
     native._charging_schedule = [
-        {"start": now - timedelta(minutes=2),
-         "end": now + timedelta(minutes=13), "value": 0.5}
+        {
+            "start": now - timedelta(minutes=2),
+            "end": now + timedelta(minutes=13),
+            "value": 0.5,
+        }
     ]
     native.scheduler = SimpleNamespace(
         charging_stop_time=now + timedelta(hours=1),
@@ -68,8 +69,11 @@ async def test_local_planned_quarter_dispatches_native_start_once_and_stop(hass)
         assert service.await_count == 1, "A duplicate Local event must not double-start"
 
         native._charging_schedule = [
-            {"start": now - timedelta(minutes=2),
-             "end": now + timedelta(minutes=13), "value": 0.0}
+            {
+                "start": now - timedelta(minutes=2),
+                "end": now + timedelta(minutes=13),
+                "value": 0.0,
+            }
         ]
         await native.update_state()
         assert native.auto_charging_state == STATE_OFF
@@ -88,8 +92,11 @@ async def test_local_not_yet_in_planned_window_never_sends_start(hass):
     native.sensor = SimpleNamespace(current_price=0.15, set_state=MagicMock())
     native.sensor_status = None
     native._charging_schedule = [
-        {"start": now + timedelta(minutes=10),
-         "end": now + timedelta(minutes=25), "value": 1}
+        {
+            "start": now + timedelta(minutes=10),
+            "end": now + timedelta(minutes=25),
+            "value": 1,
+        }
     ]
     native.scheduler = SimpleNamespace(
         charging_stop_time=now + timedelta(hours=1),
