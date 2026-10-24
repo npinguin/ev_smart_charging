@@ -24,8 +24,12 @@ VEHICLES = "vehicles"
 ASSIGNMENTS = "vehicle_assignments"
 NO_VEHICLE = ""
 VEHICLE_FACT_KEYS = (
-    "soc", "target_soc", "battery_capacity", "battery_energy",
-    "energy_required", "source_status",
+    "soc",
+    "target_soc",
+    "battery_capacity",
+    "battery_energy",
+    "energy_required",
+    "source_status",
 )
 
 
