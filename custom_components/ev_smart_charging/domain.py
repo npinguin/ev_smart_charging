@@ -161,7 +161,9 @@ class ChargeController:
         _valid_device_name(self.name)
         if self.mode not in ("local", "coordinated"):
             raise ValueError("invalid_controller_mode")
-        if any(not charger_id or not charger_id.strip() for charger_id in self.charger_ids):
+        if any(
+            not charger_id or not charger_id.strip() for charger_id in self.charger_ids
+        ):
             raise ValueError("charger_id_required")
         if len(self.charger_ids) != len(set(self.charger_ids)):
             raise ValueError("duplicate_controller_chargers")
