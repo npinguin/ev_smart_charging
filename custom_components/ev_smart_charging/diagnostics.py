@@ -515,7 +515,7 @@ def _controller_diagnostics(hass, manager):
             "plan_coverage": manager.plan.coverage if manager.plan else None,
         },
         "unavailable_explanations": unavailable,
-        "source_reference_format": "sha256_entity_id_first_12_hex",
+        "source_reference_format": "sha256_id_first_12_hex",
         "charger_details": entries,
     }
 
