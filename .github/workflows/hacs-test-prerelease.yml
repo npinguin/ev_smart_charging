@@ -1,4 +1,4 @@
-name: HACS guarded Local recovery prerelease
+name: HACS guarded HA thread-safety bugfix prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.6
+      VERSION: 2.6.0-rc.7
     steps:
       - uses: actions/checkout@v7
 
@@ -72,6 +72,17 @@ jobs:
           assert Path("tests/controller/test_local_native_execution.py").exists(), (
               "Missing Local native Start/Stop/retry regression"
           )
+          sensor_code = Path("custom_components/ev_smart_charging/sensor.py").read_text()
+          assert "self._async_source_state_changed" in sensor_code
+          assert "lambda _event: self.async_write_ha_state()" not in sensor_code, (
+              "P0: worker-thread native source callback cannot ship"
+          )
+          config_code = Path("custom_components/ev_smart_charging/config_flow.py").read_text()
+          assert '"coordinated_disabled"' in config_code, (
+              "P0: new Coordinated membership must not detach Local scheduling"
+          )
+          assert Path("tests/controller/test_thread_safety.py").exists()
+          assert Path("tests/controller/test_coordinated_admission_hold.py").exists()
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -89,7 +100,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc6-manual-zip
+          name: evsc-guarded-rc7-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -113,5 +124,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — Local-only guarded HACS Local-recovery prerelease" \
-            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; HA-native redacted diagnostics are available on every charger and controller entry/device; Local now checks native switch readback at existing five-minute retry if the optional charging-state sensor is missing; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
+            --title "EV Smart Charging $tag — Local-only HA thread-safety fix" \
+            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; HA-native redacted diagnostics are available on every charger and controller entry/device; Native source event callbacks are now HA event-loop-safe; Local retains its existing five-minute readback retry and full Local feature behavior; new Coordinated opt-in is rejected during the P0 safety hold; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
