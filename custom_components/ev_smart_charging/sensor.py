@@ -4,7 +4,7 @@ import logging
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import STATE_OFF
 
 
@@ -294,6 +294,15 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
             }
         return None
 
+    @callback
+    def _async_source_state_changed(self, _event):
+        """Publish source-dependent facts on the Home Assistant event loop.
+
+        An undecorated lambda would run as an executor job and crash on
+        async_write_ha_state. Do not request native charger state here.
+        """
+        self.async_write_ha_state()
+
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         # Refresh from authoritative native sources rather than duplicating
@@ -320,6 +329,6 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
                 async_track_state_change_event(
                     self.hass,
                     list(ids),
-                    lambda _event: self.async_write_ha_state(),
+                    self._async_source_state_changed,
                 )
             )
