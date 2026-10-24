@@ -235,6 +235,7 @@ class EVSmartChargingCoordinator:
         )
 
         self.auto_charging_state = STATE_OFF
+        self._last_native_command = None
         self.low_price_charging_state = STATE_OFF
         self.low_soc_charging_state = STATE_OFF
 
@@ -254,22 +255,27 @@ class EVSmartChargingCoordinator:
     async def periodic_check_charging_state(
         self, date_time=None
     ):  # pylint: disable=unused-argument
-        """Periodically check if charging has actually started, and retry if not."""
-        if not self.charging_state_entity_id:
+        """Local-only bounded native readback retry every five minutes.
+
+        Use the configured charging-state sensor when present, falling back
+        to the native controllable switch if no charging-state sensor exists.
+        An absent, unknown or unavailable readback is NOT evidence to retry.
+        Coordinated operation has a separate quarantined safety lifecycle.
+        """
+        if is_supervised(self.hass, self.config_entry.entry_id):
             return
-        # Only check if we think we should be charging
-        should_be_charging = self.auto_charging_state == STATE_ON
-        if not should_be_charging:
+        if self.auto_charging_state != STATE_ON:
             return
-        # Get the actual state of the charging state entity
-        state_obj = self.hass.states.get(self.charging_state_entity_id)
-        if state_obj is None:
+        source = self.charging_state_entity_id or self.charger_switch.entity_id
+        if not source:
             return
-        is_actually_charging = state_obj.state == STATE_ON
-        if not is_actually_charging:
+        state_obj = self.hass.states.get(source)
+        if state_obj is None or state_obj.state not in (STATE_ON, STATE_OFF):
+            return
+        if state_obj.state == STATE_OFF:
             _LOGGER.warning(
-                "EV Smart Charging: Charging should be ON but %s is not ON. Retrying start.",
-                self.charging_state_entity_id,
+                "EV Smart Charging: expected ON but %s reports OFF; retrying Local start.",
+                source,
             )
             await self.turn_on_charging(reason="retry")
 
@@ -546,6 +552,12 @@ class EVSmartChargingCoordinator:
 
         if state is True:
             if not physical_grant(self.hass, self.config_entry.entry_id, reason):
+                self._last_native_command = {
+                    "action": "start",
+                    "reason": reason,
+                    "dispatch": "denied",
+                    "at": dt.utcnow().isoformat(),
+                }
                 _LOGGER.info(
                     "Charge Controller denied %s start on %s",
                     reason,
@@ -553,6 +565,12 @@ class EVSmartChargingCoordinator:
                 )
                 return False
             _LOGGER.debug("Turn on charging")
+            self._last_native_command = {
+                "action": "start",
+                "reason": reason,
+                "dispatch": "requested",
+                "at": dt.utcnow().isoformat(),
+            }
             self.sensor.set_state(STATE_ON)
             if (
                 self.charger_switch.entity_id is not None
@@ -570,6 +588,12 @@ class EVSmartChargingCoordinator:
             return True
         else:
             _LOGGER.debug("Turn off charging")
+            self._last_native_command = {
+                "action": "stop",
+                "reason": reason,
+                "dispatch": "requested",
+                "at": dt.utcnow().isoformat(),
+            }
             self.sensor.set_state(STATE_OFF)
             if (
                 self.charger_switch.entity_id is not None
