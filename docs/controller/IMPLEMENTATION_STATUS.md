@@ -1,5 +1,19 @@
 # EV Smart Charging — Current Engineering Handover
 
+## 2026-10-24 — Local automatic Start investigation and native readback recovery
+
+**Field observation:** User's RHI Mobility overview shows Garage Black connected, 28% SoC and an EVSC schedule but no measured power and "Waiting for charging to begin". The displayed price charging window begins around the screenshot's current time; this is NOT conclusive evidence a due-quarter Start was skipped. The RHI Mobility Automatic button is not proof of the original EVSC Smart Charging Active switch or native charger state. Original Charge Controller `LOCAL_MONITORING` means no supervised participants; the P0 Coordinated safety hold must not block Local.
+
+**Source review:** Original native Local code calculates the current charged quarter via `get_charging_value()`, checks Smart Charging Active, EV Connected, SoC, target, price-limit, overrides and initialization, and sends `switch.turn_on` only when the current quarter requires charging. This path remains independent from Coordinated's hard kill switch. Source-level regression tests now assert that an active Local quarter dispatches exactly one native Start, future quarters do not dispatch, and the end of a charging quarter dispatches Stop.
+
+**Confirmed Local resilience gap:** Previously `periodic_check_charging_state` returned unconditionally when the optional charging-state sensor was absent. A requested Start can be lost while Local internally believes it is ON, in which case no five-minute retry was available. The existing five-minute retry now checks a **known ON/OFF native switch readback** as a fallback, only while Local expects ON, and only for a confirmed OFF. Unknown/unavailable source values do not trigger a command, Coordinated supervision has an independent lifecycle and does not execute this retry. Do NOT poll cloud hardware at five seconds.
+
+**Diagnostic extensions:** a read-only Local decision trace (current slot, actual native switch readback, expected Start/Stop, exact unmet price/SoC/Active/Connected preconditions) and the last native command intent/time. `requested` means HA service request, not confirmed EVSE power. No identifiers or raw payload exported.
+
+**Release judgment:** Do not claim the reported missed Start is reproduced physically from this screenshot. Automated Local Start/Stop and retry regression plus all nine CI gates are required for a subsequent guarded HACS test candidate. On-target verification of the real Black charger state, EVSC Active switch, true current quarter and native readback is still needed. Original P0 incident #5 remains OPEN; never re-enable Coordinated by inference.
+
+---
+
 ## Diagnostics: native HA entry and device export — 2026-10-24
 
 **Operator-observed problem on rc4:** 5 config entries / 159 entities (4 EVSC chargers + 1 Charge Controller), but no HA menu item for Download diagnostics; Controller shows LOCAL_MONITORING, 4 chargers / 2 with plan, ~4.75 planned hours, with Unknown aggregate kWh, EUR and measured power. This is not enough evidence to call the scheduler broken: aggregated EVSE power and actual cost require source coverage; Local hours exist independently of energy/currency validation. We must make quality and absence explicit.
