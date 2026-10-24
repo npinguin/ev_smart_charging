@@ -1,5 +1,20 @@
 # EV Smart Charging — Current Engineering Handover
 
+## Diagnostics: native HA entry and device export — 2026-10-24
+
+**Operator-observed problem on rc4:** 5 config entries / 159 entities (4 EVSC chargers + 1 Charge Controller), but no HA menu item for Download diagnostics; Controller shows LOCAL_MONITORING, 4 chargers / 2 with plan, ~4.75 planned hours, with Unknown aggregate kWh, EUR and measured power. This is not enough evidence to call the scheduler broken: aggregated EVSE power and actual cost require source coverage; Local hours exist independently of energy/currency validation. We must make quality and absence explicit.
+
+**Implemented in** `custom_components/ev_smart_charging/diagnostics.py` for **both** HA-native `async_get_config_entry_diagnostics` and `async_get_device_diagnostics`:
+- Expose Download diagnostics in the three-dot menu of all four original EVSC entries/devices and the singleton Charge Controller entry/device. No new entities, buttons, services, options or automatic writes.
+- Export only safe scalar values, anonymous charger_1..charger_N keys, source-role status (not configured / missing / unknown / unavailable / invalid value or unit / valid), coverage counters, Local schedule quality, expected power/SoC, plan summary, active peak status, 5-second sampling/queue health, P0 actuation hold, and explicit Unknown reasons.
+- No raw Options/data, names, street/address, entry IDs, entity IDs, unique identifiers, secrets, tokens, private attributes or provider payload. Defense-in-depth `async_redact_data` plus private-sentinel tests. Include distinct device scope and check device ownership.
+- HA diagnostics are **read only**: no plan rebuild, state update, config-entry reload, native physical Start/Stop, cloud/EVSE polling. Retain full v8 Local/native capability contract and four unaffected original config entries.
+- Test matrix: HA-managed 4-entry+controller diagnostics, five device reports, invalid/unknown/missing source classification, missing/unloaded entry, privacy-safe JSON, no rebuild/refresh, HACS/Hassfest, Local smoke, Python 3.11–3.14 >=90% coverage.
+
+**HACS v2.6.0-rc.5 release exception:** operator requested diagnostics in the HACS package immediately after rc4. Publish only after the isolated exact-sha nine-job CI Gate A and rc5 manifest/const versions agree; `COORDINATED_ACTUATION_ENABLED = False` must remain enforced. Existing physical P0 #5 is **not cleared**, and no Coordinated on-target actuation is approved. `main` and the earlier rc4 release remain untouched.
+
+---
+
 ## Release exception — v2.6.0-rc.4 guarded HACS prerelease (2026-10-24)
 
 User explicitly requested a next HACS release after the software-only simplification of the 1..N coordinated controller. **Narrow exception** to the P0 "no new prerelease" hold: publish only **`v2.6.0-rc.4` as a Local-capable, coordinated-actuation-disabled prerelease** after all nine **exact release SHA** software CI jobs succeed. This is *not* permission to perform further physical Coordinated testing, clear P0 incident #5, deploy to the affected Home Assistant without backup, merge PR #3 or publish stable.
