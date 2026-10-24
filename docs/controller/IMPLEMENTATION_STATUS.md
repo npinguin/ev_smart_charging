@@ -1,5 +1,24 @@
 # EV Smart Charging — Current Engineering Handover
 
+## 2026-10-24 — Local-to-Coordinated migration: HARD NO GO pending P0
+
+**Field blocker observed:** HA Core 2026.10.3 reported 14 non-thread-safe entity writes at `sensor.py:323` (12:14:58–12:15:08), invoking `async_write_ha_state` via an undecorated event-listener lambda in a worker executor thread. This is an EVSC integration defect, not HA Core. Fix uses a named `@callback` on the Home Assistant event loop; native event subscriptions retain `self.async_on_remove` teardown. Regression tests execute actual state events, assert loop context, and remove the entity to check cleanup on supported HA versions.
+
+**Second blocker discovered:** controller Options could accept a new participant despite `COORDINATED_ACTUATION_ENABLED=False`. This changes planning ownership and can detach Local while no coordinated native commands are allowed. The Options form must reject **new** Coordinated admissions during P0 and preserve unchanged Local settings; existing quarantined participants must remain removable for rollback. Controller Options initialization must support old and new HA config flow lifecycle. Synthetic regression tests cover both directions. **Do not manually edit Options storage to bypass admission.**
+
+**Existing data blocker:** Garage Black EVSC's SoC reads 100%/target 80% while the actual Audi Q8 reported SoC was 30% in a read-only site audit. That field reading alone does not prove the EVSC Local scheduler or physical Start is broken. Correct and validate the upstream mapping and freshness at the source; do not add RHI-specific mapping or fallback guessing to generic EVSC.
+
+**Release/field gates before onboarding even one charger:**
+1. Exact-head nine-job CI, including Python 3.11–3.14, HACS/Hassfest, formatting, Local native Start/Stop/retry and HA thread safety/lifecycle regression, passing with a version-matched HACS package.
+2. Confirm original four Local configurations/entity IDs, all relevant SoC/target/price/expected power/meter readbacks, start-quarter handling, dead-man/rollback, stale and unknown semantics, and no repeated HA errors on the real host.
+3. Plan comparison in non-actuating observation mode for **one** candidate charger, proving economically correct and DST/quarter-adjacent decisions with bounded runtime and complete diagnostics.
+4. Explicitly authorized, supervised physical Start/Stop with verified native response, independent operator/manual Stop, timeout/rollback and HA performance evidence, before the P0 hard switch is removed. This requires separate review and cannot be justified by CI or snapshots.
+5. Admit **only one** charger, observe multiple real planned starts/stops and no feedback loop, then sequentially increase to 2, 3, 4 with independent acceptance at each stage. Never migrate all four simultaneously or infer physical safety from planner output.
+
+**Engineering state:** the currently published rc6 still contains the thread-safety defect and cannot be considered ready for Coordinated field migration. The development branch patch alone is not installed on HA. No Coordinated actuation, main merge or stable release is authorized by this note. P0 issue #5 remains open.
+
+---
+
 ## 2026-10-24 — Local automatic Start investigation and native readback recovery
 
 **Field observation:** User's RHI Mobility overview shows Garage Black connected, 28% SoC and an EVSC schedule but no measured power and "Waiting for charging to begin". The displayed price charging window begins around the screenshot's current time; this is NOT conclusive evidence a due-quarter Start was skipped. The RHI Mobility Automatic button is not proof of the original EVSC Smart Charging Active switch or native charger state. Original Charge Controller `LOCAL_MONITORING` means no supervised participants; the P0 Coordinated safety hold must not block Local.
