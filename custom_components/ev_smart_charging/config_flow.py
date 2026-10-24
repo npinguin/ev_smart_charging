@@ -282,7 +282,8 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         return {
             entry.entry_id: entry.title
             for entry in self.hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get("__evsc_entry_type") not in ("charge_controller", "vehicle")
+            if entry.data.get("__evsc_entry_type")
+            not in ("charge_controller", "vehicle")
         }
 
     async def async_step_init(self, user_input=None):
@@ -338,9 +339,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
             }
         )
-        return self.async_show_form(
-            step_id="policy", data_schema=schema, errors=errors
-        )
+        return self.async_show_form(step_id="policy", data_schema=schema, errors=errors)
 
     def _vehicle_form(self, step_id, user_input=None):
         current = (
@@ -448,9 +447,10 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 data = dict(self.config_entry.options)
                 data[ASSIGNMENTS] = selected
                 return self.async_create_entry(title="", data=data)
-        available = {"": "None (no Vehicle)", **{
-            key: obj["name"] for key, obj in profiles.items()
-        }}
+        available = {
+            "": "None (no Vehicle)",
+            **{key: obj["name"] for key, obj in profiles.items()},
+        }
         schema = {
             vol.Optional(
                 f"charger_{entry_id}", default=previous.get(entry_id, "")
