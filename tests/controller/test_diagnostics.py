@@ -254,3 +254,65 @@ def test_local_execution_diagnostics_distinguishes_price_gate_from_safety_hold(h
     assert "price_limit_blocks_start" in report["decision_blockers"]
     native.switch_apply_limit = False
     assert _local_execution_diagnostics(hass, native)["expected_on_by_legacy_rules"]
+
+
+def test_soc_source_refs_join_to_jinja_and_bridge_candidates_are_not_auto_mapped(hass):
+    """Jinja can resolve the reference without leaking a user's entity names."""
+    import hashlib
+
+    from custom_components.ev_smart_charging.diagnostics import (
+        _ref,
+        _soc_candidates,
+    )
+
+    source = "sensor.evsc_bridge_black_vehicle_soc"
+    hass.states.async_set(source, "28", {"unit_of_measurement": "%"})
+    hass.states.async_set(
+        "sensor.evsc_bridge_peblar_outside_vehicle_soc",
+        "67",
+        {"unit_of_measurement": "%"},
+    )
+    hass.states.async_set("sensor.private_person_temperature", "20")
+    report = _soc_candidates(hass)
+    expected = hashlib.sha256(source.encode("utf-8")).hexdigest()[:12]
+    assert _ref(source) == expected
+    assert any(
+        candidate["source_ref"] == expected and candidate["soc_percent"] == 28
+        for candidate in report["candidates"]
+    )
+    assert report["interpretation"] == "unverified_candidates_not_vehicle_links"
+    payload = json.dumps(report)
+    assert source not in payload
+    assert "private_person" not in payload
+    assert "evsc_bridge" not in payload
+
+
+async def test_controller_diagnostics_export_identifies_mapping_without_raw_ids(hass):
+    from custom_components.ev_smart_charging.diagnostics import _ref
+
+    controller_entry = SimpleNamespace(
+        entry_id="private_controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": []},
+        version=1,
+    )
+    manager = ChargeSupervisor(hass, controller_entry)
+    manager.chargers = lambda: {}
+    hass.data.setdefault(DOMAIN, {})["private_controller"] = manager
+    hass.states.async_set(
+        "sensor.evsc_bridge_black_vehicle_soc",
+        "28",
+        {"unit_of_measurement": "%"},
+    )
+    try:
+        report = await async_get_config_entry_diagnostics(hass, controller_entry)
+        audit = report["controller"]["source_mapping_audit"]
+        assert audit["entity_references"] == "sha256_first_12_hex"
+        assert audit["matching_script"] == "scripts/evsc_source_mapping_audit.jinja"
+        assert any(
+            item["source_ref"] == _ref("sensor.evsc_bridge_black_vehicle_soc")
+            for item in audit["candidate_vehicle_soc"]["candidates"]
+        )
+        assert "evsc_bridge_black" not in json.dumps(report)
+    finally:
+        hass.data[DOMAIN].pop("private_controller", None)
