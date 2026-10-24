@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite
+import re
+from unicodedata import normalize
 from typing import Literal
 
 AssignmentStatus = Literal[
@@ -36,18 +38,69 @@ def _soc(name: str, value: float | None) -> None:
         raise ValueError(f"{name}_outside_0_100")
 
 
+def _valid_device_name(name: str) -> None:
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("device_name_required")
+    if not device_slug(name):
+        raise ValueError("device_name_needs_letters_or_digits")
+
+
+def _optional_identifier(field: str, value: str | None) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise ValueError(f"{field}_must_be_nonempty")
+
+
+def device_slug(device_name: str) -> str:
+    """Human device-name-derived HA object ID, never a sequence number."""
+    normalized = normalize("NFKD", device_name).encode("ascii", "ignore").decode()
+    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", normalized.lower())).strip(
+        "_"
+    )
+
+
+def suggested_entity_object_id(device_name: str, entity_key: str) -> str:
+    """Default for NEW entities; existing Local IDs must remain untouched.
+
+    Example: 'Garage Black' + 'charging_power' -> garage_black_charging_power.
+    Any entity registry collision must be rejected during configuration;
+    do not fall back to HA-generated '_2' or '_3' identifiers.
+    """
+    _valid_device_name(device_name)
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", entity_key):
+        raise ValueError("invalid_entity_key")
+    return f"{device_slug(device_name)}_{entity_key}"
+
+
+def validate_unique_device_names(
+    vehicles: dict[str, Vehicle], chargers: dict[str, Charger]
+) -> None:
+    """Reject collisions across *both* HA device categories in one namespace."""
+    by_slug: dict[str, str] = {}
+    for key, obj in (*sorted(vehicles.items()), *sorted(chargers.items())):
+        slug = device_slug(obj.name)
+        if slug in by_slug:
+            raise ValueError(f"duplicate_device_name: {obj.name}")
+        by_slug[slug] = key
+
+
 @dataclass(frozen=True)
 class Vehicle:
     """Stable vehicle identity + charge capabilities, not the current EVSE."""
 
     id: str
+    name: str
+    external_identifier: str | None = None
+    ha_user_id: str | None = None
     usable_battery_kwh: float | None = None
     max_ac_charge_kw: float | None = None
     ac_phase_count: int | None = None
 
     def __post_init__(self) -> None:
-        if not self.id:
+        if not self.id or not self.id.strip():
             raise ValueError("vehicle_id_required")
+        _valid_device_name(self.name)
+        _optional_identifier("external_identifier", self.external_identifier)
+        _optional_identifier("ha_user_id", self.ha_user_id)
         _positive("usable_battery_kwh", self.usable_battery_kwh)
         _positive("max_ac_charge_kw", self.max_ac_charge_kw)
         if self.ac_phase_count not in (None, 1, 2, 3):
@@ -59,6 +112,8 @@ class Charger:
     """Stable physical EVSE identity + capabilities, not a car battery."""
 
     id: str
+    name: str
+    external_identifier: str | None = None
     max_ac_power_kw: float | None = None
     phase_count: int | None = None
     min_current_a: float | None = None
@@ -66,8 +121,10 @@ class Charger:
     charge_efficiency: float = 0.90
 
     def __post_init__(self) -> None:
-        if not self.id:
+        if not self.id or not self.id.strip():
             raise ValueError("charger_id_required")
+        _valid_device_name(self.name)
+        _optional_identifier("external_identifier", self.external_identifier)
         for field, value in (
             ("max_ac_power_kw", self.max_ac_power_kw),
             ("min_current_a", self.min_current_a),
