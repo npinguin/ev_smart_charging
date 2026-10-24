@@ -83,15 +83,27 @@ def _finite(value):
         return None
 
 
-
 # Stable pseudonymous references match sha256(entity_id)[:12] in HA Jinja
 # Developer Tools. They are NOT cryptographic anonymity or secret tokens.
 SAFE_SOURCE_PLATFORMS = frozenset(
     {
-        "audiconnect", "be_electricity_prices", "cardata", "cupra_eu_data_act",
-        "ev_smart_charging", "frank_energie", "input_number", "mqtt", "ocpp",
-        "peblar", "rhi_energy", "rhi_foundation", "rhi_mobility",
-        "sensor", "template", "vag_connect", "zwave_js",
+        "audiconnect",
+        "be_electricity_prices",
+        "cardata",
+        "cupra_eu_data_act",
+        "ev_smart_charging",
+        "frank_energie",
+        "input_number",
+        "mqtt",
+        "ocpp",
+        "peblar",
+        "rhi_energy",
+        "rhi_foundation",
+        "rhi_mobility",
+        "sensor",
+        "template",
+        "vag_connect",
+        "zwave_js",
     }
 )
 
@@ -145,6 +157,7 @@ def _soc_candidates(hass):
         "truncated": len(values) > 32,
         "interpretation": "unverified_candidates_not_vehicle_links",
     }
+
 
 def _source(hass, entity_id, *, quantity=None):
     """Classify a source without exporting its sensitive entity ID or attributes."""
