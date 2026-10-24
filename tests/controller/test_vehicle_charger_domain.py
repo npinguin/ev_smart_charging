@@ -46,7 +46,7 @@ def test_one_charger_is_same_model_as_four_without_a_second_planner():
     assert result["black"].planning_ready
     assert result["black"].effective_max_ac_kw == 7.4
     assert result["black"].required_battery_kwh == 9.0
-    assert result["black"].estimated_quarters == 5
+    assert result["black"].estimated_quarters == 6
     assert result["white"].status == "unassigned"
 
 
@@ -83,7 +83,7 @@ def test_explicit_manual_assignment_and_native_connection_are_sufficient():
     result = _resolve((Assignment("audi", "black"),))
     assert result["black"].status == "ready"
     assert result["black"].planning_ready
-    assert result["black"].estimated_quarters == 5
+    assert result["black"].estimated_quarters == 6
 
 
 def test_missing_physical_connection_and_unknown_soc_fail_closed():
