@@ -1,4 +1,4 @@
-name: HACS Phase 1 field-test prerelease
+name: HACS guarded diagnostics prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.4
+      VERSION: 2.6.0-rc.5
     steps:
       - uses: actions/checkout@v7
 
@@ -59,6 +59,12 @@ jobs:
           assert Path("tests/controller/test_unified_poll_lifecycle.py").exists(), (
               "No mode/reload/feedback regression guard"
           )
+          diagnostics = Path("custom_components/ev_smart_charging/diagnostics.py").read_text()
+          assert "async_get_config_entry_diagnostics" in diagnostics
+          assert "async_get_device_diagnostics" in diagnostics
+          assert Path("tests/controller/test_diagnostics.py").exists(), (
+              "Diagnostics regressions required in the exact-head release"
+          )
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -76,7 +82,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc4-manual-zip
+          name: evsc-guarded-rc5-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -100,5 +106,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — Local-only guarded HACS prerelease" \
-            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
+            --title "EV Smart Charging $tag — Local-only guarded HACS diagnostics prerelease" \
+            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; HA-native redacted diagnostics are available on every charger and controller entry/device; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
