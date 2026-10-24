@@ -1,19 +1,19 @@
-# Guarded HACS prerelease request — v2.6.0-rc.6 (Local automatic Start recovery)
+# Guarded HACS source prerelease request — v2.6.0-rc.7
 
-**Requested 2026-10-24 after operator field report:** HACS rc4/rc5 Local charging schedule appears, but Garage Black on RHI Mobility shows zero power and "Waiting for charging to begin". This screenshot is **not** proof an active-quarter Start was due; controlled on-target verification remains required. Authorize only the next **Local-capable guarded test prerelease** to restore the missing native switch retry and provide execution diagnostics. No control-mode migration or new Coordinated physical behavior.
+**Scope, 2026-10-24:** operator reported 14 Home Assistant Core 2026.10.3 thread-safety exceptions in ten seconds at EVSC `sensor.py:323`; native EVSC sensor listener used an undecorated synchronous lambda to invoke `async_write_ha_state` from the executor. This is an EVSC custom integration error, not a Home Assistant Core bug.
 
-**Immutable source SHA:** the exact SHA of this release request change, on `fix/local-bootstrap-lifecycle`. Do not substitute previous CI runs or builds.
+**Deliver only a Local-capable P0-quarantined update**, not approval to switch chargers to Coordinated. Continue to enforce `COORDINATED_ACTUATION_ENABLED = False`. The first real Coordinated transition had previously frozen Home Assistant; P0 #5 remains open.
 
-## Release gate — mandatory
+## Required release gate
 
-- Run all nine source CI jobs on this immutable commit. Full pytest on Python 3.11, 3.12, 3.13, 3.14 each >=90% local coverage; controller regressions, unchanged Local smoke, upstream compatibility, Black, HACS and Hassfest.
-- Verify **both** `manifest.json` and `const.py` version `2.6.0-rc.6`; HACS source-native layout with neither required ZIP asset nor `zip_release`.
-- Hard-coded `COORDINATED_ACTUATION_ENABLED = False` and rejection of new Coordinated selection must remain. Persisted participants must not automatically Start or Stop.
-- Retain rc5 entry and device diagnostics; extend charger diagnostics with Local current-quarter ON/OFF decision, activation/connection/price/SoC prerequisites, native readback and last physical service request. No entity/entry IDs, personal details, raw options or secrets in export; diagnostics remains read-only.
-- Local unchanged scheduling algorithm and native writer. Tests must show Start when due, Stop when no longer scheduled, no Start while window is future, no duplicate native commands from repeated updates.
-- Correct missing optional charging-state-sensor recovery: once per existing five-minute cycle, only if Local expects ON and the native controllable switch reports known OFF, retry native Start. No commands on unknown/unavailable readbacks and never from this retry for a supervised Coordinated charger.
-- If all exact-head gates succeed, publish tag **v2.6.0-rc.6** exactly once as a guarded GitHub prerelease for HACS; HACS downloads the source tree. Keep separate optional manual ZIP CI artifact. No main merge, stable promotion or other tag reuse.
+- Publish only from this exact release-request commit on `fix/local-bootstrap-lifecycle`, never from main or a historical green run. All nine full exact-head CI gates on Python 3.11–3.14, Local behaviour, native start/stop/retry, controller regressions, coverage >=90% where applicable, Black, HACS/Hassfest and upstream compatibility must pass.
+- Both integration manifest and const must say `2.6.0-rc.7`; this tag must be a new immutable **GitHub prerelease** only. HACS source tree is `custom_components/ev_smart_charging/`, and a separate workflow ZIP is optional manual fallback, not a required HACS asset.
+- Verify all source sensor listeners use the named event-loop `@callback` in `sensor.py`, with no `lambda _event: self.async_write_ha_state()`. HA-level regression emits source changes and verifies event-loop affinity and listener unload. No hardware polling or commands are introduced by this fix.
+- P0 safety UI protects Local: `ControllerOptionsFlow` rejects **new** `participants` when Coordinated is quarantined, leaves Local scheduling and Options unchanged, and permits removals of persisted participants to restore Local. Tests cover new-admission denial and rollback, including older and newer Home Assistant OptionsFlow initialization.
+- Preserve all four existing v8 Local entries, IDs, functions, schedules, historic data and native source bindings. No installed Robotix scripts, tests or private Home Assistant-specific mapping rules.
+- Keep diagnostics for per-charger source quality and local execution, without private IDs/secrets. Repair of the *independent* Garage Black vehicle SoC discrepancy (bridge 100% versus real reported 30%) is outside generic EVSC release scope and remains mandatory before live testing.
+- On release, label clearly **Local-only quarantined safety update**. No main merge, stable promotion, Coordinated physical testing or deletion of safety hold. Existing manual charger overrides and rollback must remain accessible.
 
-## Physical incident status
+## Field qualification after patch
 
-P0 issue #5 remains OPEN after the first Peblar Local→Coordinated switch hung Home Assistant. This candidate is not permission for Coordinated retest. It is also **not** proof that the screenshot represents a true missed Start; after installing a test candidate with backups, verify the native EVSC Active switch, the active-quarter plan, the charging-state sensor (if configured), the native charger switch and the actual EVSE/OEM charge readback. Do not confuse RHI Mobility Automatic with EVSC's native Smart Charging Active.
+Operator backs up HA, installs source-native HACS rc7, verifies no recurring thread safety exceptions, Local planning and native Start/Stop/readback on real hardware, source SoC/price freshness and consistent value ownership; then performs non-actuating coordinated plan comparison for one EVSE. Only a later explicit hardware-reviewed acceptance can allow controlled physical Coordinated migration one charger at a time. No claim of Coordinated readiness is made here.
