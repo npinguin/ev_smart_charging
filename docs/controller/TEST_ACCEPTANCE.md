@@ -1,5 +1,11 @@
 # Charge Controller — qualification and acceptance evidence
 
+## v2.6.0-rc.5 HACS diagnostics candidate — 2026-10-24
+
+User-reported missing native diagnostics download in rc4. The new `diagnostics.py` exports safely redacted JSON from HA's config-entry and device menus on all four existing chargers and the singleton controller. It includes source quality, Local schedule status, coverage/Unknown explanations and P0 quarantine. No raw entity or entry identifiers, usernames, network/source attribute payloads, tokens or physical actuation. HA-managed tests verify the five-entry/device path, privacy sentinels and read-only behavior. Release is permitted only after full exact-head nine-job Gate A plus hard `COORDINATED_ACTUATION_ENABLED=False` check. Still not physically certified: P0 #5 remains OPEN, no Coordinated retest, main merge or stable approval.
+
+---
+
 ## Guarded HACS Local-only prerelease exception — 2026-10-24
 
 **User-requested software distribution, not physical Coordinated acceptance.** A v2.6.0-rc.4 release may be published from the isolated branch after the same exact-head 9-job CI (HACS/Hassfest/Black/Local/upstream/controller + four Python versions >=90% coverage) and explicit non-configurable `COORDINATED_ACTUATION_ENABLED = False` check. Existing Local behavior, all four entries/Options/IDs and Phase 1 features remain intact; previously persisted Coordinated participants must be physically inert. No Coordinated retest, merge, stable release or unattended deployment is authorized. P0 incident #5 remains open. Native OEM readback and field acceptance remain outstanding. See `IMPLEMENTATION_STATUS.md` for full exception scope.
