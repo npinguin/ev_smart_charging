@@ -1,0 +1,54 @@
+{# EVSC source mapping audit — Home Assistant Developer Tools > Template
+   Read-only Jinja: no services, config changes, or charger commands.
+   This is a LIVE state snapshot, not a historical record.
+   Values of EVSC charging entities are internal EVSC snapshots,
+   NOT necessarily the same as the configured raw source states.
+#}
+{% set entries = [
+  'Car Charger - WB White',
+  'Car Charger - WB Black',
+  'Car Charger - Peblar Outside',
+  'Plug Car Charger',
+  'EVSC Charge Controller'
+] %}
+EVSC / BRIDGE MAPPING AUDIT
+Timestamp: {{ now().isoformat() }}
+Home Assistant: live state cache
+
+=== A. EVSC entries and native state ===
+{% for entry_title in entries %}
+{% set es = integration_entities(entry_title) | sort %}
+[{{ entry_title }}] entities={{ es | count }}
+{% for eid in es if 'charging' in eid or 'status' in eid or 'ev_connected' in eid or 'active' in eid or 'apply_limit' in eid or 'soc' in eid %}
+{% set st = states.get(eid) %}
+  {{ eid }} | state={{ states(eid) }} | source_ref={{ sha256(eid)[:12] }}
+{% if st is not none and st.attributes.get('ev_soc') is not none %}
+    EVSC cached SoC={{ state_attr(eid, 'ev_soc') }} %; target={{ state_attr(eid, 'ev_target_soc') }} %; planned={{ state_attr(eid, 'charging_is_planned') }}; start={{ state_attr(eid, 'charging_start_time') }}; stop={{ state_attr(eid, 'charging_stop_time') }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+=== B. RHI bridge and vehicle SoC candidates ===
+{% set ns = namespace(count=0) %}
+{% for st in states.sensor | sort(attribute='entity_id') %}
+{% set key = st.entity_id | lower %}
+{% set is_ev = 'evsc_bridge' in key or 'vehicle_soc' in key or 'car_soc' in key or ('soc' in key and ('audi' in key or 'vw' in key or 'q8' in key or 'id4' in key or 'battery' in key)) %}
+{% if is_ev and ns.count < 65 %}
+{% set ns.count = ns.count + 1 %}
+  {{ st.entity_id }} | value={{ st.state }} {{ st.attributes.get('unit_of_measurement', '') }} | source_ref={{ sha256(st.entity_id)[:12] }} | provider={{ config_entry_attr(config_entry_id(st.entity_id), 'domain') if config_entry_id(st.entity_id) else 'helper/YAML' }}
+{% endif %}
+{% endfor %}
+Candidates found: {{ ns.count }}
+
+=== C. EVSC-connected switches (all four) ===
+{% for eid in integration_entities('ev_smart_charging') | sort if eid.startswith('switch.') and ('connected' in eid or 'active' in eid) %}
+  {{ eid }} = {{ states(eid) }} | entry={{ config_entry_attr(config_entry_id(eid), 'title') if config_entry_id(eid) else '?' }}
+{% endfor %}
+
+=== Interpretation ===
+Check Garage Black EVSC cached SoC versus the active Audi Q8 bridge sensor.
+A candidate showing 28% while its native EVSC charging sensor shows 100%
+indicates a stale/wrong input binding or invalid upstream mapping — it does
+NOT prove which sensor the EVSC Options actually references.
+Use the updated EVSC diagnostics source_ref (SHA256 first 12) to match
+the precise configured Vehicle SoC source to a candidate above.
