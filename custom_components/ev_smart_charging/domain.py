@@ -163,9 +163,7 @@ def resolve_charging_contexts(
 
     by_charger = Counter(a.charger_id for a in assignments)
     by_vehicle = Counter(a.vehicle_id for a in assignments)
-    candidates = {
-        a.charger_id: a for a in assignments if by_charger[a.charger_id] == 1
-    }
+    candidates = {a.charger_id: a for a in assignments if by_charger[a.charger_id] == 1}
     result = {}
 
     for charger_id in sorted(chargers):
