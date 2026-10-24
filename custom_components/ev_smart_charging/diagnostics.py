@@ -22,22 +22,54 @@ from homeassistant.util import dt
 
 SCHEMA_VERSION = "1.0"
 REDACT = {
-    "password", "passwd", "token", "access_token", "refresh_token",
-    "api_key", "api_token", "secret", "client_secret", "authorization",
-    "credentials", "username", "email", "name", "address", "latitude",
-    "longitude", "serial_number", "unique_id", "entry_id", "entity_id",
-    "webhook_id", "device_id", "location", "title",
+    "password",
+    "passwd",
+    "token",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "api_token",
+    "secret",
+    "client_secret",
+    "authorization",
+    "credentials",
+    "username",
+    "email",
+    "name",
+    "address",
+    "latitude",
+    "longitude",
+    "serial_number",
+    "unique_id",
+    "entry_id",
+    "entity_id",
+    "webhook_id",
+    "device_id",
+    "location",
+    "title",
 }
 UNAVAILABLE = {"unknown", "unavailable"}
 UNITS = {"W", "kW", "Wh", "kWh", "EUR/kWh", "%"}
 SUMMARY_KEYS = (
-    "planning_status", "required_energy", "planned_energy", "unplanned_energy",
-    "planned_today", "planned_tomorrow", "indicative_cost",
-    "indicative_cost_today", "indicative_cost_tomorrow", "actual_cost_today",
+    "planning_status",
+    "required_energy",
+    "planned_energy",
+    "unplanned_energy",
+    "planned_today",
+    "planned_tomorrow",
+    "indicative_cost",
+    "indicative_cost_today",
+    "indicative_cost_tomorrow",
+    "actual_cost_today",
     "local_planned_grid_kwh_known_subtotal",
-    "local_indicative_cost_known_subtotal", "local_energy_coverage",
-    "local_cost_coverage", "local_total", "coordinated_planned_grid_kwh",
-    "coordinated_indicative_cost", "peak_control_status", "available_ev_power",
+    "local_indicative_cost_known_subtotal",
+    "local_energy_coverage",
+    "local_cost_coverage",
+    "local_total",
+    "coordinated_planned_grid_kwh",
+    "coordinated_indicative_cost",
+    "peak_control_status",
+    "available_ev_power",
 )
 
 
@@ -76,7 +108,8 @@ def _source(hass, entity_id, *, quantity=None):
             "soc": {"%", None},
         }[quantity]
         valid = (
-            value is not None and unit in valid_units
+            value is not None
+            and unit in valid_units
             and (quantity != "soc" or 0 <= value <= 100)
             and (quantity not in ("power", "energy") or value >= 0)
         )
@@ -111,19 +144,27 @@ def _charger_diagnostics(hass, charger, manager=None):
         "effective_price": opts.get("evsc_effective_price_entity"),
         "vehicle_soc": getattr(charger, "ev_soc_entity_id", None),
         "target_soc": getattr(charger, "ev_target_soc_entity_id", None),
-        "charger_switch": getattr(getattr(charger, "charger_switch", None), "entity_id", None),
+        "charger_switch": getattr(
+            getattr(charger, "charger_switch", None), "entity_id", None
+        ),
         "charging_readback": getattr(charger, "charging_state_entity_id", None),
-        "actual_power": opts.get("evsc_actual_power_entity") or legacy.get("power_sensor"),
-        "session_energy": opts.get("evsc_actual_energy_entity") or legacy.get("energy_sensor"),
+        "actual_power": opts.get("evsc_actual_power_entity")
+        or legacy.get("power_sensor"),
+        "session_energy": opts.get("evsc_actual_energy_entity")
+        or legacy.get("energy_sensor"),
         "capacity": opts.get("evsc_capacity_entity"),
         "current_battery_energy": opts.get("evsc_current_energy_entity"),
         "target_battery_energy": opts.get("evsc_target_energy_entity"),
     }
     kinds = {
-        "vehicle_soc": "soc", "target_soc": "soc",
-        "charger_switch": "switch", "charging_readback": "switch",
-        "actual_power": "power", "session_energy": "energy",
-        "capacity": "energy", "current_battery_energy": "energy",
+        "vehicle_soc": "soc",
+        "target_soc": "soc",
+        "charger_switch": "switch",
+        "charging_readback": "switch",
+        "actual_power": "power",
+        "session_energy": "energy",
+        "capacity": "energy",
+        "current_battery_energy": "energy",
         "target_battery_energy": "energy",
     }
     sources = {
@@ -141,7 +182,8 @@ def _charger_diagnostics(hass, charger, manager=None):
             manager.price_curves.get(key, ()) if manager is not None else (),
             dt.utcnow(),
         )
-        if not supervised else None
+        if not supervised
+        else None
     )
     if local_schedule is not None:
         local_schedule = {
@@ -159,9 +201,11 @@ def _charger_diagnostics(hass, charger, manager=None):
         "opportunistic": getattr(charger, "switch_opportunistic", None),
         "low_price_charging": getattr(charger, "switch_low_price_charging", None),
         "low_soc_charging": getattr(charger, "switch_low_soc_charging", None),
-        "actual_controlled_state": getattr(charger, "auto_charging_state", None)
-        if getattr(charger, "auto_charging_state", None) in ("on", "off")
-        else "unknown",
+        "actual_controlled_state": (
+            getattr(charger, "auto_charging_state", None)
+            if getattr(charger, "auto_charging_state", None) in ("on", "off")
+            else "unknown"
+        ),
         "vehicle_soc_percent": _finite(getattr(charger, "ev_soc", None)),
         "target_soc_percent": _finite(getattr(charger, "ev_target_soc", None)),
         "charging_speed_percent_per_hour": _finite(
@@ -169,14 +213,16 @@ def _charger_diagnostics(hass, charger, manager=None):
         ),
         "expected_charging_power_kw": _finite(power),
         "usable_capacity_kwh_configured": _finite(opts.get("evsc_capacity_kwh")),
-        "has_absolute_ready_by": getattr(charger, "absolute_ready_by", None) is not None,
+        "has_absolute_ready_by": getattr(charger, "absolute_ready_by", None)
+        is not None,
         "has_native_local_schedule": schedule is not None,
         "local_schedule": local_schedule,
         "source_health": sources,
         "coverage": {
             "actual_power": sources["actual_power"]["status"] == "valid",
             "session_energy": sources["session_energy"]["status"] == "valid",
-            "effective_price_configured": sources["effective_price"]["status"] != "not_configured",
+            "effective_price_configured": sources["effective_price"]["status"]
+            != "not_configured",
         },
         "config": {
             "version": getattr(charger.config_entry, "version", None),
@@ -201,9 +247,15 @@ def _controller_diagnostics(hass, manager):
     # Explain absent aggregates: for Local, missing validated rate or kW
     # coverage must remain unknown, not silently become zero.
     unavailable = {}
-    for field in ("planned_energy", "planned_today", "planned_tomorrow",
-                  "indicative_cost", "actual_cost_today", "actual_power_kw",
-                  "session_energy_kwh"):
+    for field in (
+        "planned_energy",
+        "planned_today",
+        "planned_tomorrow",
+        "indicative_cost",
+        "actual_cost_today",
+        "actual_power_kw",
+        "session_energy_kwh",
+    ):
         value = metrics.get(field) if field in metrics else summary.get(field)
         if value is not None:
             continue
@@ -224,16 +276,22 @@ def _controller_diagnostics(hass, manager):
         "coordinated_actuation_enabled": safety.COORDINATED_ACTUATION_ENABLED,
         "runtime": {
             "stopped": manager._stopped,
-            "refresh_pending": bool(manager._refresh_task and not manager._refresh_task.done()),
+            "refresh_pending": bool(
+                manager._refresh_task and not manager._refresh_task.done()
+            ),
             "replan_pending": manager._replan_requested,
             "source_event_subscription_active": manager._unsub_sources is not None,
             "five_second_sampler_active": manager._unsub is not None,
             "peak_status": manager.peak_status,
             "peak_latched": manager._peak_latched,
-            "peak_shaving_enabled": bool(manager.config_entry.options.get("peak_shaving_enabled")),
+            "peak_shaving_enabled": bool(
+                manager.config_entry.options.get("peak_shaving_enabled")
+            ),
         },
         "chargers": {
-            "total": total, "local": local, "coordinated": len(manager.participants),
+            "total": total,
+            "local": local,
+            "coordinated": len(manager.participants),
             "connected": snapshot.connected,
             "connection_unknown": snapshot.connection_unknown,
             "physically_charging": snapshot.physically_charging,
@@ -258,8 +316,12 @@ async def async_get_config_entry_diagnostics(hass, entry) -> dict[str, Any]:
     controller_entry = entry.data.get("__evsc_entry_type") == "charge_controller"
     runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     manager = next(
-        (obj for obj in hass.data.get(DOMAIN, {}).values()
-         if isinstance(obj, ChargeSupervisor)), None
+        (
+            obj
+            for obj in hass.data.get(DOMAIN, {}).values()
+            if isinstance(obj, ChargeSupervisor)
+        ),
+        None,
     )
     result = {
         "diagnostics_schema_version": SCHEMA_VERSION,
@@ -296,7 +358,10 @@ async def async_get_device_diagnostics(
         else (DOMAIN, entry.entry_id)
     )
     if wanted not in device.identifiers:
-        return {"diagnostics_schema_version": SCHEMA_VERSION, "status": "device_not_owned"}
+        return {
+            "diagnostics_schema_version": SCHEMA_VERSION,
+            "status": "device_not_owned",
+        }
     data = await async_get_config_entry_diagnostics(hass, entry)
     data["scope"] = "device"
     return data
