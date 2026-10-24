@@ -126,3 +126,49 @@ async def test_local_not_yet_in_planned_window_never_sends_start(hass):
         await native.update_state()
         assert native.auto_charging_state == STATE_OFF
         service.assert_not_awaited()
+
+
+async def test_local_retry_uses_native_switch_if_charging_sensor_is_unconfigured(hass):
+    """A missed Local Start must recover without a second charging-state sensor."""
+    native = object.__new__(EVSmartChargingCoordinator)
+    native.hass = hass
+    native.config_entry = SimpleNamespace(entry_id="independent_local")
+    native.auto_charging_state = STATE_ON
+    native.charging_state_entity_id = ""
+    native.charger_switch = SimpleNamespace(entity_id="switch.test_wallbox")
+    native.turn_on_charging = AsyncMock()
+    hass.states.async_set("switch.test_wallbox", STATE_OFF)
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_awaited_once_with(reason="retry")
+    native.turn_on_charging.reset_mock()
+
+    hass.states.async_set("switch.test_wallbox", "unavailable")
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+
+    hass.states.async_set("switch.test_wallbox", STATE_ON)
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+
+
+async def test_local_retry_does_not_attempt_unverified_or_coordinated_start(hass):
+    native = object.__new__(EVSmartChargingCoordinator)
+    native.hass = hass
+    native.config_entry = SimpleNamespace(entry_id="independent_local")
+    native.auto_charging_state = STATE_ON
+    native.charging_state_entity_id = ""
+    native.charger_switch = SimpleNamespace(entity_id="switch.test_wallbox")
+    native.turn_on_charging = AsyncMock()
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+
+    controller = SimpleNamespace(
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": ["independent_local"]},
+    )
+    with patch.object(
+        hass.config_entries, "async_entries", return_value=[controller]
+    ):
+        hass.states.async_set("switch.test_wallbox", STATE_OFF)
+        await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
