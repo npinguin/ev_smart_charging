@@ -33,6 +33,7 @@ async def test_individual_source_listener_runs_in_home_assistant_event_loop(hass
         SensorDeviceClass.POWER,
         "kW",
     )
+
     def assert_event_loop_write():
         assert asyncio.get_running_loop() is hass.loop
 
