@@ -53,9 +53,7 @@ def _optional_identifier(field: str, value: str | None) -> None:
 def device_slug(device_name: str) -> str:
     """Human device-name-derived HA object ID, never a sequence number."""
     normalized = normalize("NFKD", device_name).encode("ascii", "ignore").decode()
-    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", normalized.lower())).strip(
-        "_"
-    )
+    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", normalized.lower())).strip("_")
 
 
 def suggested_entity_object_id(device_name: str, entity_key: str) -> str:
