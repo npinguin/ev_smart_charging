@@ -65,6 +65,7 @@ class Charger:
     phase_count: int | None = None
     min_current_a: float | None = None
     max_current_a: float | None = None
+    charge_efficiency: float = 0.90
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -75,6 +76,8 @@ class Charger:
             ("max_current_a", self.max_current_a),
         ):
             _positive(field, value)
+        if not 0 < self.charge_efficiency <= 1 or not isfinite(self.charge_efficiency):
+            raise ValueError("invalid_charge_efficiency")
         if self.phase_count not in (None, 1, 2, 3):
             raise ValueError("invalid_charger_phase_count")
         if self.min_current_a is not None and self.max_current_a is not None:
@@ -160,7 +163,9 @@ def resolve_charging_contexts(
 
     by_charger = Counter(a.charger_id for a in assignments)
     by_vehicle = Counter(a.vehicle_id for a in assignments)
-    candidates = {a.charger_id: a for a in assignments}
+    candidates = {
+        a.charger_id: a for a in assignments if by_charger[a.charger_id] == 1
+    }
     result = {}
 
     for charger_id in sorted(chargers):
@@ -174,10 +179,10 @@ def resolve_charging_contexts(
         energy = None
         quarters = None
 
-        if assignment is None:
-            status = "unassigned"
-        elif by_charger[charger_id] > 1:
+        if by_charger[charger_id] > 1:
             status = "charger_claim_conflict"
+        elif assignment is None:
+            status = "unassigned"
         elif by_vehicle[assignment.vehicle_id] > 1:
             status = "vehicle_claim_conflict"
         elif assignment.vehicle_id not in vehicles:
@@ -214,7 +219,9 @@ def resolve_charging_contexts(
                 if power is not None and energy is not None:
                     from math import ceil
 
-                    quarters = ceil(energy / (power * 0.25) - 1e-9)
+                    quarters = ceil(
+                        energy / (power * 0.25 * charger.charge_efficiency) - 1e-9
+                    )
                 elif vehicle.charging_pct_per_hour is not None:
                     from math import ceil
 
