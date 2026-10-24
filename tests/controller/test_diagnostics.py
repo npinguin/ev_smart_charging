@@ -160,3 +160,91 @@ def test_source_diagnostics_distinguish_absent_unknown_invalid_and_valid(hass):
     )
     hass.states.async_set("switch.peblar", "off")
     assert _source(hass, "switch.peblar", quantity="switch")["state"] == "off"
+
+
+def test_local_execution_diagnostics_identifies_due_start_and_native_mismatch(hass):
+    """A future plan is NOT an instruction to start in the current quarter."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.diagnostics import (
+        _local_execution_diagnostics,
+    )
+
+    now = dt.now()
+    native = SimpleNamespace(
+        _charging_schedule=[
+            {"start": now - timedelta(minutes=2),
+             "end": now + timedelta(minutes=13), "value": 0.4}
+        ],
+        sensor=SimpleNamespace(current_price=0.15),
+        ev_soc=28,
+        ev_target_soc=80,
+        number_min_soc=10,
+        max_price=0.20,
+        switch_active=True,
+        switch_ev_connected=True,
+        switch_apply_limit=True,
+        switch_low_price_charging=False,
+        switch_low_soc_charging=False,
+        switch_keep_on=False,
+        auto_charging_state="off",
+        charger_switch=SimpleNamespace(entity_id="switch.private_black"),
+        is_during_intialization=lambda: False,
+    )
+    hass.states.async_set("switch.private_black", "off")
+    report = _local_execution_diagnostics(hass, native)
+    assert report["current_quarter_planned_on"] is True
+    assert report["expected_on_by_legacy_rules"] is True
+    assert report["next_internal_action"] == "start"
+    assert report["native_switch_readback"]["state"] == "off"
+    assert report["native_switch_matches_decision"] is False
+    assert "private_black" not in json.dumps(report)
+
+    # The SAME future plan should not start before its first charged quarter.
+    native._charging_schedule[0]["start"] = now + timedelta(minutes=13)
+    native._charging_schedule[0]["end"] = now + timedelta(minutes=28)
+    report = _local_execution_diagnostics(hass, native)
+    assert report["current_quarter_planned_on"] is False
+    assert report["expected_on_by_legacy_rules"] is False
+    assert report["next_internal_action"] == "none"
+    assert "current_quarter_not_scheduled" in report["decision_blockers"]
+
+    # Do not mistake visible charging windows for an active EVSC switch.
+    native.switch_active = False
+    report = _local_execution_diagnostics(hass, native)
+    assert "smart_charging_not_active" in report["decision_blockers"]
+
+
+def test_local_execution_diagnostics_distinguishes_price_gate_from_safety_hold(hass):
+    from datetime import timedelta
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.diagnostics import (
+        _local_execution_diagnostics,
+    )
+
+    now = dt.now()
+    native = SimpleNamespace(
+        _charging_schedule=[
+            {"start": now - timedelta(minutes=1),
+             "end": now + timedelta(minutes=14), "value": 1}
+        ],
+        sensor=SimpleNamespace(current_price=0.30),
+        ev_soc=50,
+        ev_target_soc=80,
+        number_min_soc=10,
+        max_price=0.20,
+        switch_active=True,
+        switch_ev_connected=True,
+        switch_apply_limit=True,
+        switch_low_price_charging=False,
+        switch_low_soc_charging=False,
+        switch_keep_on=False,
+        auto_charging_state="off",
+        charger_switch=SimpleNamespace(entity_id="switch.test"),
+        is_during_intialization=lambda: False,
+    )
+    report = _local_execution_diagnostics(hass, native)
+    assert report["expected_on_by_legacy_rules"] is False
+    assert "price_limit_blocks_start" in report["decision_blockers"]
+    native.switch_apply_limit = False
+    assert _local_execution_diagnostics(hass, native)["expected_on_by_legacy_rules"]
