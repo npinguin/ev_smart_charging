@@ -166,9 +166,7 @@ async def test_local_retry_does_not_attempt_unverified_or_coordinated_start(hass
         data={"__evsc_entry_type": "charge_controller"},
         options={"participants": ["independent_local"]},
     )
-    with patch.object(
-        hass.config_entries, "async_entries", return_value=[controller]
-    ):
+    with patch.object(hass.config_entries, "async_entries", return_value=[controller]):
         hass.states.async_set("switch.test_wallbox", STATE_OFF)
         await native.periodic_check_charging_state()
     native.turn_on_charging.assert_not_awaited()
