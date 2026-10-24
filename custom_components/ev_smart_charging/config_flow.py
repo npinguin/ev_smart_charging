@@ -56,7 +56,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         if config_entry.data.get("__evsc_entry_type") == "charge_controller":
-            return ControllerOptionsFlow()
+            return ControllerOptionsFlow(config_entry)
         return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
@@ -260,6 +260,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
 class ControllerOptionsFlow(config_entries.OptionsFlow):
     """Only controller-wide policy; charger sources stay with each EVSC."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Preserve upstream-compatible options flow initialization."""
+        if MAJOR_VERSION < 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 11):
+            self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         known = {
