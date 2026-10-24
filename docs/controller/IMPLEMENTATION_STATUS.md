@@ -6,7 +6,7 @@
 
 **Second blocker discovered:** controller Options could accept a new participant despite `COORDINATED_ACTUATION_ENABLED=False`. This changes planning ownership and can detach Local while no coordinated native commands are allowed. The Options form must reject **new** Coordinated admissions during P0 and preserve unchanged Local settings; existing quarantined participants must remain removable for rollback. Controller Options initialization must support old and new HA config flow lifecycle. Synthetic regression tests cover both directions. **Do not manually edit Options storage to bypass admission.**
 
-**Existing data blocker:** Garage Black EVSC's SoC reads 100%/target 80% while the actual Audi Q8 reported SoC was 30% in a read-only site audit. That field reading alone does not prove the EVSC Local scheduler or physical Start is broken. Correct and validate the upstream mapping and freshness at the source; do not add RHI-specific mapping or fallback guessing to generic EVSC.
+**Corrected with operator evidence (24 October 2026):** Garage Black's EVSC SoC of 100% is correct and exceeds the 80% target, so no Local Start is due. The alternative 30% RHI value is not evidence of an EVSC mapping defect and must not be treated as a release blocker. Analyze RHI's separate reading independently if relevant.
 
 **Release/field gates before onboarding even one charger:**
 1. Exact-head nine-job CI, including Python 3.11–3.14, HACS/Hassfest, formatting, Local native Start/Stop/retry and HA thread safety/lifecycle regression, passing with a version-matched HACS package.
