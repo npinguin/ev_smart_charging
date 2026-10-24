@@ -23,6 +23,8 @@ from .const import (
 from .coordinator import EVSmartChargingCoordinator
 from .controller.runtime import is_supervised, set_control_mode
 from .entity import EVSmartChargingEntity
+from .domain import suggested_entity_object_id
+from .vehicle_config import ASSIGNMENTS, VEHICLES, validate_assignments
 from .helpers.general import get_parameter, get_quarter_index
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ async def async_setup_entry(
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectReadyQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectControlMode(entry, coordinator))
+    selects.append(VehicleAssignmentSelect(entry))
     async_add_devices(selects)
 
 
@@ -146,4 +149,70 @@ class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
 
     async def async_select_option(self, option):
         set_control_mode(self.coordinator.hass, self.config_entry.entry_id, option)
+        self.async_write_ha_state()
+
+
+class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
+    """Native HA Charger attribute to select a Vehicle or explicitly None.
+
+    The single controller Options dict stores the assignment; no duplicate
+    device, new ConfigEntry, cloud bridge or charge command is introduced.
+    """
+
+    _entity_key = "assigned_vehicle"
+    _attr_name = "Assigned vehicle"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = True
+
+    def __init__(self, entry):
+        super().__init__(entry)
+        self._attr_unique_id = f"{entry.entry_id}.assigned_vehicle"
+        self._attr_suggested_object_id = suggested_entity_object_id(
+            entry.title, "assigned_vehicle"
+        )
+
+    def _controller(self):
+        return next(
+            (
+                entry for entry in self.hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get("__evsc_entry_type") == "charge_controller"
+            ),
+            None,
+        )
+
+    @property
+    def options(self):
+        controller = self._controller()
+        profiles = controller.options.get(VEHICLES, {}) if controller else {}
+        return ["None", *sorted(profile["name"] for profile in profiles.values())]
+
+    @property
+    def current_option(self):
+        controller = self._controller()
+        if not controller:
+            return "None"
+        assigned = controller.options.get(ASSIGNMENTS, {}).get(self.config_entry.entry_id)
+        return controller.options.get(VEHICLES, {}).get(assigned, {}).get("name", "None")
+
+    async def async_select_option(self, option: str) -> None:
+        controller = self._controller()
+        if controller is None:
+            raise ValueError("controller_unavailable")
+        profiles = controller.options.get(VEHICLES, {})
+        names = {v["name"]: key for key, v in profiles.items()}
+        if option != "None" and option not in names:
+            raise ValueError("unknown_vehicle")
+        requested = {
+            **controller.options.get(ASSIGNMENTS, {}),
+            self.config_entry.entry_id: names.get(option, ""),
+        }
+        chargers = {
+            entry.entry_id: entry.title
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type") not in ("charge_controller", "vehicle")
+        }
+        selected = validate_assignments(requested, profiles, chargers)
+        self.hass.config_entries.async_update_entry(
+            controller, options={**controller.options, ASSIGNMENTS: selected}
+        )
         self.async_write_ha_state()
