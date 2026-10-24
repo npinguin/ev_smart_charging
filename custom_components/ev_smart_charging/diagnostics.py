@@ -151,13 +151,14 @@ def _local_execution_diagnostics(hass, charger):
     active = getattr(charger, "switch_active", None) is True
     connected = getattr(charger, "switch_ev_connected", None) is True
     apply_limit = getattr(charger, "switch_apply_limit", None) is True
+    limit_disabled = getattr(charger, "switch_apply_limit", None) is False
     slot_on = current_slot is not None and current_slot != 0
     allow_price = (
         price is not None
         and max_price is not None
         and (
             price < max_price
-            or not apply_limit
+            or limit_disabled
             or (soc is not None and minimum is not None and soc < minimum)
         )
     )
@@ -189,14 +190,17 @@ def _local_execution_diagnostics(hass, charger):
     target_reached = soc is not None and target is not None and soc >= target
     if target_reached:
         desired = False
+    keep_on_until = getattr(charger, "switch_keep_on_completion_time", None)
+    keep_on_reached = (
+        keep_on_until is not None
+        and getattr(keep_on_until, "tzinfo", None) is not None
+        and dt.now() >= keep_on_until
+    )
     keep_on = (
         getattr(charger, "switch_keep_on", None) is True
-        and not apply_limit
+        and limit_disabled
         and connected
-        and (
-            target_reached
-            or getattr(charger, "switch_keep_on_completion_time", None) is not None
-        )
+        and (target_reached or keep_on_reached)
     )
     if keep_on:
         desired = True
