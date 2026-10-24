@@ -38,6 +38,12 @@
           "charger_entity": "Charger control entity (single space to remove)",
           "charging_state_entity": "Charging state entity (single space to remove)",
           "ev_controlled": "An EV integration will control start/stop of charging"
+        },
+        "menu_options": {
+          "policy": "Charge Controller policy",
+          "add_vehicle": "Add Vehicle",
+          "edit_vehicle": "Edit Vehicle",
+          "assign_vehicle": "Assign Vehicles to Chargers"
         }
       },
       "charger": {
@@ -64,6 +70,55 @@
           "paused_chargers": "Manually paused chargers"
         },
         "title": "Charge Controller settings"
+      },
+      "policy": {
+        "title": "Charge Controller policy",
+        "description": "Local works independently. Coordinated membership is held for safety until field acceptance.",
+        "data": {
+          "participants": "Coordinated Chargers",
+          "max_parallel": "Maximum simultaneous Chargers",
+          "power_budget_kw": "Group power budget (kW; 0=unlimited)",
+          "peak_shaving_enabled": "Enable peak shaving",
+          "site_power_sensor": "Site power sensor",
+          "peak_target_kw": "Target peak (kW)",
+          "peak_reserve_kw": "Reserve power (kW)"
+        }
+      },
+      "add_vehicle": {
+        "title": "Add Vehicle",
+        "description": "Configure one Vehicle using Home Assistant entities; no car-brand integration required.",
+        "data": {
+          "name": "Vehicle name",
+          "soc_entity": "Vehicle SoC sensor (Home Assistant entity)",
+          "target_soc": "Default target SoC (%)",
+          "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
+          "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
+          "external_identifier": "External vehicle reference (optional)",
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)"
+        }
+      },
+      "edit_vehicle": {
+        "title": "Choose a Vehicle",
+        "data": {
+          "vehicle": "Vehicle to edit"
+        }
+      },
+      "update_vehicle": {
+        "title": "Edit Vehicle",
+        "data": {
+          "name": "Vehicle name",
+          "soc_entity": "Vehicle SoC sensor (Home Assistant entity)",
+          "target_soc": "Default target SoC (%)",
+          "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
+          "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
+          "external_identifier": "External vehicle reference (optional)",
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)"
+        }
+      },
+      "assign_vehicle": {
+        "title": "Assign Vehicle to Charger",
+        "description": "Each Charger can select a Vehicle or None. This selection does not change original Local physical control.",
+        "data": {}
       }
     },
     "error": {
@@ -77,7 +132,12 @@
       "charger_control_switch_not_found": "Charger control entity not found.",
       "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
       "charging_state_entity_not_found": "Charging state entity not found.",
-      "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete."
+      "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete.",
+      "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
+      "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names."
+    },
+    "abort": {
+      "no_vehicles": "No Vehicles configured. Add a Vehicle first."
     }
   },
   "entity": {

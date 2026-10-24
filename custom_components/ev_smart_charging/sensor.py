@@ -25,8 +25,12 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     _LOGGER.debug("EVSmartCharging.sensor.py")
     if entry.data.get("__evsc_entry_type") == "charge_controller":
         from .controller.sensors import controller_sensors
+        from .vehicle_sensors import vehicle_sensors
 
-        async_add_devices(controller_sensors(hass.data[DOMAIN][entry.entry_id]))
+        async_add_devices(
+            controller_sensors(hass.data[DOMAIN][entry.entry_id])
+            + vehicle_sensors(entry)
+        )
         return
 
     coordinator = hass.data[DOMAIN][entry.entry_id]

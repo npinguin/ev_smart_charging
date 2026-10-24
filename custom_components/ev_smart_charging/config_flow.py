@@ -1,14 +1,17 @@
 """Adds config flow for EV Smart Charging."""
 
 import logging
+from uuid import uuid4
 from typing import Any, Optional
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import callback
+from homeassistant.helpers.entity_registry import async_get as async_entity_registry_get
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -22,8 +25,16 @@ from .const import (
     DOMAIN,
 )
 from .controller import safety
+from .vehicle_config import (
+    ASSIGNMENTS,
+    VEHICLES,
+    VEHICLE_FACT_KEYS,
+    validate_assignments,
+    validate_profiles,
+)
 from .helpers.config_flow import DeviceNameCreator, FindEntity, FlowValidator
 from .helpers.general import get_parameter
+from .domain import suggested_entity_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -259,33 +270,45 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
 
 class ControllerOptionsFlow(config_entries.OptionsFlow):
-    """Only controller-wide policy; charger sources stay with each EVSC."""
+    """The three-concept Mobility Light UI on the existing Controller entry.
+
+    Vehicles have one canonical store on the Controller config entry, not
+    another cloud integration or new EVSC Charger entry. Local settings remain
+    on their original config entries until migration is proven equivalent.
+    """
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Preserve upstream-compatible options flow initialization."""
         if MAJOR_VERSION < 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 11):
             self.config_entry = config_entry
+        self._editing_vehicle_id = None
+        self._vehicle_error = None
+
+    def _charger_names(self):
+        return {
+            entry.entry_id: entry.title
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type")
+            not in ("charge_controller", "vehicle")
+        }
 
     async def async_step_init(self, user_input=None):
-        known = {
-            e.entry_id: e.title
-            for e in self.hass.config_entries.async_entries(DOMAIN)
-            if e.data.get("__evsc_entry_type") != "charge_controller"
-        }
+        """Simple navigation, without an extra device or configuration layer."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["policy", "add_vehicle", "edit_vehicle", "assign_vehicle"],
+        )
+
+    async def async_step_policy(self, user_input=None):
+        """Controller Local/Coordinated policies; all legacy options preserved."""
+        known = self._charger_names()
         previous = self.config_entry.options
         errors = {}
         if user_input is not None:
             requested = [e for e in user_input.get("participants", ()) if e in known]
-            # A safety hold that only prevents native commands is not enough:
-            # admission would also switch OFF the Local planner. Reject
-            # newly selected participants until Coordinated is field-approved.
             newly_selected = set(requested) - set(previous.get("participants", ()))
             if newly_selected and not safety.COORDINATED_ACTUATION_ENABLED:
                 errors["participants"] = "coordinated_disabled"
             else:
-                # Keep legacy per-charger source values as fallback until the
-                # individual source mapping is explicitly moved. Do not offer
-                # them again in the controller UI.
                 data = dict(previous)
                 data.update(user_input)
                 data["participants"] = requested
@@ -321,4 +344,145 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="policy", data_schema=schema, errors=errors)
+
+    def _vehicle_form(self, step_id, user_input=None):
+        current = (
+            self.config_entry.options.get(VEHICLES, {}).get(
+                self._editing_vehicle_id, {}
+            )
+            if self._editing_vehicle_id
+            else {}
+        )
+        defaults = {**current, **(user_input or {})}
+        return self.async_show_form(
+            step_id=step_id,
+            errors={"base": self._vehicle_error} if self._vehicle_error else {},
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name", default=defaults.get("name", "")): cv.string,
+                    (
+                        vol.Optional("soc_entity", default=defaults["soc_entity"])
+                        if defaults.get("soc_entity")
+                        else vol.Optional("soc_entity")
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        "target_soc", default=defaults.get("target_soc", 80)
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                    vol.Optional(
+                        "usable_battery_kwh",
+                        default=defaults.get("usable_battery_kwh", ""),
+                    ): vol.Any("", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
+                    vol.Optional(
+                        "max_ac_charge_kw",
+                        default=defaults.get("max_ac_charge_kw", ""),
+                    ): vol.Any("", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
+                    vol.Optional(
+                        "external_identifier",
+                        default=defaults.get("external_identifier", ""),
+                    ): cv.string,
+                    vol.Optional(
+                        "ha_user_id", default=defaults.get("ha_user_id", "")
+                    ): cv.string,
+                }
+            ),
+        )
+
+    def _save_vehicle(self, user_input):
+        profiles = dict(self.config_entry.options.get(VEHICLES, {}))
+        vehicle_id = self._editing_vehicle_id or uuid4().hex
+        profiles[vehicle_id] = dict(user_input)
+        try:
+            validate_profiles(profiles, self._charger_names())
+            registry = async_entity_registry_get(self.hass)
+            for key in VEHICLE_FACT_KEYS:
+                entity_id = "sensor." + suggested_entity_object_id(
+                    profiles[vehicle_id]["name"], key
+                )
+                registered = registry.async_get(entity_id)
+                expected = f"{DOMAIN}_vehicle_{vehicle_id}_{key}"
+                if registered is not None and registered.unique_id != expected:
+                    raise ValueError("entity_name_collision")
+                if registered is None and self.hass.states.get(entity_id) is not None:
+                    raise ValueError("entity_name_collision")
+        except (ValueError, KeyError, TypeError):
+            self._vehicle_error = "invalid_vehicle_configuration"
+            return None
+        data = dict(self.config_entry.options)
+        data[VEHICLES] = profiles
+        return self.async_create_entry(title="", data=data)
+
+    async def async_step_add_vehicle(self, user_input=None):
+        """Create one user-defined Vehicle, no OEM discovery."""
+        self._editing_vehicle_id = None
+        self._vehicle_error = None
+        if user_input is not None:
+            result = self._save_vehicle(user_input)
+            if result is not None:
+                return result
+        return self._vehicle_form("add_vehicle", user_input)
+
+    async def async_step_edit_vehicle(self, user_input=None):
+        """Choose an existing Vehicle; stable ID is never changed on rename."""
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        if not profiles:
+            return self.async_abort(reason="no_vehicles")
+        if user_input is not None:
+            chosen = user_input["vehicle"]
+            if chosen in profiles:
+                self._editing_vehicle_id = chosen
+                return await self.async_step_update_vehicle()
+        return self.async_show_form(
+            step_id="edit_vehicle",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("vehicle"): vol.In(
+                        {key: obj["name"] for key, obj in profiles.items()}
+                    )
+                }
+            ),
+        )
+
+    async def async_step_update_vehicle(self, user_input=None):
+        if user_input is not None:
+            self._vehicle_error = None
+            result = self._save_vehicle(user_input)
+            if result is not None:
+                return result
+        return self._vehicle_form("update_vehicle", user_input)
+
+    async def async_step_assign_vehicle(self, user_input=None):
+        """Assignment is a Charger attribute; None is always allowed."""
+        known = self._charger_names()
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        previous = self.config_entry.options.get(ASSIGNMENTS, {})
+        errors = {}
+        if user_input is not None:
+            proposed = {
+                key.removeprefix("charger_"): vehicle
+                for key, vehicle in user_input.items()
+                if key.startswith("charger_")
+            }
+            try:
+                selected = validate_assignments(proposed, profiles, known)
+            except ValueError:
+                errors["base"] = "invalid_assignment"
+            else:
+                data = dict(self.config_entry.options)
+                data[ASSIGNMENTS] = selected
+                return self.async_create_entry(title="", data=data)
+        available = {
+            "": "None (no Vehicle)",
+            **{key: obj["name"] for key, obj in profiles.items()},
+        }
+        schema = {
+            vol.Optional(
+                f"charger_{entry_id}", default=previous.get(entry_id, "")
+            ): vol.In(available)
+            for entry_id in sorted(known)
+        }
+        return self.async_show_form(
+            step_id="assign_vehicle", data_schema=vol.Schema(schema), errors=errors
+        )
