@@ -130,6 +130,135 @@ def _source(hass, entity_id, *, quantity=None):
     return result
 
 
+def _local_execution_diagnostics(hass, charger):
+    """Trace the original Local decision without invoking the native writer.
+
+    This mirrors coordinator.update_state's existing prerequisites and price
+    overrides. It is an observation only, not an independent scheduler.
+    """
+    from .helpers.coordinator import get_charging_value
+
+    schedule = getattr(charger, "_charging_schedule", None)
+    try:
+        current_slot = get_charging_value(schedule) if schedule is not None else None
+    except (TypeError, ValueError, KeyError):
+        current_slot = None
+    price = _finite(getattr(getattr(charger, "sensor", None), "current_price", None))
+    soc = _finite(getattr(charger, "ev_soc", None))
+    target = _finite(getattr(charger, "ev_target_soc", None))
+    minimum = _finite(getattr(charger, "number_min_soc", None))
+    max_price = _finite(getattr(charger, "max_price", None))
+    active = getattr(charger, "switch_active", None) is True
+    connected = getattr(charger, "switch_ev_connected", None) is True
+    apply_limit = getattr(charger, "switch_apply_limit", None) is True
+    slot_on = current_slot is not None and current_slot != 0
+    allow_price = (
+        price is not None
+        and max_price is not None
+        and (
+            price < max_price
+            or not apply_limit
+            or (soc is not None and minimum is not None and soc < minimum)
+        )
+    )
+    desired = (
+        slot_on
+        and soc is not None
+        and minimum is not None
+        and allow_price
+        and connected
+        and active
+    )
+    low_price = (
+        active
+        and connected
+        and getattr(charger, "switch_low_price_charging", None) is True
+        and price is not None
+        and _finite(getattr(charger, "low_price_charging", None)) is not None
+        and price <= _finite(getattr(charger, "low_price_charging", None))
+    )
+    low_soc = (
+        active
+        and connected
+        and getattr(charger, "switch_low_soc_charging", None) is True
+        and soc is not None
+        and _finite(getattr(charger, "low_soc_charging", None)) is not None
+        and soc < _finite(getattr(charger, "low_soc_charging", None))
+    )
+    desired = bool(desired or low_price or low_soc)
+    target_reached = soc is not None and target is not None and soc >= target
+    if target_reached:
+        desired = False
+    keep_on = (
+        getattr(charger, "switch_keep_on", None) is True
+        and not apply_limit
+        and connected
+        and (
+            target_reached
+            or getattr(charger, "switch_keep_on_completion_time", None) is not None
+        )
+    )
+    if keep_on:
+        desired = True
+    in_initialization = False
+    initial_check = getattr(charger, "is_during_intialization", None)
+    if callable(initial_check):
+        try:
+            in_initialization = bool(initial_check())
+        except (AttributeError, TypeError):
+            in_initialization = False
+    if in_initialization:
+        desired = False
+    internal_on = getattr(charger, "auto_charging_state", None) == "on"
+    switch = getattr(getattr(charger, "charger_switch", None), "entity_id", None)
+    readback = _source(hass, switch, quantity="switch")
+    actual = readback.get("state")
+    missing = []
+    if not active:
+        missing.append("smart_charging_not_active")
+    if not connected:
+        missing.append("ev_not_connected")
+    if soc is None:
+        missing.append("soc_unknown")
+    if target is None:
+        missing.append("target_soc_unknown")
+    if price is None:
+        missing.append("current_price_unknown")
+    if schedule is None:
+        missing.append("schedule_unavailable")
+    elif not slot_on:
+        missing.append("current_quarter_not_scheduled")
+    if slot_on and not allow_price and not (low_price or low_soc):
+        missing.append("price_limit_blocks_start")
+    if target_reached and not keep_on:
+        missing.append("target_reached")
+    if in_initialization:
+        missing.append("initialization_hold")
+    return {
+        "current_quarter_planned_on": slot_on,
+        "current_quarter_slot_known": current_slot is not None,
+        "current_price_eur_or_native_unit": price,
+        "price_limit_active": apply_limit,
+        "price_limit_value": max_price,
+        "expected_on_by_legacy_rules": desired,
+        "local_internal_commanded_on": internal_on,
+        "native_switch_readback": readback,
+        "native_switch_matches_decision": (
+            actual == ("on" if desired else "off") if actual is not None else None
+        ),
+        "reconciliation_needed": (
+            actual != ("on" if desired else "off") if actual is not None else None
+        ),
+        "next_internal_action": (
+            "start" if desired and not internal_on
+            else "stop" if not desired and internal_on
+            else "none"
+        ),
+        "decision_blockers": missing,
+        "manual_or_low_price_override": bool(low_price or low_soc or keep_on),
+    }
+
+
 def _charger_diagnostics(hass, charger, manager=None):
     """One native charger: Local configuration and read-only source evidence."""
     opts = charger.config_entry.options
@@ -195,6 +324,9 @@ def _charger_diagnostics(hass, charger, manager=None):
     return {
         "mode": "coordinated" if supervised else "local",
         "native_control_owner": "original_evsc_coordinator",
+        "local_execution": (
+            _local_execution_diagnostics(hass, charger) if not supervised else None
+        ),
         "enabled": getattr(charger, "switch_active", None),
         "ev_connected": getattr(charger, "switch_ev_connected", None),
         "keep_on": getattr(charger, "switch_keep_on", None),
