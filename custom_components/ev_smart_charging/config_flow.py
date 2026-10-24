@@ -270,9 +270,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         previous = self.config_entry.options
         errors = {}
         if user_input is not None:
-            requested = [
-                e for e in user_input.get("participants", ()) if e in known
-            ]
+            requested = [e for e in user_input.get("participants", ()) if e in known]
             # A safety hold that only prevents native commands is not enough:
             # admission would also switch OFF the Local planner. Reject
             # newly selected participants until Coordinated is field-approved.
