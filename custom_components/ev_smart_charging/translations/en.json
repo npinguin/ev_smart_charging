@@ -133,7 +133,8 @@
       "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
       "charging_state_entity_not_found": "Charging state entity not found.",
       "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete.",
-      "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles."
+      "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
+      "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names."
     },
     "abort": {
       "no_vehicles": "No Vehicles configured. Add a Vehicle first."
