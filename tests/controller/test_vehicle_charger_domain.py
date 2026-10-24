@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.ev_smart_charging.domain import (
     Assignment,
+    ChargeController,
     ChargeIntent,
     Charger,
     Vehicle,
@@ -234,3 +235,57 @@ def test_required_device_identity_and_optional_external_reference_validation():
         Vehicle("audi", " ")
     with pytest.raises(ValueError, match="external_identifier_must_be_nonempty"):
         Charger("black", "Garage Black", external_identifier=" ")
+
+
+def test_controller_never_has_its_own_vehicle_assignment():
+    """Vehicle is selected on the Charger, not on the planning Controller."""
+    controller = ChargeController(
+        "controller", "EVSC Charge Controller", mode="local",
+        charger_ids=("black", "white"),
+    )
+    assert controller.mode == "local"
+    assert controller.charger_ids == ("black", "white")
+    assert not hasattr(controller, "selected_vehicle_id")
+    assert not hasattr(controller, "vehicle_id")
+    assert not hasattr(controller, "assignment")
+
+
+@pytest.mark.parametrize("mode", ["local", "coordinated"])
+def test_controller_accepts_no_vehicle_assignment_and_no_chargers(mode):
+    controller = ChargeController("controller", "EVSC Controller", mode=mode)
+    assert controller.charger_ids == ()
+    contexts = resolve_charging_contexts({}, {}, (), {}, {}, {})
+    assert contexts == {}
+
+
+@pytest.mark.parametrize("mode", ["local", "coordinated"])
+def test_connected_charger_without_assigned_vehicle_is_observed_not_planned(mode):
+    """None is a valid choice even when charger is physically connected."""
+    controller = ChargeController(
+        "controller", "EVSC Controller", mode=mode, charger_ids=("black",)
+    )
+    contexts = resolve_charging_contexts(
+        {"black": Charger("black", "Garage Black", max_ac_power_kw=11)},
+        {},
+        (),  # selected_vehicle_id = None; no synthetic Guest assigned
+        {},
+        {},
+        {"black": True},
+    )
+    context = contexts[controller.charger_ids[0]]
+    assert context.status == "unassigned"
+    assert context.vehicle_id is None
+    assert context.target_soc_percent is None
+    assert context.ready_by is None
+    assert context.required_battery_kwh is None
+    assert context.effective_max_ac_kw is None
+    assert context.estimated_quarters is None
+    assert not context.planning_ready
+
+
+def test_controller_cannot_duplicate_charger_members():
+    with pytest.raises(ValueError, match="duplicate_controller_chargers"):
+        ChargeController(
+            "controller", "EVSC Controller",
+            charger_ids=("black", "black"),
+        )
