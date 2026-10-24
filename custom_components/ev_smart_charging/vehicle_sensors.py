@@ -12,7 +12,12 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import DOMAIN, NAME
 from .domain import suggested_entity_object_id
-from .vehicle_config import VEHICLES, read_vehicle_soc, vehicle_from_profile
+from .vehicle_config import (
+    VEHICLES,
+    VEHICLE_FACT_KEYS,
+    read_vehicle_soc,
+    vehicle_from_profile,
+)
 
 
 class EVSCVehicleSensor(SensorEntity):
@@ -113,12 +118,5 @@ def vehicle_sensors(entry):
     return [
         EVSCVehicleSensor(entry, vid, profile, key)
         for vid, profile in sorted(profiles.items())
-        for key in (
-            "soc",
-            "target_soc",
-            "battery_capacity",
-            "battery_energy",
-            "energy_required",
-            "source_status",
-        )
+        for key in VEHICLE_FACT_KEYS
     ]
