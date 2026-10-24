@@ -256,8 +256,9 @@ def test_local_execution_diagnostics_distinguishes_price_gate_from_safety_hold(h
     assert _local_execution_diagnostics(hass, native)["expected_on_by_legacy_rules"]
 
 
-
-def test_generic_source_reference_matches_home_assistant_sha256_without_leaking_id(hass):
+def test_generic_source_reference_matches_home_assistant_sha256_without_leaking_id(
+    hass,
+):
     """The optional local audit resolves exact source refs; no RHI dependency."""
     import hashlib
     from custom_components.ev_smart_charging.diagnostics import _ref, _source
