@@ -11,6 +11,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.entity_registry import async_get as async_entity_registry_get
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -360,9 +361,13 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default=defaults.get("name", "")): cv.string,
-                    vol.Optional(
-                        "soc_entity", default=defaults.get("soc_entity", "")
-                    ): cv.string,
+                    (
+                        vol.Optional("soc_entity", default=defaults["soc_entity"])
+                        if defaults.get("soc_entity")
+                        else vol.Optional("soc_entity")
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
                     vol.Optional(
                         "target_soc", default=defaults.get("target_soc", 80)
                     ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
