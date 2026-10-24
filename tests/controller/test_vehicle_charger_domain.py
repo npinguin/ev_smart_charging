@@ -240,7 +240,9 @@ def test_required_device_identity_and_optional_external_reference_validation():
 def test_controller_never_has_its_own_vehicle_assignment():
     """Vehicle is selected on the Charger, not on the planning Controller."""
     controller = ChargeController(
-        "controller", "EVSC Charge Controller", mode="local",
+        "controller",
+        "EVSC Charge Controller",
+        mode="local",
         charger_ids=("black", "white"),
     )
     assert controller.mode == "local"
@@ -286,6 +288,7 @@ def test_connected_charger_without_assigned_vehicle_is_observed_not_planned(mode
 def test_controller_cannot_duplicate_charger_members():
     with pytest.raises(ValueError, match="duplicate_controller_chargers"):
         ChargeController(
-            "controller", "EVSC Controller",
+            "controller",
+            "EVSC Controller",
             charger_ids=("black", "black"),
         )
