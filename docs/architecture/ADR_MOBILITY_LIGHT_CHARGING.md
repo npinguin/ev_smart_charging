@@ -15,6 +15,16 @@ EV Smart Charging (EVSC) is a **standalone, end-user configurable Mobility Light
 
 A single Home Assistant installation may have four Chargers and any number of user-defined Vehicles (including Guest). The user changes an assignment at a Charger; EVSC resolves the effective vehicle/charger capabilities and *then* computes demand and plans.
 
+## Home Assistant device model
+
+EVSC will expose **one HA Device per user-configured Vehicle** (logical vehicle), **one EVSC HA Device per Charger** (physical EVSE control facade), and **one Charge Controller HA Device** for group monitoring/policies.
+
+- Preserve the existing native EVSC charger config-entry/device identifiers and entity IDs on migration; do not create a duplicate Charger device for an existing Local entry.
+- New Vehicle devices get EVSC-owned stable IDs and vehicle-specific entities (SoC, target, charge intent, diagnostics), independently of their current Charger assignment.
+- Assignment is a user-editable selector/relationship. Reassigning a Vehicle must not rename either HA device, copy technical identifiers or re-register entities.
+- An EVSC Charger remains linked to its user-chosen native control switch/readbacks. Do **not** copy source vendor device `identifiers`, `connections` or registry ownership into the EVSC Device. Cross-device navigation can be added through supported HA links without source identity duplication.
+- The user configures plain HA entities through HA entity selectors; no branded vehicle/EVSE provider implementations or mandatory RHI dependencies.
+
 ## Deliberate non-goals
 
 - No full RHI Mobility stack, no RHI Foundation or RHI Energy dependency, and no HA device/vehicle integration abstraction/discovery framework. The user explicitly binds HA entities on each model.
