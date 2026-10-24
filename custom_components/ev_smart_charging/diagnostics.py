@@ -83,80 +83,24 @@ def _finite(value):
         return None
 
 
-# Stable pseudonymous references match sha256(entity_id)[:12] in HA Jinja
-# Developer Tools. They are NOT cryptographic anonymity or secret tokens.
-SAFE_SOURCE_PLATFORMS = frozenset(
-    {
-        "audiconnect",
-        "be_electricity_prices",
-        "cardata",
-        "cupra_eu_data_act",
-        "ev_smart_charging",
-        "frank_energie",
-        "input_number",
-        "mqtt",
-        "ocpp",
-        "peblar",
-        "rhi_energy",
-        "rhi_foundation",
-        "rhi_mobility",
-        "sensor",
-        "template",
-        "vag_connect",
-        "zwave_js",
-    }
-)
-
-
+# A source_ref can be matched locally with sha256(entity_id)[:12] in HA.
+# No raw entity/entry identifiers are included in the support export.
 def _ref(raw):
-    """Deterministic pseudonym; the Jinja audit resolves it locally."""
+    """Deterministic pseudonym for matching local HA source mapping."""
     if not raw or not isinstance(raw, str):
         return None
     return sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
 def _owner(hass, entity_id):
+    """Registry availability and generic integration type only."""
     if not isinstance(entity_id, str) or not entity_id:
         return None
     registered = async_get_entity_registry(hass).async_get(entity_id)
+    if registered is None:
+        return "unregistered"
     platform = getattr(registered, "platform", None)
-    return platform if platform in SAFE_SOURCE_PLATFORMS else "other_or_unregistered"
-
-
-def _soc_candidates(hass):
-    """Bounded candidate discovery, not an automatic vehicle match.
-
-    Candidate entity IDs and personal names are never exported; a local
-    read-only Jinja audit can resolve the stable short hashes if required.
-    """
-    values = []
-    for state in hass.states.async_all("sensor"):
-        identifier = state.entity_id.lower()
-        if not (
-            "evsc_bridge_" in identifier
-            or ("vehicle_soc" in identifier and ("rhi_" in identifier))
-        ):
-            continue
-        value = _finite(state.state)
-        if value is None or not 0 <= value <= 100:
-            continue
-        unit = state.attributes.get("unit_of_measurement")
-        if unit not in (None, "%"):
-            continue
-        values.append(
-            {
-                "source_ref": _ref(state.entity_id),
-                "soc_percent": value,
-                "source_platform": _owner(hass, state.entity_id),
-            }
-        )
-    values.sort(key=lambda x: x["source_ref"])
-    return {
-        "count": len(values),
-        "candidates": values[:32],
-        "truncated": len(values) > 32,
-        "interpretation": "unverified_candidates_not_vehicle_links",
-    }
+    return platform if isinstance(platform, str) and platform.isidentifier() else "other"
 
 
 def _source(hass, entity_id, *, quantity=None):
@@ -571,11 +515,7 @@ def _controller_diagnostics(hass, manager):
             "plan_coverage": manager.plan.coverage if manager.plan else None,
         },
         "unavailable_explanations": unavailable,
-        "source_mapping_audit": {
-            "entity_references": "sha256_first_12_hex",
-            "matching_script": "scripts/evsc_source_mapping_audit.jinja",
-            "candidate_vehicle_soc": _soc_candidates(hass),
-        },
+        "source_reference_format": "sha256_entity_id_first_12_hex",
         "charger_details": entries,
     }
 
