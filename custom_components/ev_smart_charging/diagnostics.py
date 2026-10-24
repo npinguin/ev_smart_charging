@@ -8,7 +8,6 @@ or raw Home Assistant state attributes.
 from __future__ import annotations
 
 from math import isfinite
-from time import monotonic
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -98,7 +97,7 @@ def _source(hass, entity_id, *, quantity=None):
         return result
     result["status"] = "present"
     unit = state.attributes.get("unit_of_measurement")
-    if unit in UNITS:
+    if isinstance(unit, str) and unit in UNITS:
         result["unit"] = unit
     if quantity in ("power", "energy", "soc"):
         value = _finite(state.state)
@@ -109,6 +108,7 @@ def _source(hass, entity_id, *, quantity=None):
         }[quantity]
         valid = (
             value is not None
+            and (unit is None or isinstance(unit, str))
             and unit in valid_units
             and (quantity != "soc" or 0 <= value <= 100)
             and (quantity not in ("power", "energy") or value >= 0)
