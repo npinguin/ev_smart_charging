@@ -14,6 +14,8 @@ import re
 from unicodedata import normalize
 from typing import Literal
 
+ControllerMode = Literal["local", "coordinated"]
+
 AssignmentStatus = Literal[
     "ready",
     "unassigned",
@@ -136,6 +138,33 @@ class Charger:
         if self.min_current_a is not None and self.max_current_a is not None:
             if self.min_current_a > self.max_current_a:
                 raise ValueError("min_current_exceeds_max")
+
+
+@dataclass(frozen=True)
+class ChargeController:
+    """One Local or Coordinated planner scope, never a Vehicle owner.
+
+    A Controller is valid with zero Chargers, or with Chargers assigned to
+    no Vehicle. In Local mode it monitors and schedules each Charger
+    independently; Coordinated adds shared group constraints. Neither mode
+    creates an implicit or default Vehicle assignment.
+    """
+
+    id: str
+    name: str
+    mode: ControllerMode = "local"
+    charger_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id or not self.id.strip():
+            raise ValueError("controller_id_required")
+        _valid_device_name(self.name)
+        if self.mode not in ("local", "coordinated"):
+            raise ValueError("invalid_controller_mode")
+        if any(not charger_id or not charger_id.strip() for charger_id in self.charger_ids):
+            raise ValueError("charger_id_required")
+        if len(self.charger_ids) != len(set(self.charger_ids)):
+            raise ValueError("duplicate_controller_chargers")
 
 
 @dataclass(frozen=True)
