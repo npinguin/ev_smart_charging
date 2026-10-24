@@ -44,7 +44,8 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
                 await hass.config_entries.async_setup(entry.entry_id)
             await hass.async_block_till_done()
         controllers = [
-            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
         assert len(controllers) == 1
@@ -115,8 +116,10 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
 
 async def test_download_is_a_read_only_snapshot(hass):
     controller_entry = SimpleNamespace(
-        entry_id="controller", data={"__evsc_entry_type": "charge_controller"},
-        options={"participants": []}, version=1
+        entry_id="controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": []},
+        version=1,
     )
     manager = ChargeSupervisor(hass, controller_entry)
     manager.rebuild = MagicMock()
