@@ -100,7 +100,9 @@ def _owner(hass, entity_id):
     if registered is None:
         return "unregistered"
     platform = getattr(registered, "platform", None)
-    return platform if isinstance(platform, str) and platform.isidentifier() else "other"
+    return (
+        platform if isinstance(platform, str) and platform.isidentifier() else "other"
+    )
 
 
 def _source(hass, entity_id, *, quantity=None):
