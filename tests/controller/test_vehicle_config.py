@@ -1,6 +1,7 @@
 """Mobility Light directly uses HA entities, devices and Controller options."""
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.data_entry_flow import FlowResultType
@@ -8,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
 from custom_components.ev_smart_charging.domain import suggested_entity_object_id
+from custom_components.ev_smart_charging.select import VehicleAssignmentSelect
 from custom_components.ev_smart_charging.vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
@@ -173,3 +175,69 @@ async def test_controller_vehicle_add_and_clear_assignment_with_flow(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert controller.options[ASSIGNMENTS] == {}
     assert controller.options.get("participants") == []
+
+
+async def test_charger_select_assigns_and_clears_without_changing_local_runtime(hass):
+    charger = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="black",
+        title="Garage Black",
+        data={"device_name": "Garage Black"},
+        options={"maximum_price": 0.30},
+        version=8,
+    )
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller",
+        title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={
+            "participants": [],
+            VEHICLES: {"audi": {"name": "Audi Q8", "target_soc": 80}},
+        },
+        version=8,
+    )
+    charger.add_to_hass(hass)
+    controller.add_to_hass(hass)
+    entity = VehicleAssignmentSelect(charger)
+    entity.hass = hass
+    entity.async_write_ha_state = MagicMock()
+    assert entity._attr_suggested_object_id == "garage_black_assigned_vehicle"
+    assert entity.options == ["None", "Audi Q8"]
+    assert entity.current_option == "None"
+
+    await entity.async_select_option("Audi Q8")
+    assert controller.options[ASSIGNMENTS] == {"black": "audi"}
+    assert entity.current_option == "Audi Q8"
+    assert controller.options["participants"] == []
+    assert charger.options["maximum_price"] == 0.30
+
+    await entity.async_select_option("None")
+    assert controller.options[ASSIGNMENTS] == {}
+    assert entity.current_option == "None"
+
+
+async def test_charger_select_rejects_assignment_conflict(hass):
+    black = MockConfigEntry(
+        domain=DOMAIN, entry_id="black", title="Garage Black",
+        data={"device_name": "Garage Black"}, version=8,
+    )
+    white = MockConfigEntry(
+        domain=DOMAIN, entry_id="white", title="Garage White",
+        data={"device_name": "Garage White"}, version=8,
+    )
+    controller = MockConfigEntry(
+        domain=DOMAIN, entry_id="controller", title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={
+            VEHICLES: {"audi": {"name": "Audi Q8", "target_soc": 80}},
+            ASSIGNMENTS: {"white": "audi"},
+        }, version=8,
+    )
+    for entry in (black, white, controller):
+        entry.add_to_hass(hass)
+    entity = VehicleAssignmentSelect(black)
+    entity.hass = hass
+    with pytest.raises(ValueError, match="vehicle_already_assigned"):
+        await entity.async_select_option("Audi Q8")
+    assert controller.options[ASSIGNMENTS] == {"white": "audi"}
