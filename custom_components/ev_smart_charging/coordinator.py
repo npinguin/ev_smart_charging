@@ -441,11 +441,11 @@ class EVSmartChargingCoordinator:
                     self.switch_keep_on_completion_time = (
                         self.scheduler.get_charging_stop_time()
                     )
-                await self.turn_on_charging()
+                await self.turn_on_charging(reason="automatic")
             if not turn_on_charging and current_value:
                 # Turn off charging
                 self.auto_charging_state = STATE_OFF
-                await self.turn_off_charging()
+                await self.turn_off_charging(reason="automatic")
 
             if (
                 self.scheduler.charging_stop_time is not None
@@ -545,7 +545,7 @@ class EVSmartChargingCoordinator:
                     self.auto_charging_state = STATE_ON
             else:
                 self.auto_charging_state = STATE_OFF
-                await self.turn_off_charging()
+                await self.turn_off_charging(reason="automatic")
 
     async def turn_on_charging(self, state: bool = True, *, reason: str = "manual"):
         """Existing physical writer; fail closed before any supervised ON."""
@@ -609,9 +609,9 @@ class EVSmartChargingCoordinator:
                     target={"entity_id": self.charger_switch.entity_id},
                 )
 
-    async def turn_off_charging(self):
-        """Turn off charging"""
-        await self.turn_on_charging(False)
+    async def turn_off_charging(self, *, reason: str = "manual"):
+        """Turn off charging through the original native writer."""
+        await self.turn_on_charging(False, reason=reason)
 
     async def add_sensor(self, sensors: list[EVSmartChargingSensor]):
         """Set up sensor"""
