@@ -23,13 +23,11 @@ def test_optional_none_vehicle_assignment_is_first_class():
     models = {"audi": {"name": "Audi Q8", "target_soc": 80}}
     chargers = {"black": "Garage Black", "peblar": "Peblar Outside"}
     assert validate_assignments({"black": "", "peblar": None}, models, chargers) == {}
-    assert validate_assignments({"black": "audi", "peblar": None}, models, chargers) == {
-        "black": "audi"
-    }
+    assert validate_assignments(
+        {"black": "audi", "peblar": None}, models, chargers
+    ) == {"black": "audi"}
     with pytest.raises(ValueError, match="vehicle_already_assigned"):
-        validate_assignments(
-            {"black": "audi", "peblar": "audi"}, models, chargers
-        )
+        validate_assignments({"black": "audi", "peblar": "audi"}, models, chargers)
 
 
 def test_profiles_guard_device_led_entity_naming_and_user_identity():
@@ -96,8 +94,10 @@ def test_vehicle_ha_device_sensor_names_and_units(hass):
         options={
             VEHICLES: {
                 "audi": {
-                    "name": "Audi Q8", "soc_entity": "sensor.audi_soc",
-                    "target_soc": 80, "usable_battery_kwh": 18,
+                    "name": "Audi Q8",
+                    "soc_entity": "sensor.audi_soc",
+                    "target_soc": 80,
+                    "usable_battery_kwh": 18,
                 }
             }
         }
