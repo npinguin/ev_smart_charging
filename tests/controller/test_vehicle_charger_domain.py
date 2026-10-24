@@ -197,8 +197,10 @@ def test_legacy_soc_rate_is_validated_at_assignment():
 
 def test_ha_user_identity_is_optional_and_does_not_grant_native_control():
     vehicle = Vehicle(
-        "audi", "Audi Q8", external_identifier="user-defined-vehicle-code",
-        ha_user_id="opaque-ha-user-id"
+        "audi",
+        "Audi Q8",
+        external_identifier="user-defined-vehicle-code",
+        ha_user_id="opaque-ha-user-id",
     )
     assert vehicle.id == "audi"
     assert vehicle.ha_user_id == "opaque-ha-user-id"
