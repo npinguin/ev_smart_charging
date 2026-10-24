@@ -1,5 +1,17 @@
 # Charge Controller — qualification and acceptance evidence
 
+## v2.6.0-rc.6 — Local automatic charging recovery candidate (2026-10-24)
+
+RHI Mobility field screenshot: Garage Black 28% SoC, charger connected and scheduled, but status "Waiting for charging to begin" and zero reported kW. Screenshot alone does not prove current quarter should have started: the next price window appears around 10:00 and visible Ready By comparison belongs to the bridge. Native EVSC must be investigated independently of the UX. Original Local execution calls native `switch.turn_on` only if the current quarter and all Active/Connected/price/SoC conditions permit. P0 Coordinated hold does not apply to Local.
+
+Verified code defect in the original Local resilience path: with no optional charging-state sensor configured, the existing 5-minute `periodic_check_charging_state` did nothing. If the native Start command failed or was ignored, Local's internal expected ON state could remain ON without any retry. New fallback checks the configured native switch **only when its readback is explicitly OFF and Local already expects ON**; unknown/unavailable reads, no planned Start, and Coordinated participants must issue no new command. Existing retry cadence remains every five minutes, no high-frequency service spam.
+
+Proof required for software Gate A: end-to-end native Local Start → deduplicate repeated update → Stop, future-quarter no-op, known-OFF fallback retry, unknown/unavailable suppression and Coordinated suppression; on all supported Python versions >=90% coverage and HACS/Hassfest, Black, upstream and original Local. The diagnostics entry/device JSON includes current slot, start decision blockers, native readback and last requested native command, without raw names/IDs.
+
+This candidate **does not establish that a real on-target failure occurred**; diagnose actual charger and EVSC native entity states separately. Hard-coded `COORDINATED_ACTUATION_ENABLED=False` remains unchanged, no physical Coordinated testing and P0 #5 stays OPEN. Publish only an explicitly labeled guarded HACS prerelease from the exact tested SHA.
+
+---
+
 ## v2.6.0-rc.5 HACS diagnostics candidate — 2026-10-24
 
 User-reported missing native diagnostics download in rc4. The new `diagnostics.py` exports safely redacted JSON from HA's config-entry and device menus on all four existing chargers and the singleton controller. It includes source quality, Local schedule status, coverage/Unknown explanations and P0 quarantine. No raw entity or entry identifiers, usernames, network/source attribute payloads, tokens or physical actuation. HA-managed tests verify the five-entry/device path, privacy sentinels and read-only behavior. Release is permitted only after full exact-head nine-job Gate A plus hard `COORDINATED_ACTUATION_ENABLED=False` check. Still not physically certified: P0 #5 remains OPEN, no Coordinated retest, main merge or stable approval.
