@@ -49,9 +49,7 @@ async def test_individual_source_listener_runs_in_home_assistant_event_loop(hass
         await hass.async_block_till_done()
         assert fact.async_write_ha_state.call_count == 1
 
-        hass.states.async_set(
-            "sensor.ev_soc", "28", {"unit_of_measurement": "%"}
-        )
+        hass.states.async_set("sensor.ev_soc", "28", {"unit_of_measurement": "%"})
         await hass.async_block_till_done()
         assert fact.async_write_ha_state.call_count == 2
     finally:
