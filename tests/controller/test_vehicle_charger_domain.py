@@ -60,20 +60,24 @@ def test_vehicle_can_move_between_chargers_without_editing_vehicle_profile():
 
 
 def test_duplicate_vehicle_claim_never_picks_a_random_charger():
-    result = _resolve((
-        Assignment("audi", "black"),
-        Assignment("audi", "white"),
-    ))
+    result = _resolve(
+        (
+            Assignment("audi", "black"),
+            Assignment("audi", "white"),
+        )
+    )
     assert result["black"].status == "vehicle_claim_conflict"
     assert result["white"].status == "vehicle_claim_conflict"
     assert not result["black"].planning_ready
 
 
 def test_duplicate_charger_claim_cannot_select_a_random_vehicle():
-    result = _resolve((
-        Assignment("audi", "black"),
-        Assignment("guest", "black"),
-    ))
+    result = _resolve(
+        (
+            Assignment("audi", "black"),
+            Assignment("guest", "black"),
+        )
+    )
     assert result["black"].status == "charger_claim_conflict"
     assert result["black"].vehicle_id is None
 
@@ -88,7 +92,10 @@ def test_explicit_manual_assignment_and_native_connection_are_sufficient():
 
 def test_missing_physical_connection_and_unknown_soc_fail_closed():
     assignment = (Assignment("audi", "black"),)
-    assert _resolve(assignment, connected={"black": None})["black"].status == "not_connected"
+    assert (
+        _resolve(assignment, connected={"black": None})["black"].status
+        == "not_connected"
+    )
     assert _resolve(assignment, soc=None)["black"].status == "soc_unknown"
 
 
@@ -116,10 +123,13 @@ def test_missing_vehicle_capabilities_are_unknown_not_default_11kw():
     assert context.effective_max_ac_kw is None
 
 
-@pytest.mark.parametrize("vehicle", [
-    Vehicle("audi", usable_battery_kwh=18),
-    Vehicle("audi", max_ac_charge_kw=7.4),
-])
+@pytest.mark.parametrize(
+    "vehicle",
+    [
+        Vehicle("audi", usable_battery_kwh=18),
+        Vehicle("audi", max_ac_charge_kw=7.4),
+    ],
+)
 def test_vehicle_profiles_are_independent_of_charger(vehicle):
     assert vehicle.id == "audi"
 
@@ -170,9 +180,7 @@ def test_missing_charging_rate_does_not_invent_time_or_power():
 
 def test_legacy_soc_rate_does_not_travel_with_vehicle_to_different_evse():
     """Legacy %/h belongs to one assigned vehicle/charger combination."""
-    first = _resolve(
-        (Assignment("audi", "black", estimated_soc_pct_per_hour=6),)
-    )
+    first = _resolve((Assignment("audi", "black", estimated_soc_pct_per_hour=6),))
     moved = _resolve((Assignment("audi", "white"),))
     # Both use physical vehicle+charger max AC; assignment fallback is unused.
     assert first["black"].required_battery_kwh == moved["white"].required_battery_kwh
