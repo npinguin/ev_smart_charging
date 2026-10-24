@@ -137,8 +137,8 @@ def test_original_local_soc_per_hour_path_without_battery_kwh():
     """A Local owner must not be forced to configure additional OEM facts."""
     result = resolve_charging_contexts(
         {"black": Charger("black")},
-        {"guest": Vehicle("guest", charging_pct_per_hour=10)},
-        (Assignment("guest", "black"),),
+        {"guest": Vehicle("guest")},
+        (Assignment("guest", "black", estimated_soc_pct_per_hour=10),),
         {"guest": VehicleState("guest", 30)},
         {"guest": ChargeIntent("guest", 80)},
         {"black": True},
@@ -166,3 +166,20 @@ def test_missing_charging_rate_does_not_invent_time_or_power():
     )
     assert result["black"].status == "charging_rate_unknown"
     assert result["black"].estimated_quarters is None
+
+
+def test_legacy_soc_rate_does_not_travel_with_vehicle_to_different_evse():
+    """Legacy %/h belongs to one assigned vehicle/charger combination."""
+    first = _resolve(
+        (Assignment("audi", "black", estimated_soc_pct_per_hour=6),)
+    )
+    moved = _resolve((Assignment("audi", "white"),))
+    # Both use physical vehicle+charger max AC; assignment fallback is unused.
+    assert first["black"].required_battery_kwh == moved["white"].required_battery_kwh
+    assert moved["white"].effective_max_ac_kw == 7.4
+    assert moved["black"].status == "unassigned"
+
+
+def test_legacy_soc_rate_is_validated_at_assignment():
+    with pytest.raises(ValueError, match="estimated_soc_pct_per_hour"):
+        Assignment("guest", "black", estimated_soc_pct_per_hour=-1)
