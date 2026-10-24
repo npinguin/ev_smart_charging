@@ -58,7 +58,9 @@ class EVSCVehicleSensor(SensorEntity):
     def native_value(self):
         soc = read_vehicle_soc(self.hass, self.profile)
         target = float(self.profile.get("target_soc", 80))
-        capacity = vehicle_from_profile(self.vehicle_id, self.profile).usable_battery_kwh
+        capacity = vehicle_from_profile(
+            self.vehicle_id, self.profile
+        ).usable_battery_kwh
         if self.key == "soc":
             return soc
         if self.key == "target_soc":
@@ -66,7 +68,9 @@ class EVSCVehicleSensor(SensorEntity):
         if self.key == "battery_capacity":
             return capacity
         if self.key == "battery_energy":
-            return round(capacity * soc / 100, 4) if soc is not None and capacity else None
+            return (
+                round(capacity * soc / 100, 4) if soc is not None and capacity else None
+            )
         if self.key == "energy_required":
             return (
                 round(capacity * max(0, target - soc) / 100, 4)
