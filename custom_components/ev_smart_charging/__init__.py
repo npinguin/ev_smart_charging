@@ -3,9 +3,10 @@
 import asyncio
 import logging
 
-from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, SOURCE_IMPORT
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
-from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant, callback
+
 try:
     from homeassistant.core import SupportsResponse
 except ImportError:
@@ -44,51 +45,65 @@ CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
-async def async_setup(hass: HomeAssistant, _config) -> bool:
-    """Bootstrap the singleton after HA startup, not during EVSC entry setup.
-
-    Reentering config-entry setup while forwarding charger platforms can
-    cause the same source entry to be loaded twice (and breaks upstream).
-    """
-    async def ensure_controller():
-        if not any(
-            entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
-            for entry in hass.config_entries.async_entries(DOMAIN)
-        ):
-            await hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": SOURCE_IMPORT},
-                data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
-            )
-
-    if SupportsResponse is not None:
-        async def get_charge_plan(_call):
-            controller = next(
-                (obj for obj in hass.data.get(DOMAIN, {}).values()
-                 if isinstance(obj, ChargeSupervisor)),
-                None,
-            )
-            if controller is None:
-                return {
-                    "schema_version": "1.0",
-                    "status": "CONTROLLER_NOT_READY",
-                    "chargers": [],
-                }
-            return controller.plan_payload()
-
-        hass.services.async_register(
-            DOMAIN, "get_charge_plan", get_charge_plan,
-            supports_response=SupportsResponse.ONLY,
+async def _ensure_controller(hass: HomeAssistant) -> None:
+    """Import exactly one persistent controller after managed charger startup."""
+    if not any(
+        entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    ):
+        await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
         )
 
-    if not hass.is_running:
-        # When EVSC is installed into an already-running HA instance, its
-        # singleton is bootstrapped at the next normal HA start. Reentering
-        # config-entry setup here would race existing platform forwarding.
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED,
-            lambda _event: hass.async_create_task(ensure_controller()),
+
+def _register_charge_plan_service(hass: HomeAssistant) -> None:
+    """Expose the read-only controller response when EVSC first loads."""
+    if SupportsResponse is None or hass.services.has_service(DOMAIN, "get_charge_plan"):
+        return
+
+    async def get_charge_plan(_call):
+        controller = next(
+            (
+                obj
+                for obj in hass.data.get(DOMAIN, {}).values()
+                if isinstance(obj, ChargeSupervisor)
+            ),
+            None,
         )
-    return True
+        if controller is None:
+            return {
+                "schema_version": "1.0",
+                "status": "CONTROLLER_NOT_READY",
+                "chargers": [],
+            }
+        return controller.plan_payload()
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_charge_plan",
+        get_charge_plan,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+
+def _queue_controller_bootstrap(hass: HomeAssistant) -> None:
+    """Schedule import outside platform forwarding, at most once per HA run."""
+    bootstrap_marker = f"{DOMAIN}_controller_bootstrap_queued"
+    if hass.data.get(bootstrap_marker):
+        return
+    hass.data[bootstrap_marker] = True
+    if hass.is_running:
+        hass.async_create_task(_ensure_controller(hass))
+    else:
+
+        @callback
+        def _on_hass_started(_event):
+            """Schedule bootstrap on the event loop, not a worker thread."""
+            hass.async_create_task(_ensure_controller(hass))
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_hass_started)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -99,13 +114,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data.setdefault(DOMAIN, {})
         _LOGGER.debug(STARTUP_MESSAGE)
 
+    _register_charge_plan_service(hass)
+
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
         hass.data[DOMAIN][entry.entry_id] = ChargeSupervisor(hass, entry)
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
-                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+                await hass.config_entries.async_forward_entry_setups(
+                    entry, [Platform.SENSOR]
+                )
             else:
-                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+                await hass.config_entries.async_forward_entry_setup(
+                    entry, Platform.SENSOR
+                )
             entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             await hass.data[DOMAIN][entry.entry_id].async_start()
         except Exception:
@@ -158,6 +179,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         device.id, name_by_user=entry.title
                     )
 
+    # Home Assistant owns real config-entry transitions. Legacy callers that
+    # invoke async_setup_entry directly on an already-LOADED mock entry must
+    # never trigger a second setup from inside platform forwarding.
+    if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
+        _queue_controller_bootstrap(hass)
 
     return True
 
@@ -192,17 +218,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unloaded
 
 
-# Global lock
-ev_smart_charging_lock = asyncio.Lock()
-
-
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
+    """Use HA-managed reload so async_on_unload unregisters old listeners.
+
+    Direct calls to this module's unload/setup bypass ConfigEntry cleanup,
+    multiplying options listeners after each mode or configuration change.
+    """
     _LOGGER.debug("async_reload_entry")
-    # Make sure setup is completed before next unload is started.
-    async with ev_smart_charging_lock:
-        await async_unload_entry(hass, entry)
-        await async_setup_entry(hass, entry)
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_migrate_entry(hass, config_entry: ConfigEntry):

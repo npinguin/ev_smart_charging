@@ -1,5 +1,202 @@
 # EV Smart Charging — Current Engineering Handover
 
+## 2026-10-24 — Local-to-Coordinated migration: HARD NO GO pending P0
+
+**Field blocker observed:** HA Core 2026.10.3 reported 14 non-thread-safe entity writes at `sensor.py:323` (12:14:58–12:15:08), invoking `async_write_ha_state` via an undecorated event-listener lambda in a worker executor thread. This is an EVSC integration defect, not HA Core. Fix uses a named `@callback` on the Home Assistant event loop; native event subscriptions retain `self.async_on_remove` teardown. Regression tests execute actual state events, assert loop context, and remove the entity to check cleanup on supported HA versions.
+
+**Second blocker discovered:** controller Options could accept a new participant despite `COORDINATED_ACTUATION_ENABLED=False`. This changes planning ownership and can detach Local while no coordinated native commands are allowed. The Options form must reject **new** Coordinated admissions during P0 and preserve unchanged Local settings; existing quarantined participants must remain removable for rollback. Controller Options initialization must support old and new HA config flow lifecycle. Synthetic regression tests cover both directions. **Do not manually edit Options storage to bypass admission.**
+
+**Corrected with operator evidence (24 October 2026):** Garage Black's EVSC SoC of 100% is correct and exceeds the 80% target, so no Local Start is due. The alternative 30% RHI value is not evidence of an EVSC mapping defect and must not be treated as a release blocker. Analyze RHI's separate reading independently if relevant.
+
+**Release/field gates before onboarding even one charger:**
+1. Exact-head nine-job CI, including Python 3.11–3.14, HACS/Hassfest, formatting, Local native Start/Stop/retry and HA thread safety/lifecycle regression, passing with a version-matched HACS package.
+2. Confirm original four Local configurations/entity IDs, all relevant SoC/target/price/expected power/meter readbacks, start-quarter handling, dead-man/rollback, stale and unknown semantics, and no repeated HA errors on the real host.
+3. Plan comparison in non-actuating observation mode for **one** candidate charger, proving economically correct and DST/quarter-adjacent decisions with bounded runtime and complete diagnostics.
+4. Explicitly authorized, supervised physical Start/Stop with verified native response, independent operator/manual Stop, timeout/rollback and HA performance evidence, before the P0 hard switch is removed. This requires separate review and cannot be justified by CI or snapshots.
+5. Admit **only one** charger, observe multiple real planned starts/stops and no feedback loop, then sequentially increase to 2, 3, 4 with independent acceptance at each stage. Never migrate all four simultaneously or infer physical safety from planner output.
+
+**Engineering state:** the currently published rc6 still contains the thread-safety defect and cannot be considered ready for Coordinated field migration. The development branch patch alone is not installed on HA. No Coordinated actuation, main merge or stable release is authorized by this note. P0 issue #5 remains open.
+
+---
+
+## 2026-10-24 — Local automatic Start investigation and native readback recovery
+
+**Field observation:** User's RHI Mobility overview shows Garage Black connected, 28% SoC and an EVSC schedule but no measured power and "Waiting for charging to begin". The displayed price charging window begins around the screenshot's current time; this is NOT conclusive evidence a due-quarter Start was skipped. The RHI Mobility Automatic button is not proof of the original EVSC Smart Charging Active switch or native charger state. Original Charge Controller `LOCAL_MONITORING` means no supervised participants; the P0 Coordinated safety hold must not block Local.
+
+**Source review:** Original native Local code calculates the current charged quarter via `get_charging_value()`, checks Smart Charging Active, EV Connected, SoC, target, price-limit, overrides and initialization, and sends `switch.turn_on` only when the current quarter requires charging. This path remains independent from Coordinated's hard kill switch. Source-level regression tests now assert that an active Local quarter dispatches exactly one native Start, future quarters do not dispatch, and the end of a charging quarter dispatches Stop.
+
+**Confirmed Local resilience gap:** Previously `periodic_check_charging_state` returned unconditionally when the optional charging-state sensor was absent. A requested Start can be lost while Local internally believes it is ON, in which case no five-minute retry was available. The existing five-minute retry now checks a **known ON/OFF native switch readback** as a fallback, only while Local expects ON, and only for a confirmed OFF. Unknown/unavailable source values do not trigger a command, Coordinated supervision has an independent lifecycle and does not execute this retry. Do NOT poll cloud hardware at five seconds.
+
+**Diagnostic extensions:** a read-only Local decision trace (current slot, actual native switch readback, expected Start/Stop, exact unmet price/SoC/Active/Connected preconditions) and the last native command intent/time. `requested` means HA service request, not confirmed EVSE power. No identifiers or raw payload exported.
+
+**Release judgment:** Do not claim the reported missed Start is reproduced physically from this screenshot. Automated Local Start/Stop and retry regression plus all nine CI gates are required for a subsequent guarded HACS test candidate. On-target verification of the real Black charger state, EVSC Active switch, true current quarter and native readback is still needed. Original P0 incident #5 remains OPEN; never re-enable Coordinated by inference.
+
+---
+
+## Diagnostics: native HA entry and device export — 2026-10-24
+
+**Operator-observed problem on rc4:** 5 config entries / 159 entities (4 EVSC chargers + 1 Charge Controller), but no HA menu item for Download diagnostics; Controller shows LOCAL_MONITORING, 4 chargers / 2 with plan, ~4.75 planned hours, with Unknown aggregate kWh, EUR and measured power. This is not enough evidence to call the scheduler broken: aggregated EVSE power and actual cost require source coverage; Local hours exist independently of energy/currency validation. We must make quality and absence explicit.
+
+**Implemented in** `custom_components/ev_smart_charging/diagnostics.py` for **both** HA-native `async_get_config_entry_diagnostics` and `async_get_device_diagnostics`:
+- Expose Download diagnostics in the three-dot menu of all four original EVSC entries/devices and the singleton Charge Controller entry/device. No new entities, buttons, services, options or automatic writes.
+- Export only safe scalar values, anonymous charger_1..charger_N keys, source-role status (not configured / missing / unknown / unavailable / invalid value or unit / valid), coverage counters, Local schedule quality, expected power/SoC, plan summary, active peak status, 5-second sampling/queue health, P0 actuation hold, and explicit Unknown reasons.
+- No raw Options/data, names, street/address, entry IDs, entity IDs, unique identifiers, secrets, tokens, private attributes or provider payload. Defense-in-depth `async_redact_data` plus private-sentinel tests. Include distinct device scope and check device ownership.
+- HA diagnostics are **read only**: no plan rebuild, state update, config-entry reload, native physical Start/Stop, cloud/EVSE polling. Retain full v8 Local/native capability contract and four unaffected original config entries.
+- Test matrix: HA-managed 4-entry+controller diagnostics, five device reports, invalid/unknown/missing source classification, missing/unloaded entry, privacy-safe JSON, no rebuild/refresh, HACS/Hassfest, Local smoke, Python 3.11–3.14 >=90% coverage.
+
+**HACS v2.6.0-rc.5 release exception:** operator requested diagnostics in the HACS package immediately after rc4. Publish only after the isolated exact-sha nine-job CI Gate A and rc5 manifest/const versions agree; `COORDINATED_ACTUATION_ENABLED = False` must remain enforced. Existing physical P0 #5 is **not cleared**, and no Coordinated on-target actuation is approved. `main` and the earlier rc4 release remain untouched.
+
+---
+
+## Release exception — v2.6.0-rc.4 guarded HACS prerelease (2026-10-24)
+
+User explicitly requested a next HACS release after the software-only simplification of the 1..N coordinated controller. **Narrow exception** to the P0 "no new prerelease" hold: publish only **`v2.6.0-rc.4` as a Local-capable, coordinated-actuation-disabled prerelease** after all nine **exact release SHA** software CI jobs succeed. This is *not* permission to perform further physical Coordinated testing, clear P0 incident #5, deploy to the affected Home Assistant without backup, merge PR #3 or publish stable.
+
+- Hard switch **`COORDINATED_ACTUATION_ENABLED = False`** must be verified in the source tree by the publishing job and remain without config/UI override; a new Local -> Coordinated selection is rejected before Options change. Persisted Coordinated participants are non-actuating during startup. Original Local execution remains native.
+- Source-native HACS uses integration folder `custom_components/ev_smart_charging/`, independent from an optional manual ZIP asset. Manifest and code version must both be `2.6.0-rc.4`.
+- Operator must independently verify that HA is recovered and physical EVSE native control works before installing any test build; mandatory full backup/rollback and preserve four original Local config entries, Options and unique IDs.
+- Exact-head release workflow repeats HACS + Hassfest + Black + legacy Local + controller tests + Python 3.11–3.14 test/90% local coverage gates. Separate GitHub tag/release may be created only after those checks pass; no force/overwrite and no main merge.
+- Release status and issue status are separate: **published software candidate != field-certified coordinated charging**. Do not enable physical Coordinated actuation until field evidence, incident RCA and acceptance have been completed.
+
+---
+
+## P0 SIMPLIFICATION PASS — 1..N engine, Local-style execution (2026-10-24)
+
+**Engineering branch only; unmerged, no prerelease and physical Coordinated still disabled.** This section supersedes the historical event-driven architecture description below. The hard switch in `controller/safety.py` remains `COORDINATED_ACTUATION_ENABLED = False`.
+
+### What changed in source
+- **Root lifecycle fix:** the options listener now calls the Home Assistant-managed `hass.config_entries.async_reload(entry.entry_id)`. HA itself runs `async_on_unload` callbacks, preventing update-listener multiplication from manual unload/setup.
+- **Single 5-second supervisor sampler:** sample cached HA state only, not native network integrations. No runtime subscription to frequent native readback/power state events. Compare planning-relevant prices, per-EVSC effective tariff, SoC, target, usable/current/target stored kWh, Ready By, activation/connection, options, source availability, 15-minute UTC boundary, and peak-feasible EVSE sets. **Only material changes trigger the 1..N `build_plan()` engine**.
+- **Native execution separate from planning:** actual power/energy/switch readback feed cost/status and a controlled native reconciliation, never trigger a full group optimization by themselves. One bounded work queue remains for planning and reconciliation; teardown prevents stopped controllers from rebuilding or rearming.
+- **Peak safety:** monitor fresh site and EVSE power every 5 seconds; changed feasible combinations or a 90-second stable recovery trigger replanning, not every meter watt fluctuation. Peak remains a software load policy, not electrical protection. Keep fail-closed behavior, margins, manual pause and full-rate binary Stop/Resume.
+- **P0 native quarantine:** automatic EV-disconnect OFF from HA restored `EV Connected` is held for persisted Coordinated participants during the hard safety hold; explicit operator Stop and original Local disconnect behavior remain intact.
+- **Cardinality:** existing `build_plan` handles one to multiple coordinated chargers using the same code path. No separate one-charger coordinated engine.
+
+### Strict scope / no feature drift
+**Retained:** 4 unchanged v8 Local entries / original IDs, original Local price limits, opportunistic/low-SoC/keep-on/ready-time behavior, native writer, individual prices and effective EUR curves, optional native battery kWh, group power/concurrency/mixed kW, 15-minute UTC/DST, current-quarter commitment, rolling deadlines, non-duplicated Local+Coordinated totals, cost ledger, peak with manual latch and 90-second recovery, source ownership and native readback.
+
+**Migration boundary:** the original Local scheduler remains the established Local implementation until its complete configuration semantics are proven equivalent in the generalized `build_plan` planner. This is deliberate zero-drift compatibility, **not** a claim that Local was silently switched to another planner. Coordinated already uses the same 1..N group planner for a single charger or four chargers and the same native EVSC physical writer. Do not remove legacy Local behavior or introduce a second physical writer to meet a cosmetic 'single planner' objective.
+
+### Validation and release gates
+- New HA-managed repeated Options-reload test: no listener buildup, no surviving old controller or timer.
+- New polling/readback tests: raw native changes do not replan; price and SoC changes do; stopped controller cannot schedule or rearm; restoring disconnected Coordinated participants is passive during P0; Local disconnect is unaffected.
+- Explicit one-versus-four plan regression plus full existing functional/compatibility matrix.
+- **Status is code-in-review only:** current exact-head CI must pass after these commits, then operator-supervised four-entry drop-in / physical readback and rollback before any physical coordinated release. Never cite historical green runs as evidence of this new head.
+
+---
+
+## P0 FIELD INCIDENT — Coordinated HARD HOLD (2026-10-23)
+
+**FIELD ACCEPTANCE FAILED**: switching the Peblar EVSC entry Local → Coordinated made the user's entire Home Assistant installation unresponsive. The earlier thread-safety violation and this subsequent hang are separate observations. The event storm/feedback loop is a *plausible code-backed hypothesis*, not a proven single root cause without incident runtime logs. Track [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5).
+
+**Do NOT install/promote or run coordinated charging** from v2.6.0-rc.2/rc.3, or infer fitness from prior synthetic CI. Restore HA safely first. Real field tests STOP until independent OEM control confirmed and HA runtime is recovered.
+
+**Engineering containment on the isolated PR branch**: the `controller/safety.py` hard kill switch is `COORDINATED_ACTUATION_ENABLED = False` and has **no UI/config override**. Already-persisted Coordinated participants remain in storage but are prevented from automatic Start *and* Stop after restart; new Coordinated selection is rejected without writing Options. Unmodified Local behavior and native manual OFF must remain possible. The runtime's HA event listeners are `@callback` and source/peak state events use **one coalesced, debounced, rate-limited refresh worker**; identical state content is ignored; stop/unload cancels any pending runner. P0 tests stress 2000 HA events, write feedback, cancellation, persisted restart hold and native writer inactivity. Code CI on exact HEAD and real recovery evidence remain REQUIRED before considering any further field test.
+
+**HACS distribution hold**: `hacs-test-prerelease.yml` publication job is explicitly disabled during P0, even for a request-file change. This document does not authorize a tag, release, PR merge, or unattended native action. Re-enabling requires separate risk review, incident evidence and supervised live acceptance.
+
+---
+
+## HACS field-test prerelease exception — 2026-10-23
+
+The operator requested a **HACS-installable test prerelease** after the full Gate A passed (exact CI run [40019900033](https://github.com/npinguin/ev_smart_charging/actions/runs/40019900033)). This permits only a deliberately marked **`v2.6.0-rc.2` GitHub prerelease**, built from the isolated `fix/local-bootstrap-lifecycle` branch using `hacs-test-prerelease.yml`. Publication is contingent on a fresh exact-head full 9-job CI Gate A via the reusable `pull.yml`. The test ZIP is `ev_smart_charging.zip` with integration files at archive root. Manifest and code both read `2.6.0-rc.2`.
+
+This is a **test distribution**, NOT a stable/production release, not physical acceptance, and NOT permission to merge PR #3, modify `main`, or promote the frozen RC1. A full target HA backup, rollback files, 4 unchanged Local entries and initially passive controller remain mandatory. This explicit exception supersedes earlier blanket 'no tag before field-test' wording only for this **single isolated prerelease tag**.
+
+---
+
+## Current CI decision — 2026-10-23: Codecov OPTIONAL
+
+The operator explicitly approved optional external Codecov reporting. Both `.github/workflows/pull.yml` and `.github/workflows/push.yml` now enforce a **required local pytest minimum coverage of 90%** on Python 3.11–3.14, in addition to full test success. A failing or unavailable external Codecov report must **not** fail the CI job. OIDC reporting is retained as a best-effort integration.
+
+The observed baseline was approximately **91% coverage** on all four Python versions before this CI change. The updated workflow still requires verification on its exact branch HEAD.
+
+**HACS remains a separate mandatory release gate.** GitHub Issues is enabled; valid repository topics have not yet been configured. No field installation, release or main/feature branch merge is authorized. Historical entries below describe the earlier mandatory-Codecov policy and should not be read as the current gate.
+
+---
+
+## Engineering completion pass — 2026-10-23 (final code integration still requires CI)
+
+**Scope:** This checkpoint covers *implementation source* on the isolated `fix/local-bootstrap-lifecycle` branch, not approval to deploy, release, or change an existing installation. **The first field test must be a zero-configuration drop-in upgrade on four real EVSC entries** after the code gate closes. `main`, frozen RC1, and `feature/charge-controller` are still protected.
+
+| Code contract | Current implementation / evidence | Release meaning |
+|---|---|---|
+| Existing four Local EVSC entries, no manual source or config changes | `test_drop_in_four_local.py` (HA-managed four-entry fixture), singleton bootstrap, old unique IDs and Options unchanged | Automated mock evidence; real upgrade NOT RUN |
+| Original Local physical writer and protective operator Stop | Unchanged native EVSC service path; controller grants gate ON only after explicit Coordinated opt-in | Only native EVSE field readback can prove physical behavior |
+| 15-minute planning / UTC-DST / dynamic deadlines / current-slot accounting | Joint planner with immutable active permit and prorated remaining-quarter kWh; regression covers partial quarter replan | Software tests only |
+| Four different EVSE powers and true per-EVSC cost curves | Exact bounded min-EUR future allocation for mixed kW and kW-constrained concurrency; min-cost flow for simpler cases; no fabricated tariff equality | Solver bounds use *feasible* fallback, not an unsupported global-optimality claim |
+| Local + Coordinated totals / coverage | Read-only Local schedule normalization, each own optional effective price and kW, consolidated kWh/EUR + partial known subtotals, no cached Local double-count | Unknown source means unavailable headline, not zero |
+| Energy-native alternative sources | Optional capacity, stored current/target kWh and future effective EUR price interval bindings on **individual** EVSC Options; legacy fields untouched; direct/derived resolution | No compulsory edits during drop-in |
+| Actual charge cost | Time-aligned native energy delta × validated per-EVSC EUR source with guarded HA Store restore and meter-binding-change reset | No daily value unless completeness is evidenced; meter/power source validation on target HA still required |
+| Phase 1 peak policy | Native-only binary Stop/Resume, stale site/EVSE meter fail closed, 90-second stable recovery and margin, manual pause persistence, observed peak price impact only for equal energy plans | Not circuit/phase overload protection; variable native throttling belongs to Phase 2 |
+| Reactive runtime / device identity | Lifecycle-managed read-only source watchers, one controller HA device, additive original-entry individual read-only entities, provider device unchanged | Upgrade/rollback and physical four-charger tests not yet run |
+
+**Exact-head CI gate still OPEN.** Every new source change must pass strict Black, original Local smoke, upstream baseline, focused controller and full Python 3.11–3.14 tests. The first hardware test remains **after** this gate. HACS requires enabled Issues and at least one valid repository topic. Local coverage is a mandatory >=90% pytest gate; optional Codecov upload failures do not block CI.
+
+**Qualification outcome: NOT RELEASE APPROVED.** No tag, no feature/main merge, no demand to change configuration. Source-code coverage and measured physical acceptance are deliberately separate.
+
+---
+
+## Additional Phase 1 implementation checkpoint — 2026-10-23 — NOT RELEASE APPROVED
+
+**Owner release gate unchanged: full code feature completion precedes first physical test, which is a zero-config drop-in upgrade.** Work remains isolated on draft PR #3. Original `main`, frozen RC1, contract reference and `feature/charge-controller` remain unchanged.
+
+**Implemented on fix branch since the prior checkpoint:**
+
+- Peak transient binary STOP/Resume: `839367f` + `79dfe10` introduce a distinct nonpersistent peak latch, require 90 seconds of stable adequate headroom plus 0.5 kW restart margin before automated recovery, and preserve the independent persistent operator Manual Stop. Tests `c9f40f6` cover interrupted cheap slot, recovery and no needless initial delay. This policy is not a circuit protection system.
+- Individual EVSC source projection: `5e2db17` + `79698fa` add seven **read-only** per-entry source/energy/cost HA facts, keeping old entry IDs, source bindings, device identity and original charging/status sensor unique IDs. Missing optional source values remain `None`. Regression `925138c` covers no-config, native W→kW, SoC/usable-capacity AC energy and stable identity.
+- Per-EVSC economic scheduling: `e53b56a` + `724d07b` implement exact future minimum-EUR matching for homogeneous full-power quarter slots, while preserving active grants. Tests `31af969` include price-of-delay, negative prices and mixed-kW conservative fallback. This is **not** an exact general heterogeneous-kW integer optimizer.
+- Actual charging-cost provenance: `bc1d607` + `450ef76` + `c3154d1` + `e6e7341` add timestamp-aligned measured-energy delta ledger, conservative tariff alignment, complete-coverage-only per-entry and group EUR values and partial-known subtotals with quality. `e7064a7` tests day-boundary baseline, missing intervals, tariff changes and native meter reset. **Ledger now uses HA native Store with guarded restore; runtime and long-duration coverage acceptance remain open.**
+- `37a6855` extends read-only per-EVSC plan details with estimated AC energy/cost, actual-cost evidence, price quality and manual/peak pause reason.
+- Strict Black applied to earlier feature modules via one-time run; temporary actions removed. Latest modified plan payload and full suite still require exact final CI validation.
+
+**Automation evidence:** [PR #3 run 39976972066](https://github.com/npinguin/ev_smart_charging/actions/runs/39976972066) reports focused controller PASS, unchanged Local smoke PASS, upstream baseline PASS, full Python 3.11/3.12/3.13 test jobs PASS and Python 3.14 pytest PASS (only subsequent Codecov token upload fails). HACS repo metadata remains FAIL. This run precedes the final format/docs changes; do not use it as proof of latest HEAD.
+
+**Latest incremental implementation superseding the previous gaps:** exact bounded mixed-kW optimizer (`mixed_optimizer.py`), Local/Coordinated financial projections (`local_projection.py`) with explicit partial-coverage subtotals, optional native stored-kWh/effective-tariff source bindings, reactive source listeners and active-grant revocation on operator disable. These **code paths exist**, but successful exact-head CI and on-target HA lifecycle/rollback proof remain mandatory. The general optimum is not claimed when bounded fallback is used. HACS topics remain an external repository-administration gate; optional Codecov reporting does not block CI. Physical four-charger acceptance is Gate B/C **after** feature complete and is not claimed.
+
+**Decision: FEATURE-INCOMPLETE / NO RELEASE / NO FIELD INSTALL.** Do not tag, merge feature or instruct the operator to change Home Assistant configuration.
+
+---
+
+## Release sequencing decision — 2026-10-23: FEATURE COMPLETE BEFORE FIRST FIELD TEST
+
+**Owner requirement: DO NOT RELEASE A PARTIAL CONTROLLER.** Do not package, tag, promote, or ask the operator to test a new release before all agreed Phase 1 / individual EVSC / controller capabilities are implemented and the software-only acceptance gates pass. The **first field acceptance** is an in-place **drop-in upgrade of the existing four-charger Home Assistant installation with ZERO user configuration changes**, not a new-config wizard. Controlled tests and CI during development do not count as that field acceptance.
+
+**Drop-in contract:** replace the complete existing EVSC custom component only; preserve every v8 charger config-entry ID/version, existing data and options, existing native EVSE/vehicle/price bindings, original entity unique IDs and Local charging behavior. No YAML change, manual EVSC Options edit, entity rename, source remapping or charger re-pairing. The controller may create its ONE internal config entry/device automatically with empty participants, but **must remain observational and send no new charging command** while the original four chargers stay Local. New optional measurements must stay optional. A pre-upgrade backup, old-entity snapshot and a tested rollback path are mandatory.
+
+**Feature-complete implementation gates before field acceptance:** (1) correct 0/1/4 entry lifecycle, idempotent bootstrap and stable identity; (2) original Local and Stop preserved; (3) Coordinated admission, effective grants, manual Stop/Resume, power/connection readback and exclusive native writer; (4) valid per-EVSC costs/prices, scheduling against differing prices and complete/partial forecasts; (5) 15-minute slot/deadline/calendar/DST, group totals and plan response; (6) enforced Phase 1 binary peak policy with fresh meters, hysteresis/cooldown, unachievable/missing-source state and no native throttling; (7) financial actual/indicative values only with correct time-aligned meter/price provenance; (8) complete HA entity/options contract; (9) CI including Black, HACS, Codecov and all relevant Python/HA versions. Phase 2 current throttling is **not** part of this acceptance.
+
+**Code work from this checkpoint (NOT feature complete):**
+- `712b6f4`: new four-v8-entry HA-managed drop-in fixture verifies untouched original data/options/version, all four stay Local, exactly one passive controller. This has NOT yet passed a physical installation.
+- `2bab23a`, `fecf8ed`: enforced site-peak values and participant power require fresh timestamped native reports (five-minute maximum); on unknown/stale source, fail closed. Distinguish `not_achievable` when uncontrollable site import exceeds target. Regression fixtures for stale/absent timestamps and Local exemption.
+- `1acd9ad`, `01e6970`: valid longer per-EVSC EUR/kWh tariff intervals split into UTC 15-minute allocation slices; reject overlapping or unaligned prices **only for that charger** rather than corrupt the other tariff stream. Do not claim finer source publication precision.
+- `938d3d5`: initial style cleanup; deterministic Black formatting finished on `c760a49`, the temporary workflow was removed at `ec2c74d`.
+- `7f60b4d`: four-entry drop-in fixture corrected for HA-managed auto-loading, rather than re-initializing already-loaded entries. [PR #3 run 39973959019](https://github.com/npinguin/ev_smart_charging/actions/runs/39973959019): focused controller suite **67 PASS**, strict Black PASS, original Local smoke PASS, upstream baseline PASS. HACS still fails on repository Issues/topics; complete Python matrix was still in progress when this evidence was reviewed.
+- `7b10231`: strengthened first-upgrade fixture to preserve both empty and existing populated legacy Options; the exact new head still requires CI review. Neither fixture establishes in-place physical HA acceptance.
+
+**Still unimplemented or unproven:** broader price normalization/provenance and genuine globally optimal joint cost, actual energy/cost over time, complete individual normalized sensor contract, documented peak hysteresis/cooldown, full schedule/financial aggregation and 0/4-native HA/equipment acceptance. This is active engineering, **not a release candidate**. Keep PR #3 DRAFT, original main/RC1/feature intact; never suppress missing CI/physical evidence.
+
+---
+
+## Follow-up checkpoint — 2026-10-23 — isolated P0 Local lifecycle fix
+
+**Status: release still BLOCKED; neither main nor RC1 nor feature/charge-controller has been modified by this checkpoint.**
+
+- Functional review branch: `fix/local-bootstrap-lifecycle`, [draft PR #3](https://github.com/npinguin/ev_smart_charging/pull/3). The new top-level `async_setup` had made the original directly-invoked Local setup reentrant during platform forwarding. Import of the singleton has been moved after an HA-managed config-entry transition, and plan service registration remains idempotent. **The original selected Local smoke cases were not changed.**
+- Evidence: [PR #3 run 39969458373](https://github.com/npinguin/ev_smart_charging/actions/runs/39969458373) reports **PASS** for selected upstream Local baseline, feature Local smoke, controller behavior, and full Python **3.11, 3.12 and 3.13** test jobs.
+- Python **3.14 test step PASS**; the job fails only on the subsequent Codecov upload, which reports `Token required - not valid tokenless upload`. `CODECOV_TOKEN` must be configured as a real GitHub Actions secret / Codecov authorization. Do not suppress the coverage-upload failure to fake a green gate.
+- Two legitimate contract-test expectation updates accompany the functional fix: the coordinator's native retry now specifies `reason="retry"`, and EVSC Options persist five new individual source defaults. Exact expectations remain asserted; no functional assertions were skipped.
+- Added `tests/controller/test_ha_managed_bootstrap.py` to prove that a normal HA-managed Local setup imports only one persistent controller and that reload preserves the singleton. This is a synthetic HA fixture, **not physical EVSE acceptance**.
+- CI test matrix explicitly uses `fail-fast: false`, so an external upload failure cannot cancel untested Python versions.
+- Independent mechanical formatting branch: `chore/black-formatting`, [merged PR #4](https://github.com/npinguin/ev_smart_charging/pull/4). A one-time isolated action generated Black formatting for 33 Python files; the formatter action has been removed. [PR #4 run 39969754549](https://github.com/npinguin/ev_smart_charging/actions/runs/39969754549) shows **strict Black check PASS**. Source-inspection checks were made AST-stable to survive Black wrapping. Formatter and all Python 3.11–3.14 test steps PASS on [PR #4 run 39970270671](https://github.com/npinguin/ev_smart_charging/actions/runs/39970270671); formatting PR #4 was merged **only into the isolated fix branch** at `844b487c47c4396cf7a1383ee9174c79a630f276`. Preserve immutable upstream/RC1 and feature until release approval.
+- HACS remains **FAIL** because repository Issues are disabled and GitHub topics are absent. The repository administrator must enable Issues and add valid topics via GitHub settings; do not weaken HACS validation. Integration categories produce a nonfatal warning.
+- Mandatory **not proved**: physical Advanced Home four-EVSE admission/readback, Home Assistant native upgrade and rollback, final financial price-unit evidence, peak protection under stale meters/interruption, and full release acceptance.
+
+**Next step:** Review the integrated fix PR #3 results, resolve HACS and Codecov repository administration, then proceed with remaining physical admission and field validation. Do not merge PR #1 or tag a release from either work branch until acceptance is complete.
+
+---
+
+
 **Status:** WORK IN PROGRESS — **NO RELEASE / NO PHYSICAL PRODUCTION APPROVAL**  
 **Reviewed:** 2026-10-23 (Europe/Brussels)  
 **Original source review baseline (historical):** `d5ced29f12c1f06d0ba9f84bc3f98bd4cb513a0d` on `feature/charge-controller`  

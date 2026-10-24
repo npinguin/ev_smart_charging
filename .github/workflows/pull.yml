@@ -2,6 +2,7 @@ name: Pull actions
 
 on:
   pull_request:
+  workflow_call:
 
 jobs:
   validate:
@@ -28,7 +29,7 @@ jobs:
         with:
           python-version: "3.x"
       - run: python3 -m pip install black
-      - run: black --check .
+      - run: black --check --diff .
 
   legacy_regression_smoke:
     runs-on: "ubuntu-latest"
@@ -84,7 +85,11 @@ jobs:
 
   tests:
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: read
+      id-token: write
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         include:
@@ -116,13 +121,17 @@ jobs:
             --asyncio-mode=auto \
             --cov-report=xml \
             --cov-report=term \
+            --cov-fail-under=90 \
             --cov custom_components.ev_smart_charging \
             -o console_output_style=count \
             -p no:sugar \
             tests
-      - name: "Upload coverage to Codecov"
+      # External Codecov reporting is optional. pytest coverage remains a
+      # required >=90% gate on every Python test matrix version.
+      - name: "Upload coverage to Codecov (optional)"
         if: ${{ matrix.python-version == '3.14' }}
+        continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          use_oidc: true
+          fail_ci_if_error: false

@@ -1,4 +1,5 @@
 """Optional absolute Ready-by for individual EVSC chargers (legacy select retained)."""
+
 from datetime import datetime
 
 from homeassistant.components.datetime import DateTimeEntity
@@ -17,7 +18,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([EVSmartChargingAbsoluteReadyBy(entry, coordinator)])
 
 
-class EVSmartChargingAbsoluteReadyBy(EVSmartChargingEntity, DateTimeEntity, RestoreEntity):
+class EVSmartChargingAbsoluteReadyBy(
+    EVSmartChargingEntity, DateTimeEntity, RestoreEntity
+):
     """One-time calendar deadline. Clear button restores recurring local EVSC time."""
 
     _entity_key = "absolute_ready_by"
@@ -38,7 +41,11 @@ class EVSmartChargingAbsoluteReadyBy(EVSmartChargingEntity, DateTimeEntity, Rest
         restored = await self.async_get_last_state()
         if restored is not None:
             value = dt.parse_datetime(restored.state)
-            if value is not None and value.tzinfo is not None and value.utcoffset() is not None:
+            if (
+                value is not None
+                and value.tzinfo is not None
+                and value.utcoffset() is not None
+            ):
                 self._attr_native_value = value
                 self.coordinator.absolute_ready_by = value
                 # The coordinator's own initial refresh runs after HA platforms load.

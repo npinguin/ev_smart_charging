@@ -1,4 +1,5 @@
 """Explicit calendar deadline helpers; legacy EVSC ready-quarter is unchanged."""
+
 from datetime import datetime, timedelta, timezone
 from math import isfinite
 

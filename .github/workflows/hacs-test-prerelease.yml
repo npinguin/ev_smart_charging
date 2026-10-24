@@ -1,0 +1,128 @@
+name: HACS guarded HA thread-safety bugfix prerelease
+
+# Explicitly operator-requested guarded Local-capable test packaging only.
+# Never publish on ordinary code pushes: one release request file gates this.
+on:
+  push:
+    branches:
+      - fix/local-bootstrap-lifecycle
+    paths:
+      - docs/controller/HACS_TEST_RELEASE_REQUEST.md
+
+permissions:
+  contents: read
+  # The called Python matrix uses GitHub OIDC for best-effort Codecov reporting.
+  id-token: write
+
+jobs:
+  full_ci_gate:
+    name: Require full Gate A regression
+    uses: ./.github/workflows/pull.yml
+
+  publish_test_prerelease:
+    name: Publish isolated HACS test prerelease
+    needs: full_ci_gate
+    # Operator explicitly requested another HACS build. P0 stays OPEN:
+    # publish only a Local-capable quarantine build; no Coordinated actuation.
+    if: ${{ github.ref == 'refs/heads/fix/local-bootstrap-lifecycle' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: 2.6.0-rc.7
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify exact tested package and version
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          manifest = json.loads(Path("custom_components/ev_smart_charging/manifest.json").read_text())
+          hacs = json.loads(Path("hacs.json").read_text())
+          const = Path("custom_components/ev_smart_charging/const.py").read_text()
+          assert manifest["version"] == version, "Mismatch: manifest version"
+          assert f'VERSION = "{version}"' in const, "Mismatch: const.py version"
+          assert not hacs.get("zip_release", False), "HACS must install from source tree"
+          assert "filename" not in hacs, "HACS must not require a release asset"
+          assert Path("custom_components/ev_smart_charging/services.yaml").exists()
+          safety = Path("custom_components/ev_smart_charging/controller/safety.py").read_text()
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
+              "P0: release must not enable coordinated physical Start/Stop"
+          )
+          runtime = Path("custom_components/ev_smart_charging/controller/runtime.py").read_text()
+          assert "CONTROLLER_POLL_SECONDS = 5" in runtime, "Expected guarded 5-second sampler"
+          assert "async_track_time_change(" in runtime, "Expected HA native sampling timer"
+          assert Path("tests/controller/test_unified_poll_lifecycle.py").exists(), (
+              "No mode/reload/feedback regression guard"
+          )
+          diagnostics = Path("custom_components/ev_smart_charging/diagnostics.py").read_text()
+          assert "async_get_config_entry_diagnostics" in diagnostics
+          assert "async_get_device_diagnostics" in diagnostics
+          assert Path("tests/controller/test_diagnostics.py").exists(), (
+              "Diagnostics regressions required in the exact-head release"
+          )
+          native = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
+          assert "source = self.charging_state_entity_id or self.charger_switch.entity_id" in native, (
+              "Missing bounded Local native-switch readback retry"
+          )
+          assert Path("tests/controller/test_local_native_execution.py").exists(), (
+              "Missing Local native Start/Stop/retry regression"
+          )
+          sensor_code = Path("custom_components/ev_smart_charging/sensor.py").read_text()
+          assert "self._async_source_state_changed" in sensor_code
+          assert "lambda _event: self.async_write_ha_state()" not in sensor_code, (
+              "P0: worker-thread native source callback cannot ship"
+          )
+          config_code = Path("custom_components/ev_smart_charging/config_flow.py").read_text()
+          assert '"coordinated_disabled"' in config_code, (
+              "P0: new Coordinated membership must not detach Local scheduling"
+          )
+          assert Path("tests/controller/test_thread_safety.py").exists()
+          assert Path("tests/controller/test_coordinated_admission_hold.py").exists()
+          print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
+          PY
+
+      - name: Package optional manual recovery ZIP (HACS uses source tree)
+        run: |
+          mkdir -p "$RUNNER_TEMP/hacs-dist"
+          (
+            cd custom_components/ev_smart_charging
+            zip -q -r "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" . -x '*/__pycache__/*' '*.pyc'
+          )
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^manifest.json$'
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml$'
+          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+
+      - name: Retain the manually usable ZIP as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: evsc-guarded-rc7-manual-zip
+          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
+          if-no-files-found: error
+
+      - name: Create prerelease without changing main or stable versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          # Publish tag once. The existing default-branch publish workflow
+          # attaches the optional ZIP after the release event; never race its
+          # release asset upload. HACS already uses the source tree.
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — Local-only HA thread-safety fix" \
+            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; HA-native redacted diagnostics are available on every charger and controller entry/device; Native source event callbacks are now HA event-loop-safe; Local retains its existing five-minute readback retry and full Local feature behavior; new Coordinated opt-in is rejected during the P0 safety hold; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."

@@ -76,7 +76,8 @@
       "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
       "charger_control_switch_not_found": "Charger control entity not found.",
       "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
-      "charging_state_entity_not_found": "Charging state entity not found."
+      "charging_state_entity_not_found": "Charging state entity not found.",
+      "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete."
     }
   },
   "entity": {

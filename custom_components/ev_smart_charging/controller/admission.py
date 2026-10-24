@@ -3,6 +3,7 @@
 This pure module is *not yet bound to physical service calls*. In supervised mode
 all automatic start paths must use this gate, but STOP is always permitted.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,7 +36,11 @@ class SupervisionGate:
     def set_mode(self, charger_id: str, mode: str, *, operator_confirmed: bool = False):
         if mode not in ("local", "coordinated"):
             raise ValueError("Unknown mode")
-        if self._mode.get(charger_id, "local") == "coordinated" and mode == "local" and not operator_confirmed:
+        if (
+            self._mode.get(charger_id, "local") == "coordinated"
+            and mode == "local"
+            and not operator_confirmed
+        ):
             raise PermissionError("Leaving coordination requires confirmation")
         self._mode[charger_id] = mode
         self._plan = None

@@ -2,10 +2,13 @@
 
 These tests use only fake config entries and intentionally do not call hardware.
 """
+
 from types import SimpleNamespace
 
 from custom_components.ev_smart_charging.controller.runtime import (
-    is_supervised, physical_grant, pause_supervised
+    is_supervised,
+    physical_grant,
+    pause_supervised,
 )
 
 
@@ -24,11 +27,15 @@ class FakeEntries:
 
 def fake_hass():
     entry = SimpleNamespace(
-        entry_id="ctl", data={"__evsc_entry_type": "charge_controller"},
-        options={"participants": ["evsc_1"], "paused_chargers": []}
+        entry_id="ctl",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": ["evsc_1"], "paused_chargers": []},
     )
     entries = FakeEntries(entry)
-    return SimpleNamespace(config_entries=entries, data={"ev_smart_charging": {}}), entries
+    return (
+        SimpleNamespace(config_entries=entries, data={"ev_smart_charging": {}}),
+        entries,
+    )
 
 
 def test_selected_supervisor_fail_closed_before_controller_setup():
