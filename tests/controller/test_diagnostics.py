@@ -66,9 +66,7 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
             == "actual_power_meter_coverage_incomplete"
         )
 
-        controller_device = SimpleNamespace(
-            identifiers={(DOMAIN, "charge_controller")}
-        )
+        controller_device = SimpleNamespace(identifiers={(DOMAIN, "charge_controller")})
         device_report = await async_get_device_diagnostics(
             hass, controller, controller_device
         )
