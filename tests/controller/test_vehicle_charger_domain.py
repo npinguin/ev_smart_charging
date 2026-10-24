@@ -11,17 +11,19 @@ from custom_components.ev_smart_charging.domain import (
     Vehicle,
     VehicleState,
     resolve_charging_contexts,
+    suggested_entity_object_id,
+    validate_unique_device_names,
 )
 
 
 def _resolve(assignments, *, connected=None, soc=30, target=80):
     cars = {
-        "audi": Vehicle("audi", usable_battery_kwh=18, max_ac_charge_kw=7.4),
-        "guest": Vehicle("guest", usable_battery_kwh=50, max_ac_charge_kw=11),
+        "audi": Vehicle("audi", "Audi Q8", usable_battery_kwh=18, max_ac_charge_kw=7.4),
+        "guest": Vehicle("guest", "Guest", usable_battery_kwh=50, max_ac_charge_kw=11),
     }
     chargers = {
-        "black": Charger("black", max_ac_power_kw=11, phase_count=3),
-        "white": Charger("white", max_ac_power_kw=22, phase_count=3),
+        "black": Charger("black", "Garage Black", max_ac_power_kw=11, phase_count=3),
+        "white": Charger("white", "Garage White", max_ac_power_kw=22, phase_count=3),
     }
     states = {
         "audi": VehicleState("audi", soc, datetime.now(timezone.utc)),
@@ -112,8 +114,8 @@ def test_correct_100_percent_soc_does_not_create_a_charging_demand():
 
 def test_missing_vehicle_capabilities_are_unknown_not_default_11kw():
     context = resolve_charging_contexts(
-        {"black": Charger("black", max_ac_power_kw=11)},
-        {"audi": Vehicle("audi", usable_battery_kwh=18)},
+        {"black": Charger("black", "Garage Black", max_ac_power_kw=11)},
+        {"audi": Vehicle("audi", "Audi Q8", usable_battery_kwh=18)},
         (Assignment("audi", "black"),),
         {"audi": VehicleState("audi", 30)},
         {"audi": ChargeIntent("audi", 80)},
@@ -126,8 +128,8 @@ def test_missing_vehicle_capabilities_are_unknown_not_default_11kw():
 @pytest.mark.parametrize(
     "vehicle",
     [
-        Vehicle("audi", usable_battery_kwh=18),
-        Vehicle("audi", max_ac_charge_kw=7.4),
+        Vehicle("audi", "Audi Q8", usable_battery_kwh=18),
+        Vehicle("audi", "Audi Q8", max_ac_charge_kw=7.4),
     ],
 )
 def test_vehicle_profiles_are_independent_of_charger(vehicle):
@@ -136,9 +138,9 @@ def test_vehicle_profiles_are_independent_of_charger(vehicle):
 
 def test_invalid_electrical_capabilities_are_rejected():
     with pytest.raises(ValueError, match="max_ac_charge_kw"):
-        Vehicle("test", max_ac_charge_kw=-1)
+        Vehicle("test", "Test", max_ac_charge_kw=-1)
     with pytest.raises(ValueError, match="min_current_exceeds_max"):
-        Charger("black", min_current_a=16, max_current_a=6)
+        Charger("black", "Garage Black", min_current_a=16, max_current_a=6)
     with pytest.raises(ValueError, match="soc_percent"):
         VehicleState("audi", 120)
 
@@ -146,8 +148,8 @@ def test_invalid_electrical_capabilities_are_rejected():
 def test_original_local_soc_per_hour_path_without_battery_kwh():
     """A Local owner must not be forced to configure additional OEM facts."""
     result = resolve_charging_contexts(
-        {"black": Charger("black")},
-        {"guest": Vehicle("guest")},
+        {"black": Charger("black", "Garage Black")},
+        {"guest": Vehicle("guest", "Guest")},
         (Assignment("guest", "black", estimated_soc_pct_per_hour=10),),
         {"guest": VehicleState("guest", 30)},
         {"guest": ChargeIntent("guest", 80)},
@@ -167,8 +169,8 @@ def test_no_connection_is_not_overridden_by_user_assignment():
 
 def test_missing_charging_rate_does_not_invent_time_or_power():
     result = resolve_charging_contexts(
-        {"black": Charger("black", max_ac_power_kw=11)},
-        {"guest": Vehicle("guest")},
+        {"black": Charger("black", "Garage Black", max_ac_power_kw=11)},
+        {"guest": Vehicle("guest", "Guest")},
         (Assignment("guest", "black"),),
         {"guest": VehicleState("guest", 20)},
         {"guest": ChargeIntent("guest", 80)},
@@ -191,3 +193,42 @@ def test_legacy_soc_rate_does_not_travel_with_vehicle_to_different_evse():
 def test_legacy_soc_rate_is_validated_at_assignment():
     with pytest.raises(ValueError, match="estimated_soc_pct_per_hour"):
         Assignment("guest", "black", estimated_soc_pct_per_hour=-1)
+
+
+def test_ha_user_identity_is_optional_and_does_not_grant_native_control():
+    vehicle = Vehicle(
+        "audi", "Audi Q8", external_identifier="user-defined-vehicle-code",
+        ha_user_id="opaque-ha-user-id"
+    )
+    assert vehicle.id == "audi"
+    assert vehicle.ha_user_id == "opaque-ha-user-id"
+    assert not hasattr(vehicle, "can_start_charging")
+
+
+def test_device_name_drives_new_entity_id_but_not_permanent_identity():
+    vehicle = Vehicle("audi", "Audi Q8")
+    renamed = Vehicle("audi", "Family Car")
+    assert vehicle.id == renamed.id
+    assert suggested_entity_object_id(vehicle.name, "soc") == "audi_q8_soc"
+    assert suggested_entity_object_id(renamed.name, "soc") == "family_car_soc"
+    assert suggested_entity_object_id("Garage Black", "charging_power") == (
+        "garage_black_charging_power"
+    )
+    assert suggested_entity_object_id("Peblar Outside", "connection") == (
+        "peblar_outside_connection"
+    )
+
+
+def test_device_name_slug_collisions_are_rejected_before_entities_are_created():
+    with pytest.raises(ValueError, match="duplicate_device_name"):
+        validate_unique_device_names(
+            {"audi": Vehicle("audi", "Garage Black")},
+            {"black": Charger("black", "Garage Black")},
+        )
+
+
+def test_required_device_identity_and_optional_external_reference_validation():
+    with pytest.raises(ValueError, match="device_name_required"):
+        Vehicle("audi", " ")
+    with pytest.raises(ValueError, match="external_identifier_must_be_nonempty"):
+        Charger("black", "Garage Black", external_identifier=" ")
