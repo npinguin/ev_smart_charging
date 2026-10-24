@@ -343,7 +343,9 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
 
     def _vehicle_form(self, step_id, user_input=None):
         current = (
-            self.config_entry.options.get(VEHICLES, {}).get(self._editing_vehicle_id, {})
+            self.config_entry.options.get(VEHICLES, {}).get(
+                self._editing_vehicle_id, {}
+            )
             if self._editing_vehicle_id
             else {}
         )
