@@ -424,18 +424,22 @@ def _charger_diagnostics(hass, charger, manager=None):
                 if cached_soc is not None and cached_target is not None
                 else None
             ),
-            "warnings": [
-                "vehicle_soc_reached_target_check_bridge_mapping"
-                if cached_soc is not None
-                and cached_target is not None
-                and cached_soc >= cached_target
-                else None,
-                "evsc_cached_soc_differs_from_configured_source"
-                if cached_soc is not None
-                and raw_soc.get("value") is not None
-                and cached_soc != raw_soc["value"]
-                else None,
-            ],
+            "warnings": (
+                (
+                    ["vehicle_soc_reached_target_check_bridge_mapping"]
+                    if cached_soc is not None
+                    and cached_target is not None
+                    and cached_soc >= cached_target
+                    else []
+                )
+                + (
+                    ["evsc_cached_soc_differs_from_configured_source"]
+                    if cached_soc is not None
+                    and raw_soc.get("value") is not None
+                    and cached_soc != raw_soc["value"]
+                    else []
+                )
+            ),
         },
         # "requested" means HA service dispatch attempted, NOT physically charging.
         "last_native_command": getattr(charger, "_last_native_command", None),
@@ -555,7 +559,7 @@ def _controller_diagnostics(hass, manager):
         },
         "unavailable_explanations": unavailable,
         "source_mapping_audit": {
-            "entity_references": "sha256_entity_id_first_12_characters",
+            "entity_references": "sha256_first_12_hex",
             "matching_script": "scripts/evsc_source_mapping_audit.jinja",
             "candidate_vehicle_soc": _soc_candidates(hass),
         },
