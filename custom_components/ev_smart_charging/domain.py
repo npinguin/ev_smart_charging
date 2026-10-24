@@ -44,14 +44,12 @@ class Vehicle:
     usable_battery_kwh: float | None = None
     max_ac_charge_kw: float | None = None
     ac_phase_count: int | None = None
-    charging_pct_per_hour: float | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
             raise ValueError("vehicle_id_required")
         _positive("usable_battery_kwh", self.usable_battery_kwh)
         _positive("max_ac_charge_kw", self.max_ac_charge_kw)
-        _positive("charging_pct_per_hour", self.charging_pct_per_hour)
         if self.ac_phase_count not in (None, 1, 2, 3):
             raise ValueError("invalid_vehicle_phase_count")
 
@@ -87,7 +85,7 @@ class Charger:
 
 @dataclass(frozen=True)
 class VehicleState:
-    """Vehicle evidence; source ID/provenance belongs to adapter, not object."""
+    """SoC from a user-selected Home Assistant entity or explicit manual input."""
 
     vehicle_id: str
     soc_percent: float | None
@@ -119,8 +117,10 @@ class Assignment:
 
     vehicle_id: str
     charger_id: str
+    estimated_soc_pct_per_hour: float | None = None
 
     def __post_init__(self) -> None:
+        _positive("estimated_soc_pct_per_hour", self.estimated_soc_pct_per_hour)
         if not self.vehicle_id or not self.charger_id:
             raise ValueError("assignment_ids_required")
 
@@ -202,8 +202,8 @@ def resolve_charging_contexts(
                 energy = 0.0
                 quarters = 0
             else:
-                # A Local user may configure a measured %/h charging rate
-                # instead of vehicle kWh. Retain that existing feature.
+                # The historical %SoC/h figure is charger+vehicle specific.
+                # Preserve it on this Assignment, not on the vehicle hardware.
                 if vehicle.usable_battery_kwh is not None:
                     energy = round(
                         vehicle.usable_battery_kwh
@@ -222,12 +222,12 @@ def resolve_charging_contexts(
                     quarters = ceil(
                         energy / (power * 0.25 * charger.charge_efficiency) - 1e-9
                     )
-                elif vehicle.charging_pct_per_hour is not None:
+                elif assignment.estimated_soc_pct_per_hour is not None:
                     from math import ceil
 
                     quarters = ceil(
                         (intent.target_soc_percent - state.soc_percent)
-                        / (vehicle.charging_pct_per_hour * 0.25)
+                        / (assignment.estimated_soc_pct_per_hour * 0.25)
                         - 1e-9
                     )
                 if quarters is None:
