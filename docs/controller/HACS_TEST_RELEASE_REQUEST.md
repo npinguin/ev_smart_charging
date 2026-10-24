@@ -1,19 +1,19 @@
-# HACS source-native guarded diagnostics release request — v2.6.0-rc.5
+# Guarded HACS prerelease request — v2.6.0-rc.6 (Local automatic Start recovery)
 
-**Operator request, 2026-10-24:** HA EVSC v2.6.0-rc.4 already shows four original charger entries and the singleton Charge Controller, but its menus lack Download diagnostics. Release the missing HA-native diagnostics as the next HACS source-installable prerelease, preserving ALL original EVSC Local functionality and keeping Coordinated physical actuation forcibly disabled.
+**Requested 2026-10-24 after operator field report:** HACS rc4/rc5 Local charging schedule appears, but Garage Black on RHI Mobility shows zero power and "Waiting for charging to begin". This screenshot is **not** proof an active-quarter Start was due; controlled on-target verification remains required. Authorize only the next **Local-capable guarded test prerelease** to restore the missing native switch retry and provide execution diagnostics. No control-mode migration or new Coordinated physical behavior.
 
-## Required exact-commit release checks
+**Immutable source SHA:** the exact SHA of this release request change, on `fix/local-bootstrap-lifecycle`. Do not substitute previous CI runs or builds.
 
-1. Trigger this workflow from the isolated `fix/local-bootstrap-lifecycle` branch after the new `diagnostics.py`, integration privacy tests and no-drift docs have been committed. All checks run on the same immutable release SHA.
-2. Run all **nine** Gate A jobs on Python 3.11–3.14 (every full test suite must meet >=90% local coverage), controller and original Local smoke, upstream compatibility, HACS/Hassfest, Black. Codecov upload optional.
-3. Confirm both `manifest.json` and `const.py` report `2.6.0-rc.5` and verify release publisher hard-asserts both diagnostics entry points and the new diagnostics regression file.
-4. HACS must install from the integration SOURCE folder, never depend on a ZIP release asset. Tested backup ZIP exists as a separate workflow artifact; default-branch release workflow may independently attach an optional fallback ZIP.
-5. `COORDINATED_ACTUATION_ENABLED = False` remains hardcoded, with no UI override; persisted Coordinated participation does not actuate; new Coordinated selection is rejected. No real physical Coordinated field test is authorized.
-6. Diagnostics must be **read-only**, available from HA entry/device menus for each original native charger and the Charge Controller, with safe scalar source classification, coverage and explanation of Unknown values. Do not export raw entity IDs, configuration, secret values, names/addresses, tokens or HA attribute payloads. Downloading diagnostics must not reload, replan or contact any physical charger.
-7. If all gates pass, publish an immutable GitHub **prerelease** `v2.6.0-rc.5`, source SHA = this exact request commit. Do not overwrite an existing tag, merge to main, or claim stable/physical certification.
+## Release gate — mandatory
 
-## P0 remains unresolved
+- Run all nine source CI jobs on this immutable commit. Full pytest on Python 3.11, 3.12, 3.13, 3.14 each >=90% local coverage; controller regressions, unchanged Local smoke, upstream compatibility, Black, HACS and Hassfest.
+- Verify **both** `manifest.json` and `const.py` version `2.6.0-rc.6`; HACS source-native layout with neither required ZIP asset nor `zip_release`.
+- Hard-coded `COORDINATED_ACTUATION_ENABLED = False` and rejection of new Coordinated selection must remain. Persisted participants must not automatically Start or Stop.
+- Retain rc5 entry and device diagnostics; extend charger diagnostics with Local current-quarter ON/OFF decision, activation/connection/price/SoC prerequisites, native readback and last physical service request. No entity/entry IDs, personal details, raw options or secrets in export; diagnostics remains read-only.
+- Local unchanged scheduling algorithm and native writer. Tests must show Start when due, Stop when no longer scheduled, no Start while window is future, no duplicate native commands from repeated updates.
+- Correct missing optional charging-state-sensor recovery: once per existing five-minute cycle, only if Local expects ON and the native controllable switch reports known OFF, retry native Start. No commands on unknown/unavailable readbacks and never from this retry for a supervised Coordinated charger.
+- If all exact-head gates succeed, publish tag **v2.6.0-rc.6** exactly once as a guarded GitHub prerelease for HACS; HACS downloads the source tree. Keep separate optional manual ZIP CI artifact. No main merge, stable promotion or other tag reuse.
 
-The first Peblar Local→Coordinated field trial froze Home Assistant. Incident #5 remains OPEN. The rc5 release makes **diagnostics** downloadable on Local-capable entries and is **not** permission to retry Coordinated, change any charger wiring/configuration or enable an automatic native Start/Stop. The operator must retain a full HA backup and independently verify charger control and recovery before any HACS installation.
+## Physical incident status
 
-No scope expansion beyond HA diagnostics and the previously tested orchestration lifecycle, no new physical writer, no EVSE current throttling, no migrated Local features.
+P0 issue #5 remains OPEN after the first Peblar Local→Coordinated switch hung Home Assistant. This candidate is not permission for Coordinated retest. It is also **not** proof that the screenshot represents a true missed Start; after installing a test candidate with backups, verify the native EVSC Active switch, the active-quarter plan, the charging-state sensor (if configured), the native charger switch and the actual EVSE/OEM charge readback. Do not confuse RHI Mobility Automatic with EVSC's native Smart Charging Active.
