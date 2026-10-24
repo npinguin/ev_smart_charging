@@ -219,20 +219,29 @@ async def test_charger_select_assigns_and_clears_without_changing_local_runtime(
 
 async def test_charger_select_rejects_assignment_conflict(hass):
     black = MockConfigEntry(
-        domain=DOMAIN, entry_id="black", title="Garage Black",
-        data={"device_name": "Garage Black"}, version=8,
+        domain=DOMAIN,
+        entry_id="black",
+        title="Garage Black",
+        data={"device_name": "Garage Black"},
+        version=8,
     )
     white = MockConfigEntry(
-        domain=DOMAIN, entry_id="white", title="Garage White",
-        data={"device_name": "Garage White"}, version=8,
+        domain=DOMAIN,
+        entry_id="white",
+        title="Garage White",
+        data={"device_name": "Garage White"},
+        version=8,
     )
     controller = MockConfigEntry(
-        domain=DOMAIN, entry_id="controller", title="EVSC Charge Controller",
+        domain=DOMAIN,
+        entry_id="controller",
+        title="EVSC Charge Controller",
         data={"__evsc_entry_type": "charge_controller"},
         options={
             VEHICLES: {"audi": {"name": "Audi Q8", "target_soc": 80}},
             ASSIGNMENTS: {"white": "audi"},
-        }, version=8,
+        },
+        version=8,
     )
     for entry in (black, white, controller):
         entry.add_to_hass(hass)
