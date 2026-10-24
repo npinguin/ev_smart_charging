@@ -6,9 +6,9 @@
 
 EV Smart Charging (EVSC) is a **standalone, end-user configurable Mobility Light for vehicle charging**. Its own functional model distinguishes:
 
-1. **Vehicle** — user-defined identity and charging characteristics (usable battery kWh, maximum AC charging kW/phases or Local %SoC/hour fallback). SoC is bound to a user-selected HA entity, or explicitly maintained by the user. No vehicle-brand SDK or auto-discovery is required.
+1. **Vehicle** — user-defined identity and charging characteristics (usable battery kWh, maximum AC charging kW/phases). SoC is bound to a user-selected HA entity, or explicitly maintained by the user. No vehicle-brand SDK or auto-discovery is required.
 2. **Charger** — the physical EVSE and its native Home Assistant control entity, optional connected/charging readback, power/energy meter, rated kW/phases, safety limits and availability. It has **no battery SoC, target SoC or Ready By**.
-3. **Assignment** — explicit selection of which Vehicle is associated with which Charger at this moment, independently of where that vehicle is normally parked. User selection is sufficient vehicle identity for Mobility Light; physical plugged-in evidence comes **separately** from the charger. At most one vehicle per charger and one charger per vehicle; collision means no automatic decision.
+3. **Assignment** — explicit selection of which Vehicle is associated with which Charger at this moment, independently of where that vehicle is normally parked. User selection is sufficient vehicle identity for Mobility Light; physical plugged-in evidence comes **separately** from the charger. At most one vehicle per charger and one charger per vehicle; collision means no automatic decision. The original SoC-%/hour estimate is an optional **Assignment-specific** fallback because charging speed depends on the charger.
 4. **Charge Intent / Policy** — target SoC, Ready By, minimum SoC, opportunistic/keep-on, price limits, low-price/low-SoC, strategy and manual override. Vehicle/session intent is not duplicated in Charger hardware configuration. User may switch the assigned Vehicle without re-entering its battery size or changing the EVSE integration.
 5. **Charge Controller** — one 1..N planning engine, site budgets, concurrency/peak limits, quarter prices and shared execution coordination. Local is the one-charger application of the same planning model; Coordinated adds group constraints, not a second planning model.
 6. **Execution** — only native EVSC device control (HA switch/OCPP/relay already configured by the user); never a new provider-specific writer or duplicated charger connections. Assignment is not physical permission to Start. Runtime state, actual readback, command intent and diagnostics remain distinct.
@@ -25,7 +25,7 @@ A single Home Assistant installation may have four Chargers and any number of us
 
 ## Concrete configuration UX — the only new user-facing concepts
 
-**Vehicles → Add/edit Vehicle:** Name, user-selected SoC sensor or manual SoC, optional usable battery capacity, max AC kW/phases, legacy %SoC/hour charging rate, target SoC and Ready By. Show a clear “unknown” when a source is missing. A Guest Vehicle is an ordinary vehicle configured by the user.
+**Vehicles → Add/edit Vehicle:** Name, user-selected SoC sensor or manual SoC, optional usable battery capacity, max AC kW/phases, target SoC and Ready By. Show a clear “unknown” when a source is missing. A Guest Vehicle is an ordinary vehicle configured by the user. If no battery capacity or charging kW is available, the user may configure a legacy SoC-%/hour estimate on that specific assignment.
 
 **Chargers → Add/edit Charger:** Name; user-selected native charging switch; optional connected/charging feedback sensors; rated AC kW/phases; optional actual power/energy meters; pricing source and native control enable. Charger remains a stable HA device and retains the existing native EVSC entry/entity identities.
 
@@ -37,9 +37,9 @@ A single Home Assistant installation may have four Chargers and any number of us
 
 | Fact | Owner | Not duplicated in |
 | --- | --- | --- |
-| Battery capacity, max vehicle AC power/phases, SoC binding, %/hour fallback | Vehicle | Charger/Controller |
+| Battery capacity, max vehicle AC power/phases, SoC binding | Vehicle | Charger/Controller |
 | Native HA switch, physical connection, EVSE rated kW, physical power/energy readings | Charger | Vehicle/Controller |
-| Which Vehicle is at which Charger | Assignment | Vehicle profile, native integration |
+| Which Vehicle is at which Charger, plus legacy SoC-%/hour estimate for that pair | Assignment | Vehicle profile, native integration |
 | Target/Ready By, minimum SoC, strategies/price preferences | Charge Intent/Policy | Charger hardware |
 | Price normalization, group capacity/concurrency/peak safety, allocations | Controller + one planning engine | Separate Local-vs-Coordinated planner |
 | Native service command + readback | Existing EVSC execution | RHI/energy adapters |
