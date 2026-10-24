@@ -324,6 +324,8 @@ def _charger_diagnostics(hass, charger, manager=None):
     return {
         "mode": "coordinated" if supervised else "local",
         "native_control_owner": "original_evsc_coordinator",
+        # "requested" means HA service dispatch attempted, NOT physically charging.
+        "last_native_command": getattr(charger, "_last_native_command", None),
         "local_execution": (
             _local_execution_diagnostics(hass, charger) if not supervised else None
         ),
