@@ -250,9 +250,9 @@ def _local_execution_diagnostics(hass, charger):
             actual != ("on" if desired else "off") if actual is not None else None
         ),
         "next_internal_action": (
-            "start" if desired and not internal_on
-            else "stop" if not desired and internal_on
-            else "none"
+            "start"
+            if desired and not internal_on
+            else "stop" if not desired and internal_on else "none"
         ),
         "decision_blockers": missing,
         "manual_or_low_price_override": bool(low_price or low_soc or keep_on),
