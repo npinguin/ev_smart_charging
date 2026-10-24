@@ -174,7 +174,8 @@ class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
     def _controller(self):
         return next(
             (
-                entry for entry in self.hass.config_entries.async_entries(DOMAIN)
+                entry
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
                 if entry.data.get("__evsc_entry_type") == "charge_controller"
             ),
             None,
@@ -191,8 +192,12 @@ class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
         controller = self._controller()
         if not controller:
             return "None"
-        assigned = controller.options.get(ASSIGNMENTS, {}).get(self.config_entry.entry_id)
-        return controller.options.get(VEHICLES, {}).get(assigned, {}).get("name", "None")
+        assigned = controller.options.get(ASSIGNMENTS, {}).get(
+            self.config_entry.entry_id
+        )
+        return (
+            controller.options.get(VEHICLES, {}).get(assigned, {}).get("name", "None")
+        )
 
     async def async_select_option(self, option: str) -> None:
         controller = self._controller()
@@ -209,7 +214,8 @@ class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
         chargers = {
             entry.entry_id: entry.title
             for entry in self.hass.config_entries.async_entries(DOMAIN)
-            if entry.data.get("__evsc_entry_type") not in ("charge_controller", "vehicle")
+            if entry.data.get("__evsc_entry_type")
+            not in ("charge_controller", "vehicle")
         }
         selected = validate_assignments(requested, profiles, chargers)
         self.hass.config_entries.async_update_entry(
