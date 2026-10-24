@@ -12,12 +12,14 @@
 
 There are **three core concepts, not five or six**. `Assignment`, `ChargeIntent`, `VehicleState` and effective charging context are small **internal value objects / attributes** of the three concepts, NOT additional HA devices, config-entry types or independent integrations.
 
-- **Assignment** = `Charger.selected_vehicle_id` with an optional vehicle/charger-pair-specific historical `%SoC/h` estimate. One vehicle can be assigned to no charger or one charger. Conflict is explicit: do not select an arbitrary winner.
+- **Assignment** = `Charger.selected_vehicle_id: str | None` with an optional vehicle/charger-pair-specific historical `%SoC/h` estimate. The user can explicitly select **None / No vehicle**. That is valid, even if the Charger is physically connected: the Charger remains visible and measurable, but generates no vehicle-specific charging demand or automatic Start. An unassigned Charger does not silently become Guest. One vehicle can be assigned to no charger or one charger. Conflict is explicit: do not select an arbitrary winner.
 - **Charge Intent** = target SoC, Ready By, minimum SoC, price/keep-on/opportunistic/low-SoC policy and user preference associated with the relevant Vehicle/session and evaluated by the Controller. Not a standalone device.
 - **Vehicle State** = current SoC, quality/freshness, optional timestamp; user maps an existing Home Assistant source. Do not implement OEM vehicle adapters.
 - **Identity** = immutable EVSC internal ID + editable display name for Vehicle and Charger; external reference optional. Optional `ha_user_id` on Vehicle is association/attribution only, **never an implicit authorization** to charge, start a charger or access another user's data.
 
 ## One Controller, two operating scopes
+
+**The Charge Controller never has a Vehicle Assignment.** Its only membership is a set of Charger IDs. A Controller with zero Chargers is valid, and a Controller with connected but unassigned Chargers is also valid. Both Local and Coordinated still monitor native state and measurements while excluding those Chargers from vehicle-specific automatic plans. `None` is a supported user selection on each Charger, not a missing Controller configuration or a request to fabricate a default Vehicle. This contract does not change existing v8 Local execution until the migration is proven feature-equivalent.
 
 **Local:** Each Charger is scheduled independently by the **same core planning semantics** as a one-member Controller. Preserve all original Local decisions and native Start/Stop. The existing HA Charger entries remain the installed control interfaces. A single Local Charger must not need a Coordinated membership or other Charger to operate.
 
@@ -30,7 +32,7 @@ There are **three core concepts, not five or six**. `Assignment`, `ChargeIntent`
 Users configure **Vehicles**, **Chargers** and **Charge Controller** in Home Assistant. They select raw HA entities instead of installing brand-specific abstractions.
 
 - Vehicle: e.g. `Audi Q8`, `Mercedes GLA`, `Guest`; edit SoC input, battery capability, default target/deadline and optional HA user association.
-- Charger: e.g. `Garage Black`, `Garage White`, `Peblar Outside`, `Utility Plug`; edit native control/readback, rated power, metering and **Assigned Vehicle: Audi Q8 / Guest / None**.
+- Charger: e.g. `Garage Black`, `Garage White`, `Peblar Outside`, `Utility Plug`; edit native control/readback, rated power, metering and **Assigned Vehicle: Audi Q8 / Guest / None**. Selecting **None** is a normal, reversible state, not a configuration error.
 - Controller: Local/Coordinated status, global policies, plans, physical execution trace, group site budget, source quality and diagnostics.
 
 **New entities default to the HA Device display name + meaningful metric name**, e.g. `sensor.audi_q8_soc`, `number.audi_q8_target_soc`, `sensor.garage_black_charging_power` and `select.garage_black_assigned_vehicle`. Never default to generated `charger_1`, `charger_2`, `vehicle_3`, etc. Check slug collisions **before creating entities** and report the conflict; do not silently append `_2`. No collision-based automatic renaming. Device renames should not silently churn already registered entity IDs.
