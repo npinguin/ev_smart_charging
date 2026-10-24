@@ -105,8 +105,10 @@ def test_vehicle_ha_device_sensor_names_and_units(hass):
     hass.states.async_set("sensor.audi_soc", "30", {"unit_of_measurement": "%"})
     all_sensors = vehicle_sensors(entry)
     assert len(all_sensors) == 6
-    assert all(sensor.device_info["identifiers"] == {(DOMAIN, "vehicle:audi")}
-               for sensor in all_sensors)
+    assert all(
+        sensor.device_info["identifiers"] == {(DOMAIN, "vehicle:audi")}
+        for sensor in all_sensors
+    )
     soc = next(sensor for sensor in all_sensors if sensor.key == "soc")
     assert soc._attr_suggested_object_id == "audi_q8_soc"
     soc.hass = hass
@@ -118,14 +120,19 @@ def test_vehicle_ha_device_sensor_names_and_units(hass):
 
 async def test_controller_vehicle_add_and_clear_assignment_with_flow(hass):
     charger = MockConfigEntry(
-        domain=DOMAIN, entry_id="black",
-        data={"device_name": "Garage Black"}, title="Garage Black", version=8,
+        domain=DOMAIN,
+        entry_id="black",
+        data={"device_name": "Garage Black"},
+        title="Garage Black",
+        version=8,
     )
     controller = MockConfigEntry(
         domain=DOMAIN,
         entry_id="controller",
         data={"__evsc_entry_type": "charge_controller"},
-        title="EVSC Charge Controller", options={"participants": []}, version=8,
+        title="EVSC Charge Controller",
+        options={"participants": []},
+        version=8,
     )
     charger.add_to_hass(hass)
     controller.add_to_hass(hass)
