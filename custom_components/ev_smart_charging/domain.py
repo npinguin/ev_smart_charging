@@ -12,17 +12,14 @@ from datetime import datetime
 from math import isfinite
 from typing import Literal
 
-AssignmentEvidence = Literal["manual", "identified"]
 AssignmentStatus = Literal[
     "ready",
     "unassigned",
     "missing_vehicle",
-    "missing_charger",
     "vehicle_claim_conflict",
     "charger_claim_conflict",
-    "identity_unverified",
     "not_connected",
-    "capacity_unknown",
+    "charging_rate_unknown",
     "soc_unknown",
     "intent_missing",
     "target_met",
@@ -47,12 +44,14 @@ class Vehicle:
     usable_battery_kwh: float | None = None
     max_ac_charge_kw: float | None = None
     ac_phase_count: int | None = None
+    charging_pct_per_hour: float | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
             raise ValueError("vehicle_id_required")
         _positive("usable_battery_kwh", self.usable_battery_kwh)
         _positive("max_ac_charge_kw", self.max_ac_charge_kw)
+        _positive("charging_pct_per_hour", self.charging_pct_per_hour)
         if self.ac_phase_count not in (None, 1, 2, 3):
             raise ValueError("invalid_vehicle_phase_count")
 
@@ -117,14 +116,10 @@ class Assignment:
 
     vehicle_id: str
     charger_id: str
-    evidence: AssignmentEvidence = "manual"
-    identity_verified: bool = False
 
     def __post_init__(self) -> None:
         if not self.vehicle_id or not self.charger_id:
             raise ValueError("assignment_ids_required")
-        if self.evidence not in ("manual", "identified"):
-            raise ValueError("invalid_assignment_evidence")
 
 
 @dataclass(frozen=True)
@@ -136,6 +131,7 @@ class EffectiveChargingContext:
     status: AssignmentStatus
     effective_max_ac_kw: float | None
     required_battery_kwh: float | None
+    estimated_quarters: int | None
     target_soc_percent: float | None
     ready_by: datetime | None
 
@@ -154,9 +150,11 @@ def resolve_charging_contexts(
 ) -> dict[str, EffectiveChargingContext]:
     """One deterministic assignment per physical EVSE; never choose first.
 
-    Identity collisions, stale/unknown SoC or power limits are visible reasons.
-    A configured manual assignment is NOT physical evidence and must not be
-    used as an implicit permit to issue charging commands.
+    The end user explicitly assigns a vehicle to a charger, without a
+    provider integration, automatic identity detection or Foundation/RHI.
+    Physical connectivity comes separately from the charger readback, and
+    neither assignment nor this pure computation issues a native command.
+    Missing values never silently become zero or an invented device limit.
     """
     from collections import Counter
 
@@ -174,6 +172,7 @@ def resolve_charging_contexts(
         intent = None
         power = None
         energy = None
+        quarters = None
 
         if assignment is None:
             status = "unassigned"
@@ -185,8 +184,6 @@ def resolve_charging_contexts(
             status = "missing_vehicle"
         elif physical_connection.get(charger_id) is not True:
             status = "not_connected"
-        elif not assignment.identity_verified:
-            status = "identity_unverified"
         else:
             vehicle = vehicles[assignment.vehicle_id]
             state = vehicle_states.get(vehicle.id)
@@ -195,22 +192,39 @@ def resolve_charging_contexts(
                 status = "soc_unknown"
             elif intent is None:
                 status = "intent_missing"
-            elif charger.max_ac_power_kw is None or vehicle.max_ac_charge_kw is None:
-                status = "capacity_unknown"
+            elif state.soc_percent >= intent.target_soc_percent:
+                status = "target_met"
+                energy = 0.0
+                quarters = 0
             else:
-                power = min(charger.max_ac_power_kw, vehicle.max_ac_charge_kw)
-                if state.soc_percent >= intent.target_soc_percent:
-                    status = "target_met"
-                    energy = 0.0
-                elif vehicle.usable_battery_kwh is None:
-                    status = "capacity_unknown"
-                else:
+                # A Local user may configure a measured %/h charging rate
+                # instead of vehicle kWh. Retain that existing feature.
+                if vehicle.usable_battery_kwh is not None:
                     energy = round(
                         vehicle.usable_battery_kwh
                         * (intent.target_soc_percent - state.soc_percent)
                         / 100,
                         6,
                     )
+                if (
+                    charger.max_ac_power_kw is not None
+                    and vehicle.max_ac_charge_kw is not None
+                ):
+                    power = min(charger.max_ac_power_kw, vehicle.max_ac_charge_kw)
+                if power is not None and energy is not None:
+                    from math import ceil
+
+                    quarters = ceil(energy / (power * 0.25) - 1e-9)
+                elif vehicle.charging_pct_per_hour is not None:
+                    from math import ceil
+
+                    quarters = ceil(
+                        (intent.target_soc_percent - state.soc_percent)
+                        / (vehicle.charging_pct_per_hour * 0.25)
+                        - 1e-9
+                    )
+                if quarters is None:
+                    status = "charging_rate_unknown"
 
         result[charger_id] = EffectiveChargingContext(
             charger_id=charger_id,
@@ -218,6 +232,7 @@ def resolve_charging_contexts(
             status=status,
             effective_max_ac_kw=power,
             required_battery_kwh=energy,
+            estimated_quarters=quarters,
             target_soc_percent=intent.target_soc_percent if intent else None,
             ready_by=intent.ready_by if intent else None,
         )
