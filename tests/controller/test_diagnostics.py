@@ -173,8 +173,11 @@ def test_local_execution_diagnostics_identifies_due_start_and_native_mismatch(ha
     now = dt.now()
     native = SimpleNamespace(
         _charging_schedule=[
-            {"start": now - timedelta(minutes=2),
-             "end": now + timedelta(minutes=13), "value": 0.4}
+            {
+                "start": now - timedelta(minutes=2),
+                "end": now + timedelta(minutes=13),
+                "value": 0.4,
+            }
         ],
         sensor=SimpleNamespace(current_price=0.15),
         ev_soc=28,
@@ -225,8 +228,11 @@ def test_local_execution_diagnostics_distinguishes_price_gate_from_safety_hold(h
     now = dt.now()
     native = SimpleNamespace(
         _charging_schedule=[
-            {"start": now - timedelta(minutes=1),
-             "end": now + timedelta(minutes=14), "value": 1}
+            {
+                "start": now - timedelta(minutes=1),
+                "end": now + timedelta(minutes=14),
+                "value": 1,
+            }
         ],
         sensor=SimpleNamespace(current_price=0.30),
         ev_soc=50,
