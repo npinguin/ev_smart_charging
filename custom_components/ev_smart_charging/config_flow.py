@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import callback
+from homeassistant.helpers.entity_registry import async_get as async_entity_registry_get
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 
@@ -26,11 +27,13 @@ from .controller import safety
 from .vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
+    VEHICLE_FACT_KEYS,
     validate_assignments,
     validate_profiles,
 )
 from .helpers.config_flow import DeviceNameCreator, FindEntity, FlowValidator
 from .helpers.general import get_parameter
+from .domain import suggested_entity_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -277,6 +280,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         if MAJOR_VERSION < 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 11):
             self.config_entry = config_entry
         self._editing_vehicle_id = None
+        self._vehicle_error = None
 
     def _charger_names(self):
         return {
@@ -352,6 +356,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         defaults = {**current, **(user_input or {})}
         return self.async_show_form(
             step_id=step_id,
+            errors={"base": self._vehicle_error} if self._vehicle_error else {},
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default=defaults.get("name", "")): cv.string,
@@ -386,7 +391,19 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         profiles[vehicle_id] = dict(user_input)
         try:
             validate_profiles(profiles, self._charger_names())
+            registry = async_entity_registry_get(self.hass)
+            for key in VEHICLE_FACT_KEYS:
+                entity_id = "sensor." + suggested_entity_object_id(
+                    profiles[vehicle_id]["name"], key
+                )
+                registered = registry.async_get(entity_id)
+                expected = f"{DOMAIN}_vehicle_{vehicle_id}_{key}"
+                if registered is not None and registered.unique_id != expected:
+                    raise ValueError("entity_name_collision")
+                if registered is None and self.hass.states.get(entity_id) is not None:
+                    raise ValueError("entity_name_collision")
         except (ValueError, KeyError, TypeError):
+            self._vehicle_error = "invalid_vehicle_configuration"
             return None
         data = dict(self.config_entry.options)
         data[VEHICLES] = profiles
@@ -395,6 +412,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_add_vehicle(self, user_input=None):
         """Create one user-defined Vehicle, no OEM discovery."""
         self._editing_vehicle_id = None
+        self._vehicle_error = None
         if user_input is not None:
             result = self._save_vehicle(user_input)
             if result is not None:
@@ -424,6 +442,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_update_vehicle(self, user_input=None):
         if user_input is not None:
+            self._vehicle_error = None
             result = self._save_vehicle(user_input)
             if result is not None:
                 return result
