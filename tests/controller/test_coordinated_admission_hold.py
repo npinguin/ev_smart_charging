@@ -28,6 +28,10 @@ async def test_controller_rejects_new_participant_without_mutating_local(hass):
     controller.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(controller.entry_id)
+    assert result["type"] == FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "policy"}
+    )
     assert result["type"] == FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"participants": [charger.entry_id]}
@@ -65,6 +69,9 @@ async def test_existing_quarantined_participant_can_be_removed(hass):
     charger.add_to_hass(hass)
     controller.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(controller.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "policy"}
+    )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"participants": []}
     )
