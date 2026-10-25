@@ -282,9 +282,14 @@ def resolve_charging_contexts(
             intent = intents.get(vehicle.id)
             # Resolve stable capability/intent independently of connection.
             # An unplugged Vehicle may still show its SoC and target in HA.
-            power = charger.max_ac_power_kw
-            if power is not None and vehicle.max_ac_charge_kw is not None:
-                power = min(power, vehicle.max_ac_charge_kw)
+            # Do not assume a vehicle-specific safe rate from an EVSE
+            # rating alone. The hardware may support 11 kW while the
+            # vehicle's actual limit has not been configured yet.
+            if (
+                charger.max_ac_power_kw is not None
+                and vehicle.max_ac_charge_kw is not None
+            ):
+                power = min(charger.max_ac_power_kw, vehicle.max_ac_charge_kw)
             if physical_connection.get(charger_id) is not True:
                 status = "not_connected"
             elif state is None or state.soc_percent is None:

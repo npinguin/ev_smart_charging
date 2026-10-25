@@ -42,7 +42,9 @@ class PriceSlot:
 
 
 @dataclass(frozen=True)
-class Charger:
+class ChargingLoadRequest:
+    """Resolved scheduling input, NOT a physical Charger configuration owner."""
+
     id: str
     mode: ControlMode
     connected: bool | None
@@ -177,6 +179,11 @@ class Charger:
         ):
             raise ValueError("Stored battery energy exceeds usable capacity")
         return max(0.0, target - current)
+
+
+# Temporary compatibility name for existing internal planner tests/imports.
+# One dataclass, not a second physical Charger model or another runtime owner.
+Charger = ChargingLoadRequest
 
 
 @dataclass(frozen=True)

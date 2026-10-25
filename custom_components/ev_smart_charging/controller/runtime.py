@@ -29,7 +29,7 @@ from .monitor import collect
 from .local_projection import local_plan_facts
 from .costs import ActualCostLedger
 from .admission import SupervisionGate
-from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
+from .planner import ChargingLoadRequest, Policy, PriceSlot, QUARTER, build_plan, utc
 from ..vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
@@ -368,7 +368,7 @@ class ChargeSupervisor:
                 # can never silently inherit unrelated Local demand.
                 if context.status not in ("ready", "target_met"):
                     soc = None
-        return Charger(
+        return ChargingLoadRequest(
             id=key,
             mode=mode,
             connected=obj.switch_ev_connected,
