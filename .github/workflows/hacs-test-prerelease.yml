@@ -1,11 +1,11 @@
-name: HACS guarded HA thread-safety bugfix prerelease
+name: HACS guarded Mobility Light drop-in prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - fix/local-bootstrap-lifecycle
+      - architecture/vehicle-charger-assignment-v1
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,12 +24,12 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/fix/local-bootstrap-lifecycle' }}
+    if: ${{ github.ref == 'refs/heads/architecture/vehicle-charger-assignment-v1' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.7
+      VERSION: 2.6.0-rc.8
     steps:
       - uses: actions/checkout@v7
 
@@ -83,6 +83,16 @@ jobs:
           )
           assert Path("tests/controller/test_thread_safety.py").exists()
           assert Path("tests/controller/test_coordinated_admission_hold.py").exists()
+          # Real HA lifecycle and four-config-entry drop-in evidence.
+          assert "async_step_link_chargers" in config_code
+          assert "linked_chargers" in config_code
+          selects = Path("custom_components/ev_smart_charging/select.py").read_text()
+          assert "ChargerControllerLinkSelect" in selects
+          assert "VehicleAssignmentSelect" in selects
+          assert Path("tests/controller/test_vehicle_config.py").exists()
+          assert Path("tests/controller/test_ha_managed_bootstrap.py").exists()
+          assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
+          assert Path("docs/controller/RC8_DROPIN_TEST.md").exists()
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -100,7 +110,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc7-manual-zip
+          name: evsc-guarded-rc8-dropin-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -124,5 +134,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — Local-only HA thread-safety fix" \
-            --notes "GUARDED TEST PRERELEASE, NOT STABLE. Local EVSC unchanged; HA-native redacted diagnostics are available on every charger and controller entry/device; Native source event callbacks are now HA event-loop-safe; Local retains its existing five-minute readback retry and full Local feature behavior; new Coordinated opt-in is rejected during the P0 safety hold; one-to-four charger controller remains in P0 quarantine. Coordinated physical Start/Stop is hard-disabled; selecting Coordinated is blocked. DO NOT USE THIS TO RETEST COORDINATED. Source-native HACS installs custom_components/ev_smart_charging/; the tested manual ZIP is available as a CI artifact; the existing published-release workflow may attach a separate optional fallback ZIP. Exact source software CI Gate A has passed; NO physical-site acceptance has been performed. Back up all four existing EVSC Local entries, Options, IDs and source bindings before any in-place test. No main merge; no automatic physical permission. Issue #5 still OPEN. Source commit: $GITHUB_SHA; draft PR #3."
+            --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
+            --notes "GUARDED MOBILITY LIGHT DROP-IN TEST PRERELEASE, NOT STABLE. Four original v8 Local EVSC Charger entries and their native Start/Stop, pricing and user entity IDs remain the default and must be tested unchanged. A persistent HA Charge Controller Device is auto-created; link Chargers from Controller Configure -> Link Chargers or the native Charger Charge Controller select, without any physical mode switch. Vehicles are managed in Controller Options and assigned with the native Assigned Vehicle select per Charger. These are real HA Options and Devices, not mocks or a separate RHI package. Non-SoC loads have an optional kWh/quarter demand and read-only multi-load preview. Physical Coordinated actuation and admission remain HARD DISABLED while P0 #5 is open: do NOT select or test physical Coordinated on Peblar or other real EVSEs. Before drop-in update, make full HA backup; capture old Charger config-entry/device/entity IDs and native controls; keep independent OEM/EVSE control. If HA health changes or any source mapping is wrong, restore rc.7 and the backup. This is a field validation prerelease, NOT proof of physical coordinated safety. Exact-head software CI gate passed. No main merge. Source commit: $GITHUB_SHA; Draft PR #6."
