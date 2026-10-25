@@ -1,6 +1,9 @@
 # Engineering Handover — EV Smart Charging → Mobility Light
 **Peildatum:** 25 oktober 2026 · **Status:** architecture WIP, not releasable · **Audience:** next engineer / reviewer
 
+> **Product correction / upstream-first priority, 25 October 2026:** This package is intended to be contributed to the original upstream EV Smart Charging repository in small, independently reviewable and testable changes. Original Local functionality and backend contracts are the baseline, **not a runtime to replace by default**. Vehicle, assignments, optional SoC/duration/energy, multi-load planning, optional flexible loads and per-load/aggregate cost metering are additive/opt-in. A multi-load planner may coexist with the upstream Local planner; never create a second physical writer or mandate a Controller on old installations. No RHI/Robotix dependency may enter upstream. In case of conflict, this upstream-first contract and [UPSTREAM_CONTRIBUTION.md](../controller/UPSTREAM_CONTRIBUTION.md) supersede earlier wording in this handover about mandatory single-planner refactoring. P0 #5 remains blocked and Draft PR #6 must **not** be submitted upstream wholesale.
+
+
 > **First instruction to the next engineer:** Continue the existing draft PR and finish the refactor. Do not start a new architecture, do not merge/release this branch as-is, and do not enable physical Coordinated actuation. The user explicitly requires **zero retained engineering debt from unused Controller extensions** and **full backward compatibility for the already used Local functionality**.
 
 ## 0. Executive handover: the five truths

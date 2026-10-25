@@ -2,6 +2,14 @@
 
 **Status:** Architectural direction. Pure reference models and tests in the isolated draft branch `architecture/vehicle-charger-assignment-v1`. **Not wired into Local runtime; not released.** Published HACS rc.7 and the physical Coordinated P0 hold remain unchanged.
 
+## Upstream-first product direction (25 October 2026)
+
+**The goal is a set of maintainable contributions back to the original upstream EV Smart Charging project, not a wholesale rewrite or a Robotix-specific fork.** All mature upstream Local features, public HA identifiers, configuration semantics and physical execution remain supported. Vehicle configuration, explicit Charger assignment, optional non-SoC demand, multi-load planning, optional flexible loads and per-load/total metering are **additive capabilities** that should be opt-in. Existing Local users must not be forced to adopt Vehicles, a Controller or a migration.
+
+The upstream Local scheduling algorithm is retained as the reference and default path. Additional multi-load/Coordinated planning **may live alongside it** while sharing narrow source/price and planning contracts; no mandatory engine replacement is required merely for model uniformity. Do not create a second physical actuator owner. Unknown source data remains unknown, but lack of a Vehicle or SoC alone must not prevent use of explicitly configured alternative-duration/energy-based planning. Without sufficient demand or physical authorization, do not invent an automatic start.
+
+For the upstream author, prepare **small independent PRs on the latest upstream `main`**, with legacy parity tests, direct HA-native use and no references or dependencies on RHI/Robotix. See [Upstream contribution gates](../controller/UPSTREAM_CONTRIBUTION.md). The current Draft PR #6 is a development workspace, **not** a candidate to merge upstream wholesale. Physical Coordinated P0 #5 remains open.
+
 ## Core model — exactly three device concepts
 
 | Concept | HA Device | Owns | Does not own |
@@ -21,9 +29,9 @@ There are **three core concepts, not five or six**. `Assignment`, `ChargeIntent`
 
 **The Charge Controller never has a Vehicle Assignment.** Its only membership is a set of Charger IDs. A Controller with zero Chargers is valid, and a Controller with connected but unassigned Chargers is also valid. Both Local and Coordinated still monitor native state and measurements while excluding those Chargers from vehicle-specific automatic plans. `None` is a supported user selection on each Charger, not a missing Controller configuration or a request to fabricate a default Vehicle. This contract does not change existing v8 Local execution until the migration is proven feature-equivalent.
 
-**Local:** Each Charger is scheduled independently by the **same core planning semantics** as a one-member Controller. Preserve all original Local decisions and native Start/Stop. The existing HA Charger entries remain the installed control interfaces. A single Local Charger must not need a Coordinated membership or other Charger to operate.
+**Local:** Each Charger retains the original upstream Local scheduling and native Start/Stop by default. A single Local Charger must not need a Vehicle profile, Controller membership, another Charger or a runtime migration to operate. Shared pure quarter/price helpers may be extracted only with proven upstream behavior parity.
 
-**Coordinated:** A Charge Controller handles several Chargers simultaneously with group concurrency, site power/peak constraints and prioritized/optimized allocation. It consumes the **same Vehicle + Charger + intent facts** as Local; it does not own a second charger/vehicle model or new native writers. Neither Local nor Coordinated changes the stable identities of Vehicles or Chargers. Policy/mode changes are reversible and must never temporarily leave a charger without an execution owner.
+**Coordinated:** Optional additive planning handles multiple Chargers and later appropriate flexible loads, adding group concurrency, site power/peak constraints and load cost accounting. It may coexist with the original Local algorithm through explicit shared prices/constraints and resolved load facts; avoid a forced replacement of the proven Local scheduler. It never creates another EVSE native writer. Charger identity and Local policy remain stable; opt-in handoff is reversible and must never leave a charger without an execution owner.
 
 **P0 rule:** no admission of a new Coordinated participant and no automatic Coordinated Start/Stop while `COORDINATED_ACTUATION_ENABLED=False`. Architecture and synthetic tests are NOT authorization for physical migration. Incident #5 remains open.
 
