@@ -10,9 +10,15 @@ from homeassistant.helpers.entity_registry import async_get as async_entity_regi
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
-from custom_components.ev_smart_charging.controller.runtime import ChargeSupervisor
+from custom_components.ev_smart_charging.controller.runtime import (
+    ChargeSupervisor,
+    set_controller_link,
+)
 from custom_components.ev_smart_charging.domain import suggested_entity_object_id
-from custom_components.ev_smart_charging.select import VehicleAssignmentSelect
+from custom_components.ev_smart_charging.select import (
+    ChargerControllerLinkSelect,
+    VehicleAssignmentSelect,
+)
 from custom_components.ev_smart_charging.vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
@@ -579,3 +585,123 @@ def test_vehicle_soc_freshness_does_not_reuse_stale_value():
             {"audi": {**limited, "soc_max_age_minutes": -1}},
             {"charger": "Garage Black"},
         )
+
+
+async def test_dropin_controller_link_flow_preserves_four_native_local_entries(hass):
+    """HA Options associate real Chargers without changing native v8 state."""
+    chargers = [
+        MockConfigEntry(
+            domain=DOMAIN,
+            entry_id=f"native_{index}",
+            title=f"Garage {index}",
+            data={"device_name": f"Garage {index}"},
+            options={"maximum_price": 0.20 + index / 100},
+            version=8,
+        )
+        for index in range(4)
+    ]
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller_links",
+        title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": [], "max_parallel": 1},
+        version=8,
+    )
+    for entry in (*chargers, controller):
+        entry.add_to_hass(hass)
+    snapshot = [
+        (entry.entry_id, entry.version, dict(entry.data), dict(entry.options))
+        for entry in chargers
+    ]
+    result = await hass.config_entries.options.async_init(controller.entry_id)
+    assert result["type"] == FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "link_chargers"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "link_chargers"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"linked_chargers": ["native_0", "native_2"]}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert controller.options["linked_chargers"] == ["native_0", "native_2"]
+    assert controller.options["participants"] == []
+    assert snapshot == [
+        (entry.entry_id, entry.version, dict(entry.data), dict(entry.options))
+        for entry in chargers
+    ]
+    manager = object.__new__(ChargeSupervisor)
+    manager.config_entry = controller
+    manager.hass = SimpleNamespace(
+        data={DOMAIN: {
+            entry.entry_id: SimpleNamespace(config_entry=entry)
+            for entry in chargers
+        }}
+    )
+    assert set(manager.chargers()) == {"native_0", "native_2"}
+
+    # Old persisted Coordinated member may not be silently unlinked.
+    controller.options["participants"] = ["native_2"]
+    result = await hass.config_entries.options.async_init(controller.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "link_chargers"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"linked_chargers": ["native_0"]}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "unlink_coordinated_first"
+
+
+async def test_charger_controller_select_links_and_unlinks_without_native_commands(
+    hass,
+):
+    """A Charger Device select changes Controller Options, not its Local entry."""
+    first = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="garage_black",
+        title="Garage Black",
+        data={"device_name": "Garage Black"},
+        options={"maximum_price": 0.24},
+        version=8,
+    )
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="garage_white",
+        title="Garage White",
+        data={"device_name": "Garage White"},
+        version=8,
+    )
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller_link",
+        title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": []},
+        version=8,
+    )
+    for entry in (first, second, controller):
+        entry.add_to_hass(hass)
+    select = ChargerControllerLinkSelect(first)
+    select.hass = hass
+    assert select.current_option == "EVSC Charge Controller"
+    await select.async_select_option("Not linked")
+    assert controller.options["linked_chargers"] == ["garage_white"]
+    assert select.current_option == "Not linked"
+    assert first.options == {"maximum_price": 0.24}
+    await select.async_select_option("EVSC Charge Controller")
+    assert select.current_option == "EVSC Charge Controller"
+    assert set(controller.options["linked_chargers"]) == {
+        "garage_black",
+        "garage_white",
+    }
+    assert controller.options["participants"] == []
+    with pytest.raises(ValueError, match="invalid_controller_link"):
+        await select.async_select_option("Invalid")
+
+    # Physical supervised ownership must not be detached by unlink.
+    controller.options["participants"] = ["garage_black"]
+    with pytest.raises(ValueError, match="Local before unlinking"):
+        await select.async_select_option("Not linked")
+    assert "garage_black" in controller.options["linked_chargers"]
