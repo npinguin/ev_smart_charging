@@ -393,11 +393,15 @@ def test_vehicle_contexts_are_read_only_and_keep_local_source_independent(hass):
         options={VEHICLES: {"audi": profile}, ASSIGNMENTS: {"black": "audi"}}
     )
     black = SimpleNamespace(
-        config_entry=SimpleNamespace(entry_id="black", title="Garage Black", options={}),
+        config_entry=SimpleNamespace(
+            entry_id="black", title="Garage Black", options={}
+        ),
         switch_ev_connected=True,
     )
     white = SimpleNamespace(
-        config_entry=SimpleNamespace(entry_id="white", title="Garage White", options={}),
+        config_entry=SimpleNamespace(
+            entry_id="white", title="Garage White", options={}
+        ),
         switch_ev_connected=True,
     )
     manager.chargers = lambda: {"black": black, "white": white}

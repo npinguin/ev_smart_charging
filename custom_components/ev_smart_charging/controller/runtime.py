@@ -28,7 +28,12 @@ from .local_projection import local_plan_facts
 from .costs import ActualCostLedger
 from .admission import SupervisionGate
 from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
-from ..vehicle_config import ASSIGNMENTS, VEHICLES, read_vehicle_soc, resolve_user_contexts
+from ..vehicle_config import (
+    ASSIGNMENTS,
+    VEHICLES,
+    read_vehicle_soc,
+    resolve_user_contexts,
+)
 
 _LOGGER = logging.getLogger(__name__)
 MARKER = "__evsc_entry_type"
