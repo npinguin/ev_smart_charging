@@ -644,7 +644,9 @@ async def test_dropin_controller_link_flow_preserves_four_native_local_entries(h
     assert set(manager.chargers()) == {"native_0", "native_2"}
 
     # Old persisted Coordinated member may not be silently unlinked.
-    controller.options["participants"] = ["native_2"]
+    hass.config_entries.async_update_entry(
+        controller, options={**controller.options, "participants": ["native_2"]}
+    )
     result = await hass.config_entries.options.async_init(controller.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "link_chargers"}
@@ -687,6 +689,7 @@ async def test_charger_controller_select_links_and_unlinks_without_native_comman
         entry.add_to_hass(hass)
     select = ChargerControllerLinkSelect(first)
     select.hass = hass
+    select.async_write_ha_state = MagicMock()
     assert select.current_option == "EVSC Charge Controller"
     await select.async_select_option("Not linked")
     assert controller.options["linked_chargers"] == ["garage_white"]
@@ -703,7 +706,9 @@ async def test_charger_controller_select_links_and_unlinks_without_native_comman
         await select.async_select_option("Invalid")
 
     # Physical supervised ownership must not be detached by unlink.
-    controller.options["participants"] = ["garage_black"]
+    hass.config_entries.async_update_entry(
+        controller, options={**controller.options, "participants": ["garage_black"]}
+    )
     with pytest.raises(ValueError, match="Local before unlinking"):
         await select.async_select_option("Not linked")
     assert "garage_black" in controller.options["linked_chargers"]
