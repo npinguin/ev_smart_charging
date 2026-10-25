@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 
 from ..const import DOMAIN, NAME
+from . import safety
 
 
 class ControllerSensor(SensorEntity):
@@ -113,7 +114,7 @@ class ControllerSensor(SensorEntity):
                     obj.config_entry.title
                     for _, obj in sorted(self.manager.chargers().items())
                 ],
-                "coordinated_actuation_available": False,
+                "coordinated_actuation_available": safety.COORDINATED_ACTUATION_ENABLED,
                 "manually_paused": len(
                     self.manager.config_entry.options.get("paused_chargers", [])
                 ),
