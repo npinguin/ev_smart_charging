@@ -21,7 +21,7 @@ from .controller.local_projection import local_plan_facts
 from .controller.runtime import ChargeSupervisor, _number
 from homeassistant.util import dt
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 REDACT = {
     "password",
     "passwd",
@@ -442,6 +442,118 @@ def _charger_diagnostics(hass, charger, manager=None):
     }
 
 
+def _multi_day_diagnostics(manager):
+    """Bounded, private snapshot of the real 1..N Controller runtime plan.
+
+    Never compute a new plan or serialize raw quarter events, OEM IDs, tariff
+    attributes, Vehicle names or HA entity/entry IDs in a support download.
+    """
+    detail = manager.multi_day_details or {}
+    loads = detail.get("loads", ())
+    by_day = detail.get("by_day", ())
+    # All real EVSC Charger instances are reported, with a hard upper bound
+    # against corrupted storage and hostile future price horizons.
+    sampled_loads = []
+    for load in loads[:32]:
+        if not isinstance(load, dict):
+            continue
+        sampled_loads.append(
+            {
+                "charger_ref": _ref(load.get("evsc_entry_id")),
+                "vehicle_ref": _ref(load.get("assigned_vehicle_id")),
+                "status": load.get("status"),
+                "requested_battery_kwh": _finite(load.get("requested_battery_kwh")),
+                "planned_battery_kwh": _finite(load.get("planned_battery_kwh")),
+                "remaining_battery_kwh": _finite(load.get("remaining_battery_kwh")),
+                "planned_grid_kwh": _finite(load.get("planned_grid_kwh")),
+                "indicative_cost_eur": _finite(load.get("indicative_cost_eur")),
+                "ready_by_configured": bool(load.get("ready_by")),
+                "scheduled_quarters": len(load.get("slots") or ()),
+                "days": [
+                    {
+                        "date": item.get("date"),
+                        "planned_grid_kwh": _finite(item.get("planned_grid_kwh")),
+                        "indicative_cost_eur": _finite(item.get("indicative_cost_eur")),
+                    }
+                    for item in (load.get("by_day") or ())[:16]
+                    if isinstance(item, dict)
+                ],
+            }
+        )
+    return {
+        "status": manager.multi_day_status,
+        "computed": manager.multi_day_plan is not None,
+        "advisory_only": True,
+        "physical_actuation_authorized": False,
+        "planning_horizon_days": detail.get(
+            "planning_horizon_days",
+            manager.config_entry.options.get("planning_horizon_days", 2),
+        ),
+        "coverage": detail.get("coverage"),
+        "full_horizon_priced": detail.get("full_horizon_priced"),
+        "planned_grid_kwh": _finite(detail.get("planned_grid_kwh")),
+        "indicative_cost_eur": _finite(detail.get("indicative_cost_eur")),
+        "price_horizon_end": detail.get("price_horizon_end"),
+        "by_day": [
+            {
+                "date": item.get("date"),
+                "planned_grid_kwh": _finite(item.get("planned_grid_kwh")),
+                "indicative_cost_eur": _finite(item.get("indicative_cost_eur")),
+                "price_coverage": item.get("price_coverage"),
+            }
+            for item in by_day[:16]
+            if isinstance(item, dict)
+        ],
+        "loads": sampled_loads,
+        "load_count": len(loads),
+        "excluded_chargers": [
+            {
+                "charger_ref": _ref(item.get("evsc_entry_id")),
+                "status": item.get("status"),
+            }
+            for item in (detail.get("excluded") or ())[:32]
+            if isinstance(item, dict)
+        ],
+        "warning_count": len(detail.get("warnings") or ()),
+    }
+
+
+def _vehicle_diagnostics(hass, manager):
+    """All Vehicle profiles, ownership and source quality; never names/IDs."""
+    options = manager.config_entry.options
+    profiles = options.get("vehicles", {})
+    assignments = options.get("vehicle_assignments", {})
+    by_vehicle = {value: key for key, value in assignments.items() if value}
+    # Use the same source quality adapter as the real Controller.
+    from .vehicle_config import vehicle_soc_reading
+
+    vehicles = []
+    for vehicle_id, profile in sorted(profiles.items()):
+        reading, quality = vehicle_soc_reading(hass, profile)
+        vehicles.append(
+            {
+                "vehicle_ref": _ref(vehicle_id),
+                "assigned_charger_ref": _ref(by_vehicle.get(vehicle_id)),
+                "soc_percent": _finite(reading),
+                "soc_source_status": quality,
+                "soc_source": _source(hass, profile.get("soc_entity"), quantity="soc"),
+                "target_soc_percent": _finite(profile.get("target_soc", 80)),
+                "usable_battery_kwh": _finite(profile.get("usable_battery_kwh")),
+                "max_ac_charge_kw": _finite(profile.get("max_ac_charge_kw")),
+                "ready_by_configured": bool(profile.get("ready_by")),
+                "soc_freshness_limit_minutes": profile.get(
+                    "soc_max_age_minutes", 0
+                ),
+            }
+        )
+    return {
+        "configured": len(profiles),
+        "assigned": sum(bool(value) for value in assignments.values()),
+        "unassigned": sum(key not in by_vehicle for key in profiles),
+        "profiles": vehicles,
+    }
+
+
 def _controller_diagnostics(hass, manager):
     chargers = manager.chargers()
     snapshot = manager.snapshot()
@@ -454,6 +566,56 @@ def _controller_diagnostics(hass, manager):
     status = manager.reason
     total = len(chargers)
     local = total - len(manager.participants)
+    configured_chargers = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("__evsc_entry_type") != "charge_controller"
+    ]
+    linked_keys = set(chargers)
+    unloaded = [
+        _ref(entry.entry_id)
+        for entry in configured_chargers
+        if entry.entry_id not in hass.data.get(DOMAIN, {})
+    ]
+    unlinked = [
+        _ref(entry.entry_id)
+        for entry in configured_chargers
+        if entry.entry_id not in linked_keys
+    ]
+    multi_day = _multi_day_diagnostics(manager)
+    vehicles = _vehicle_diagnostics(hass, manager)
+    blockers = []
+    if unloaded:
+        blockers.append("configured_charger_not_loaded")
+    if unlinked:
+        blockers.append("charger_not_linked_to_controller")
+    if any(
+        item["source_health"]["charger_switch"]["status"]
+        not in ("present",)
+        for item in entries.values()
+    ):
+        blockers.append("charger_control_source_unavailable")
+    if any(
+        item["source_health"]["actual_power"]["status"] != "valid"
+        for item in entries.values()
+    ):
+        blockers.append("charger_power_meter_coverage_incomplete")
+    if any(
+        item["source_health"]["session_energy"]["status"] != "valid"
+        for item in entries.values()
+    ):
+        blockers.append("charger_session_meter_coverage_incomplete")
+    if any(
+        item["source_health"]["effective_price"]["status"] != "present"
+        for item in entries.values()
+    ):
+        blockers.append("effective_price_coverage_incomplete")
+    if not vehicles["configured"]:
+        blockers.append("no_vehicle_profiles_configured")
+    if multi_day["status"] not in ("PLANNED", "PROVISIONAL"):
+        blockers.append("multi_day_plan_not_ready")
+    if not safety.COORDINATED_ACTUATION_ENABLED:
+        blockers.append("coordinated_physical_safety_hold")
     # Explain absent aggregates: for Local, missing validated rate or kW
     # coverage must remain unknown, not silently become zero.
     unavailable = {}
@@ -483,6 +645,27 @@ def _controller_diagnostics(hass, manager):
     return {
         "mode": "coordinated" if manager.participants else "local_monitoring",
         "status": status,
+        "diagnostic_scope": "entire_ev_smart_charging_installation",
+        "configured_charger_count": len(configured_chargers),
+        "linked_charger_count": total,
+        "unlinked_charger_refs": unlinked,
+        "unloaded_charger_refs": unloaded,
+        "vehicle_profiles": vehicles,
+        "multi_day_planning": multi_day,
+        "readiness": {
+            "local_monitoring_running": not manager._stopped
+            and manager._unsub is not None,
+            "multi_day_computed": multi_day["computed"],
+            "multi_day_feasible": multi_day["status"] == "PLANNED",
+            "source_coverage_complete": not any(
+                code
+                for code in blockers
+                if code.startswith("charger_")
+                or code.startswith("effective_price_")
+            ),
+            "physical_coordinated_enabled": safety.COORDINATED_ACTUATION_ENABLED,
+            "blockers": blockers,
+        },
         "coordinated_actuation_enabled": safety.COORDINATED_ACTUATION_ENABLED,
         "runtime": {
             "stopped": manager._stopped,
