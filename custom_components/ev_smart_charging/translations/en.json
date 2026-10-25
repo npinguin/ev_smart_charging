@@ -43,7 +43,8 @@
           "policy": "Charge Controller policy",
           "add_vehicle": "Add Vehicle",
           "edit_vehicle": "Edit Vehicle",
-          "assign_vehicle": "Assign Vehicles to Chargers"
+          "assign_vehicle": "Assign Vehicles to Chargers",
+          "delete_vehicle": "Delete Vehicle"
         }
       },
       "charger": {
@@ -119,6 +120,20 @@
         "title": "Assign Vehicle to Charger",
         "description": "Each Charger can select a Vehicle or None. This selection does not change original Local physical control.",
         "data": {}
+      },
+      "delete_vehicle": {
+        "title": "Choose Vehicle to delete",
+        "description": "Deletion does not change the Local charger configuration.",
+        "data": {
+          "vehicle": "Vehicle to delete"
+        }
+      },
+      "confirm_delete_vehicle": {
+        "title": "Confirm Vehicle deletion",
+        "description": "Delete {vehicle} and clear its assignment? Its EVSC entities and device are removed on Controller reload. Local charging continues unchanged.",
+        "data": {
+          "confirm": "Yes, delete this Vehicle"
+        }
       }
     },
     "error": {
@@ -134,7 +149,8 @@
       "charging_state_entity_not_found": "Charging state entity not found.",
       "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete.",
       "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
-      "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names."
+      "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names.",
+      "confirm_required": "Confirm the deletion explicitly or return to the previous screen."
     },
     "abort": {
       "no_vehicles": "No Vehicles configured. Add a Vehicle first."

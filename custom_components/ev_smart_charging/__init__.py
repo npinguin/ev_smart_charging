@@ -117,6 +117,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     _register_charge_plan_service(hass)
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        from .vehicle_sensors import cleanup_orphan_vehicle_registry
+
+        cleanup_orphan_vehicle_registry(hass, entry)
         hass.data[DOMAIN][entry.entry_id] = ChargeSupervisor(hass, entry)
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):

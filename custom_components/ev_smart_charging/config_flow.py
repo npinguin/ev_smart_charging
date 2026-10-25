@@ -281,6 +281,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         if MAJOR_VERSION < 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 11):
             self.config_entry = config_entry
         self._editing_vehicle_id = None
+        self._deleting_vehicle_id = None
         self._vehicle_error = None
 
     def _charger_names(self):
@@ -295,7 +296,7 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         """Simple navigation, without an extra device or configuration layer."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["policy", "add_vehicle", "edit_vehicle", "assign_vehicle"],
+            menu_options=["policy", "add_vehicle", "edit_vehicle", "delete_vehicle", "assign_vehicle"],
         )
 
     async def async_step_policy(self, user_input=None):
@@ -452,6 +453,54 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             if result is not None:
                 return result
         return self._vehicle_form("update_vehicle", user_input)
+
+    async def async_step_delete_vehicle(self, user_input=None):
+        """Select an existing Vehicle, without deleting it yet."""
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        if not profiles:
+            return self.async_abort(reason="no_vehicles")
+        if user_input is not None:
+            selected = user_input.get("vehicle")
+            if selected not in profiles:
+                return self.async_abort(reason="no_vehicles")
+            self._deleting_vehicle_id = selected
+            return await self.async_step_confirm_delete_vehicle()
+        return self.async_show_form(
+            step_id="delete_vehicle",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("vehicle"): vol.In(
+                        {key: obj["name"] for key, obj in profiles.items()}
+                    )
+                }
+            ),
+        )
+
+    async def async_step_confirm_delete_vehicle(self, user_input=None):
+        """Remove profile and assignments in one commit; never change Local."""
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        vehicle_id = self._deleting_vehicle_id
+        if vehicle_id not in profiles:
+            return self.async_abort(reason="no_vehicles")
+        if user_input is not None and user_input.get("confirm") is True:
+            options = dict(self.config_entry.options)
+            options[VEHICLES] = {
+                key: profile for key, profile in profiles.items() if key != vehicle_id
+            }
+            options[ASSIGNMENTS] = {
+                charger_id: assigned_id
+                for charger_id, assigned_id in options.get(ASSIGNMENTS, {}).items()
+                if assigned_id != vehicle_id
+            }
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="confirm_delete_vehicle",
+            data_schema=vol.Schema(
+                {vol.Required("confirm", default=False): cv.boolean}
+            ),
+            description_placeholders={"vehicle": profiles[vehicle_id]["name"]},
+            errors={"base": "confirm_required"} if user_input is not None else {},
+        )
 
     async def async_step_assign_vehicle(self, user_input=None):
         """Assignment is a Charger attribute; None is always allowed."""

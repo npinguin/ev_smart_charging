@@ -9,6 +9,11 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.device_registry import async_get as async_device_registry_get
+from homeassistant.helpers.entity_registry import (
+    async_get as async_entity_registry_get,
+    async_entries_for_config_entry,
+)
 
 from .const import DOMAIN, NAME
 from .domain import suggested_entity_object_id
@@ -120,3 +125,38 @@ def vehicle_sensors(entry):
         for vid, profile in sorted(profiles.items())
         for key in VEHICLE_FACT_KEYS
     ]
+
+
+def cleanup_orphan_vehicle_registry(hass, entry) -> None:
+    """Prune only deleted EVSC Vehicle entities/devices of this Controller.
+
+    Kept Vehicles preserve stable unique IDs and user-renamed entity IDs.
+    Existing Local Charger entries and their native controls are untouched.
+    """
+    active = set(entry.options.get(VEHICLES, {}))
+    entity_registry = async_entity_registry_get(hass)
+    prefix = f"{DOMAIN}_vehicle_"
+    for entity in tuple(async_entries_for_config_entry(entity_registry, entry.entry_id)):
+        if entity.platform != DOMAIN or entity.domain != "sensor":
+            continue
+        if not entity.unique_id.startswith(prefix):
+            continue
+        for key in VEHICLE_FACT_KEYS:
+            suffix = f"_{key}"
+            if entity.unique_id.endswith(suffix):
+                vehicle_id = entity.unique_id[len(prefix) : -len(suffix)]
+                if vehicle_id not in active:
+                    entity_registry.async_remove(entity.entity_id)
+                break
+
+    device_registry = async_device_registry_get(hass)
+    for device in tuple(device_registry.devices.values()):
+        if device.config_entries != {entry.entry_id}:
+            continue
+        if any(
+            domain == DOMAIN
+            and identifier.startswith("vehicle:")
+            and identifier.removeprefix("vehicle:") not in active
+            for domain, identifier in device.identifiers
+        ):
+            device_registry.async_remove_device(device.id)

@@ -5,6 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.device_registry import async_get as async_device_registry_get
+from homeassistant.helpers.entity_registry import async_get as async_entity_registry_get
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
@@ -18,7 +20,10 @@ from custom_components.ev_smart_charging.vehicle_config import (
     validate_assignments,
     validate_profiles,
 )
-from custom_components.ev_smart_charging.vehicle_sensors import vehicle_sensors
+from custom_components.ev_smart_charging.vehicle_sensors import (
+    cleanup_orphan_vehicle_registry,
+    vehicle_sensors,
+)
 
 
 def test_optional_none_vehicle_assignment_is_first_class():
@@ -250,3 +255,114 @@ async def test_charger_select_rejects_assignment_conflict(hass):
     with pytest.raises(ValueError, match="vehicle_already_assigned"):
         await entity.async_select_option("Audi Q8")
     assert controller.options[ASSIGNMENTS] == {"white": "audi"}
+
+
+async def test_delete_vehicle_confirms_and_unassigns_without_local_changes(hass):
+    charger = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="black",
+        title="Garage Black",
+        data={"device_name": "Garage Black"},
+        options={"maximum_price": 0.30},
+        version=8,
+    )
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller",
+        title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={
+            "participants": [],
+            VEHICLES: {
+                "audi": {"name": "Audi Q8", "target_soc": 80},
+                "guest": {"name": "Guest", "target_soc": 90},
+            },
+            ASSIGNMENTS: {"black": "audi"},
+        },
+        version=8,
+    )
+    charger.add_to_hass(hass)
+    controller.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(controller.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "delete_vehicle"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"vehicle": "audi"}
+    )
+    assert result["step_id"] == "confirm_delete_vehicle"
+    assert controller.options[ASSIGNMENTS] == {"black": "audi"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"confirm": False}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "confirm_required"
+    assert controller.options[ASSIGNMENTS] == {"black": "audi"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"confirm": True}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert controller.options[VEHICLES] == {"guest": {"name": "Guest", "target_soc": 90}}
+    assert controller.options[ASSIGNMENTS] == {}
+    assert controller.options["participants"] == []
+    assert charger.options["maximum_price"] == 0.30
+    assert charger.version == 8
+
+
+def test_vehicle_registry_cleanup_preserves_retained_vehicle_and_charger(hass):
+    charger = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="black",
+        title="Garage Black",
+        data={"device_name": "Garage Black"},
+        version=8,
+    )
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller",
+        title="EVSC Charge Controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={VEHICLES: {"guest": {"name": "Guest", "target_soc": 80}}},
+        version=8,
+    )
+    charger.add_to_hass(hass)
+    controller.add_to_hass(hass)
+    devices = async_device_registry_get(hass)
+    entities = async_entity_registry_get(hass)
+    stale = devices.async_get_or_create(
+        config_entry_id=controller.entry_id,
+        identifiers={(DOMAIN, "vehicle:audi")},
+        name="Audi Q8",
+    )
+    retained = devices.async_get_or_create(
+        config_entry_id=controller.entry_id,
+        identifiers={(DOMAIN, "vehicle:guest")},
+        name="Guest",
+    )
+    local = devices.async_get_or_create(
+        config_entry_id=charger.entry_id,
+        identifiers={(DOMAIN, "charger:black")},
+        name="Garage Black",
+    )
+    deleted_sensor = entities.async_get_or_create(
+        "sensor", DOMAIN, f"{DOMAIN}_vehicle_audi_soc",
+        suggested_object_id="audi_q8_soc",
+        config_entry=controller, device_id=stale.id,
+    )
+    retained_sensor = entities.async_get_or_create(
+        "sensor", DOMAIN, f"{DOMAIN}_vehicle_guest_soc",
+        suggested_object_id="guest_soc",
+        config_entry=controller, device_id=retained.id,
+    )
+    cleanup_orphan_vehicle_registry(hass, controller)
+    assert entities.async_get(deleted_sensor.entity_id) is None
+    assert devices.async_get(stale.id) is None
+    assert entities.async_get(retained_sensor.entity_id) is not None
+    assert devices.async_get(retained.id) is not None
+    assert devices.async_get(local.id) is not None
+    cleanup_orphan_vehicle_registry(hass, controller)
+    assert devices.async_get(retained.id) is not None
