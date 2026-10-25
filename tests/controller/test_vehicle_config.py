@@ -561,7 +561,11 @@ def test_vehicle_soc_freshness_does_not_reuse_stale_value():
         last_updated=now - timedelta(hours=3),
     )
     hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity: state))
-    limited = {"name": "Audi Q8", "soc_entity": "sensor.audi", "soc_max_age_minutes": 30}
+    limited = {
+        "name": "Audi Q8",
+        "soc_entity": "sensor.audi",
+        "soc_max_age_minutes": 30,
+    }
     assert vehicle_soc_reading(hass, limited) == (None, "stale")
     assert read_vehicle_soc(hass, limited) is None
     unlimited = {**limited, "soc_max_age_minutes": 0}
