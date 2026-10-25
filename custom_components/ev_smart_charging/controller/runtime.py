@@ -28,6 +28,7 @@ from .local_projection import local_plan_facts
 from .costs import ActualCostLedger
 from .admission import SupervisionGate
 from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
+from ..vehicle_config import ASSIGNMENTS, VEHICLES, read_vehicle_soc, resolve_user_contexts
 
 _LOGGER = logging.getLogger(__name__)
 MARKER = "__evsc_entry_type"
@@ -908,6 +909,57 @@ class ChargeSupervisor:
             "available_ev_power": self.available_ev_power_kw,
         }
 
+    def vehicle_contexts(self):
+        """Read-only Vehicle/Charger assignment evidence for HA testing.
+
+        This never grants a physical command, edits a Local charger or
+        overrides its original SoC/charging schedule. Missing or conflicting
+        source evidence is explicit and never replaced by an assumed EV.
+        """
+        options = self.config_entry.options
+        profiles = options.get(VEHICLES, {})
+        if not profiles:
+            return {}
+        chargers = self.chargers()
+        descriptions = {
+            key: {
+                "name": obj.config_entry.title,
+                "connected": obj.switch_ev_connected,
+                "max_ac_power_kw": self._source_config(key, obj).get("power_kw"),
+            }
+            for key, obj in chargers.items()
+        }
+        try:
+            contexts = resolve_user_contexts(self.hass, options, descriptions)
+        except (ValueError, TypeError, KeyError) as error:
+            _LOGGER.warning("EVSC read-only Vehicle contexts invalid: %s", error)
+            return {
+                key: {"status": "invalid_assignment_or_vehicle_configuration"}
+                for key in chargers
+            }
+        selected = options.get(ASSIGNMENTS, {})
+        output = {}
+        for key, context in contexts.items():
+            vehicle_id = selected.get(key)
+            profile = profiles.get(vehicle_id, {}) if vehicle_id else {}
+            output[key] = {
+                "status": context.status,
+                "assigned_vehicle": profile.get("name"),
+                "soc_percent": (
+                    read_vehicle_soc(self.hass, profile) if profile else None
+                ),
+                "target_soc_percent": context.target_soc_percent,
+                "required_battery_kwh": context.required_battery_kwh,
+                "estimated_quarters": context.estimated_quarters,
+                "effective_max_ac_kw": context.effective_max_ac_kw,
+                "source_configured": bool(profile.get("soc_entity")),
+                "physical_connection_confirmed": (
+                    descriptions[key]["connected"] is True
+                ),
+                "advisory_only": True,
+            }
+        return output
+
     def plan_payload(self):
         """One read-only, bounded response for the current quarter plan."""
         plan = self.plan
@@ -928,6 +980,7 @@ class ChargeSupervisor:
                     }
                 )
         results = {r.charger_id: r for r in plan.results} if plan is not None else {}
+        vehicle_contexts = self.vehicle_contexts()
         chargers = []
         for key, obj in sorted(self.chargers().items()):
             result = results.get(key)
@@ -935,6 +988,7 @@ class ChargeSupervisor:
                 {
                     "evsc_entry_id": key,
                     "mode": "coordinated" if key in self.participants else "local",
+                    "vehicle_context": vehicle_contexts.get(key),
                     "price_source_entity": (
                         obj.config_entry.options.get("evsc_effective_price_entity")
                         or getattr(obj, "price_entity_id", None)

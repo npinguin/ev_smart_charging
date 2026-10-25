@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_registry import async_get as async_entity_regi
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
+from custom_components.ev_smart_charging.controller.runtime import ChargeSupervisor
 from custom_components.ev_smart_charging.domain import suggested_entity_object_id
 from custom_components.ev_smart_charging.select import VehicleAssignmentSelect
 from custom_components.ev_smart_charging.vehicle_config import (
@@ -374,3 +375,43 @@ def test_vehicle_registry_cleanup_preserves_retained_vehicle_and_charger(hass):
     assert devices.async_get(local.id) is not None
     cleanup_orphan_vehicle_registry(hass, controller)
     assert devices.async_get(retained.id) is not None
+
+
+def test_vehicle_contexts_are_read_only_and_keep_local_source_independent(hass):
+    """HA consumers see assignments without changing original Local controls."""
+    profile = {
+        "name": "Audi Q8",
+        "soc_entity": "sensor.audi_soc",
+        "target_soc": 80,
+        "usable_battery_kwh": 18,
+        "max_ac_charge_kw": 7.4,
+    }
+    hass.states.async_set("sensor.audi_soc", "30", {"unit_of_measurement": "%"})
+    manager = object.__new__(ChargeSupervisor)
+    manager.hass = hass
+    manager.config_entry = SimpleNamespace(
+        options={VEHICLES: {"audi": profile}, ASSIGNMENTS: {"black": "audi"}}
+    )
+    black = SimpleNamespace(
+        config_entry=SimpleNamespace(entry_id="black", title="Garage Black", options={}),
+        switch_ev_connected=True,
+    )
+    white = SimpleNamespace(
+        config_entry=SimpleNamespace(entry_id="white", title="Garage White", options={}),
+        switch_ev_connected=True,
+    )
+    manager.chargers = lambda: {"black": black, "white": white}
+    manager._source_config = lambda key, obj: {"power_kw": 11}
+    contexts = manager.vehicle_contexts()
+    assert contexts["black"]["status"] == "ready"
+    assert contexts["black"]["assigned_vehicle"] == "Audi Q8"
+    assert contexts["black"]["required_battery_kwh"] == 9
+    assert contexts["black"]["advisory_only"] is True
+    assert contexts["white"]["status"] == "unassigned"
+    assert contexts["white"]["soc_percent"] is None
+    assert black.config_entry.options == {}
+
+    hass.states.async_set("sensor.audi_soc", "unavailable")
+    unavailable = manager.vehicle_contexts()
+    assert unavailable["black"]["status"] == "soc_unknown"
+    assert unavailable["black"]["required_battery_kwh"] is None
