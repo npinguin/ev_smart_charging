@@ -46,7 +46,8 @@
           "add_vehicle": "Add Vehicle",
           "edit_vehicle": "Edit Vehicle",
           "assign_vehicle": "Assign Vehicles to Chargers",
-          "delete_vehicle": "Delete Vehicle"
+          "delete_vehicle": "Delete Vehicle",
+          "link_chargers": "Link Chargers to Controller"
         }
       },
       "charger": {
@@ -138,6 +139,13 @@
         "data": {
           "confirm": "Yes, delete this Vehicle"
         }
+      },
+      "link_chargers": {
+        "title": "Link Chargers",
+        "description": "Link existing Chargers to the Charge Controller while retaining their native Local execution.",
+        "data": {
+          "linked_chargers": "Linked Chargers"
+        }
       }
     },
     "error": {
@@ -155,7 +163,10 @@
       "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
       "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names.",
       "confirm_required": "Confirm the deletion explicitly or return to the previous screen.",
-      "exclusive_load_demand": "Configure requested kWh OR duration, not both."
+      "exclusive_load_demand": "Configure requested kWh OR duration, not both.",
+      "invalid_charger_link": "Unknown Charger",
+      "unlink_coordinated_first": "Return Charger to Local before unlinking",
+      "charger_not_linked": "Link Charger to Controller first"
     },
     "abort": {
       "no_vehicles": "No Vehicles configured. Add a Vehicle first."

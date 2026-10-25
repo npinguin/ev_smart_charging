@@ -86,6 +86,7 @@ class ControllerSensor(SensorEntity):
             return summary[self.key]
         snapshot = self.manager.snapshot()
         return {
+            "linked_chargers": len(self.manager.chargers()),
             "status": self.manager.reason,
             "chargers": snapshot.chargers,
             "connected": snapshot.connected,
@@ -107,6 +108,12 @@ class ControllerSensor(SensorEntity):
                 "mode": "coordinated" if self.manager.participants else "local",
                 "coordination_enabled": bool(self.manager.participants),
                 "participants": len(self.manager.participants),
+                "linked_chargers": len(self.manager.chargers()),
+                "linked_charger_names": [
+                    obj.config_entry.title
+                    for _, obj in sorted(self.manager.chargers().items())
+                ],
+                "coordinated_actuation_available": False,
                 "manually_paused": len(
                     self.manager.config_entry.options.get("paused_chargers", [])
                 ),
@@ -204,6 +211,9 @@ def controller_sensors(manager):
             manager, "available_ev_power", "Available EV power", "mdi:flash-outline"
         ),
         ControllerSensor(manager, "chargers", "Chargers", "mdi:ev-station"),
+        ControllerSensor(
+            manager, "linked_chargers", "Linked Chargers", "mdi:link-variant"
+        ),
         ControllerSensor(manager, "connected", "Connected chargers", "mdi:connection"),
         ControllerSensor(
             manager,

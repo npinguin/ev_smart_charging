@@ -38,6 +38,9 @@
           "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
           "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
           "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
+        },
+        "menu_options": {
+          "link_chargers": "Laadpunten koppelen"
         }
       },
       "charger": {
@@ -64,6 +67,13 @@
           "paused_chargers": "Handmatig gepauzeerde laadpunten"
         },
         "title": "Instellingen Charge Controller"
+      },
+      "link_chargers": {
+        "title": "Laadpunten koppelen",
+        "description": "Koppel bestaande Chargers aan de Charge Controller. Hun oorspronkelijke Local-aansturing blijft actief.",
+        "data": {
+          "linked_chargers": "Gekoppelde laadpunten"
+        }
       }
     },
     "error": {
@@ -76,7 +86,10 @@
       "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
       "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
       "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden.",
+      "invalid_charger_link": "Onbekend laadpunt",
+      "unlink_coordinated_first": "Zet de Charger eerst terug in Local-modus",
+      "charger_not_linked": "Koppel de Charger eerst aan de Controller"
     }
   },
   "entity": {

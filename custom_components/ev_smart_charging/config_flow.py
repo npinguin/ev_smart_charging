@@ -315,11 +315,40 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             menu_options=[
                 "policy",
+                "link_chargers",
                 "add_vehicle",
                 "edit_vehicle",
                 "delete_vehicle",
                 "assign_vehicle",
             ],
+        )
+
+    async def async_step_link_chargers(self, user_input=None):
+        """Link existing EVSC Charger devices, never switch their native writer."""
+        known = self._charger_names()
+        previous = self.config_entry.options
+        selected = previous.get("linked_chargers", list(known))
+        errors = {}
+        if user_input is not None:
+            requested = set(user_input.get("linked_chargers", ()))
+            if not requested.issubset(known):
+                errors["base"] = "invalid_charger_link"
+            elif not set(previous.get("participants", ())).issubset(requested):
+                errors["base"] = "unlink_coordinated_first"
+            else:
+                data = dict(previous)
+                data["linked_chargers"] = sorted(requested)
+                return self.async_create_entry(title="", data=data)
+        return self.async_show_form(
+            step_id="link_chargers",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "linked_chargers", default=selected
+                    ): cv.multi_select(known)
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_policy(self, user_input=None):
@@ -330,8 +359,11 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             requested = [e for e in user_input.get("participants", ()) if e in known]
             newly_selected = set(requested) - set(previous.get("participants", ()))
+            linked = set(previous.get("linked_chargers", known))
             if newly_selected and not safety.COORDINATED_ACTUATION_ENABLED:
                 errors["participants"] = "coordinated_disabled"
+            elif not set(requested).issubset(linked):
+                errors["participants"] = "charger_not_linked"
             else:
                 data = dict(previous)
                 data.update(user_input)

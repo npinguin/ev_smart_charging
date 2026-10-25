@@ -21,7 +21,12 @@ from .const import (
     START_QUARTER_NONE,
 )
 from .coordinator import EVSmartChargingCoordinator
-from .controller.runtime import is_supervised, set_control_mode
+from .controller.runtime import (
+    controller_entry,
+    is_supervised,
+    set_control_mode,
+    set_controller_link,
+)
 from .entity import EVSmartChargingEntity
 from .domain import suggested_entity_object_id
 from .vehicle_config import ASSIGNMENTS, VEHICLES, validate_assignments
@@ -40,6 +45,7 @@ async def async_setup_entry(
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectReadyQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectControlMode(entry, coordinator))
+    selects.append(ChargerControllerLinkSelect(entry))
     selects.append(VehicleAssignmentSelect(entry))
     async_add_devices(selects)
 
@@ -149,6 +155,50 @@ class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
 
     async def async_select_option(self, option):
         set_control_mode(self.coordinator.hass, self.config_entry.entry_id, option)
+        self.async_write_ha_state()
+
+
+class ChargerControllerLinkSelect(EVSmartChargingEntity, SelectEntity):
+    """HA Charger config select with persisted, non-actuating Controller link."""
+
+    _entity_key = "charge_controller"
+    _attr_name = "Charge Controller"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = True
+    _attr_options = ["Not linked", "EVSC Charge Controller"]
+
+    def __init__(self, entry):
+        super().__init__(entry)
+        self._attr_unique_id = f"{entry.entry_id}.charge_controller"
+        self._attr_suggested_object_id = suggested_entity_object_id(
+            entry.title, "charge_controller"
+        )
+
+    @property
+    def current_option(self):
+        controller = controller_entry(self.hass)
+        if controller is None:
+            return "Not linked"
+        charger_ids = {
+            entry.entry_id
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type") != "charge_controller"
+        }
+        linked = controller.options.get("linked_chargers", charger_ids)
+        return (
+            "EVSC Charge Controller"
+            if self.config_entry.entry_id in linked
+            else "Not linked"
+        )
+
+    async def async_select_option(self, option):
+        if option not in self._attr_options:
+            raise ValueError("invalid_controller_link")
+        set_controller_link(
+            self.hass,
+            self.config_entry.entry_id,
+            option == "EVSC Charge Controller",
+        )
         self.async_write_ha_state()
 
 

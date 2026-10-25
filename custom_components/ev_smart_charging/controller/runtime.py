@@ -124,6 +124,34 @@ def resume_supervised(hass, charger_id):
     )
 
 
+def set_controller_link(hass, charger_id, linked):
+    """Persist a Charger/Controller association without changing Local control."""
+    entry = controller_entry(hass)
+    if entry is None:
+        raise ValueError("EVSC Charge Controller is not configured")
+    available = {
+        item.entry_id
+        for item in hass.config_entries.async_entries(DOMAIN)
+        if item.data.get(MARKER) != CONTROLLER_TYPE
+    }
+    if charger_id not in available:
+        raise ValueError("Unknown EVSC Charger")
+    existing = set(entry.options.get("linked_chargers", available))
+    if linked:
+        existing.add(charger_id)
+    else:
+        if charger_id in entry.options.get("participants", ()):
+            raise ValueError("Return the Charger to Local before unlinking")
+        existing.discard(charger_id)
+    if "linked_chargers" in entry.options and existing == set(
+        entry.options["linked_chargers"]
+    ):
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "linked_chargers": sorted(existing)}
+    )
+
+
 def set_control_mode(hass, charger_id, mode):
     """Persist one Local/Coordinated owner on the controller entry."""
     if mode not in ("local", "coordinated"):
@@ -146,6 +174,8 @@ def set_control_mode(hass, charger_id, mode):
                 "Coordinated control is suspended after a critical HA incident; "
                 "remain in Local until safety revalidation"
             )
+        if charger_id not in entry.options.get("linked_chargers", charger_ids):
+            raise ValueError("Link Charger to Charge Controller before coordination")
         participants.add(charger_id)
     else:
         participants.discard(charger_id)
@@ -229,12 +259,17 @@ class ChargeSupervisor:
         return set(self.config_entry.options.get("participants", []))
 
     def chargers(self):
-        return {
+        """Linked Chargers, or all existing Chargers before explicit selection."""
+        discovered = {
             key: obj
             for key, obj in self.hass.data.get(DOMAIN, {}).items()
             if key != self.config_entry.entry_id
             and getattr(getattr(obj, "config_entry", None), "entry_id", None) == key
         }
+        linked = self.config_entry.options.get("linked_chargers")
+        if linked is None:
+            return discovered
+        return {key: obj for key, obj in discovered.items() if key in linked}
 
     def snapshot(self):
         coordinators = list(self.chargers().values())
