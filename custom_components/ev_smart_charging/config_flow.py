@@ -383,6 +383,10 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                     "max_parallel", default=previous.get("max_parallel", 1)
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
                 vol.Optional(
+                    "planning_horizon_days",
+                    default=previous.get("planning_horizon_days", 2),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=14)),
+                vol.Optional(
                     "power_budget_kw", default=previous.get("power_budget_kw", 0)
                 ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
                 vol.Optional(

@@ -99,7 +99,7 @@ class ChargingLoadRequest:
             raise ValueError("Invalid explicit load energy")
         if self.requested_duration_quarters is not None and (
             not isinstance(self.requested_duration_quarters, int)
-            or not 1 <= self.requested_duration_quarters <= 96
+            or not 1 <= self.requested_duration_quarters <= 14 * 96
         ):
             raise ValueError("Invalid explicit load duration")
         if (

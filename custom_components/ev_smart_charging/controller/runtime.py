@@ -222,6 +222,11 @@ class ChargeSupervisor:
         self.hass = hass
         self.config_entry = config_entry
         self.plan = None
+        # Canonical 1..N multi-day Controller schedule. It is never attached
+        # to a physical admission gate while Coordinated P0 is open.
+        self.multi_day_plan = None
+        self.multi_day_status = "NOT_COMPUTED"
+        self.multi_day_details = None
         self.gate = SupervisionGate(max_plan_age=timedelta(minutes=5))
         self.gate.set_membership(config_entry.options.get("participants", ()))
         self.reason = "LOCAL_MONITORING"
@@ -300,9 +305,13 @@ class ChargeSupervisor:
             or legacy.get("energy_sensor"),
         }
 
-    def _charger(self, key, obj):
+    def _charger(self, key, obj, *, controller_planning=False, context=None):
         attrs = self._source_config(key, obj)
-        mode = "coordinated" if key in self.participants else "local"
+        mode = (
+            "coordinated"
+            if controller_planning or key in self.participants
+            else "local"
+        )
         profiles = self.config_entry.options.get(VEHICLES, {})
         # Old Ready By belongs exclusively to the old Local compatibility
         # path. An explicitly configured Vehicle can never borrow it.
@@ -338,7 +347,7 @@ class ChargeSupervisor:
         # New Controller input: canonical Vehicle + Charge Intent + Charger
         # capabilities. Never use the old Local Vehicle/Ready By as fallback.
         # Original Local execution is untouched and retains its v8 sources.
-        if mode == "coordinated" and profiles:
+        if mode == "coordinated" and (profiles or controller_planning):
             options = self.config_entry.options
             assignments = options.get(ASSIGNMENTS, {})
             assigned_id = assignments.get(key)
@@ -351,20 +360,21 @@ class ChargeSupervisor:
                     raise ValueError("missing_vehicle")
                 if sum(v == assigned_id for v in assignments.values()) != 1:
                     raise ValueError("vehicle_already_assigned")
-                context = resolve_user_contexts(
-                    self.hass,
-                    {
-                        VEHICLES: {assigned_id: profiles[assigned_id]},
-                        ASSIGNMENTS: {key: assigned_id},
-                    },
-                    {
-                        key: {
-                            "name": obj.config_entry.title,
-                            "connected": obj.switch_ev_connected,
-                            "max_ac_power_kw": power,
-                        }
-                    },
-                )[key]
+                if context is None:
+                    context = resolve_user_contexts(
+                        self.hass,
+                        {
+                            VEHICLES: {assigned_id: profiles[assigned_id]},
+                            ASSIGNMENTS: {key: assigned_id},
+                        },
+                        {
+                            key: {
+                                "name": obj.config_entry.title,
+                                "connected": obj.switch_ev_connected,
+                                "max_ac_power_kw": power,
+                            }
+                        },
+                    )[key]
                 soc = context.current_soc_percent
                 target_soc = context.target_soc_percent
                 capacity = context.usable_battery_kwh
@@ -374,6 +384,30 @@ class ChargeSupervisor:
                 # can never silently inherit unrelated Local demand.
                 if context.status not in ("ready", "target_met"):
                     soc = None
+            elif controller_planning and not profiles:
+                # Explicit energy/duration only, with original Charger deadline;
+                # never infer a Vehicle from physical cable connection.
+                ready = obj.absolute_ready_by or get_ready_quarter_utc(
+                    obj.ready_quarter_local
+                )
+                load_energy = _number(
+                    obj.config_entry.options.get("evsc_load_energy_kwh", 0)
+                )
+                load_duration = _number(
+                    obj.config_entry.options.get("evsc_load_duration_quarters", 0)
+                )
+            elif controller_planning and key not in assignments:
+                # Manual non-Vehicle demand remains possible even if other
+                # Chargers have proper Vehicle profiles.
+                ready = obj.absolute_ready_by or get_ready_quarter_utc(
+                    obj.ready_quarter_local
+                )
+                load_energy = _number(
+                    obj.config_entry.options.get("evsc_load_energy_kwh", 0)
+                )
+                load_duration = _number(
+                    obj.config_entry.options.get("evsc_load_duration_quarters", 0)
+                )
         return ChargingLoadRequest(
             id=key,
             mode=mode,
@@ -1077,83 +1111,175 @@ class ChargeSupervisor:
             }
         return output
 
-    def load_preview(self):
-        """Non-actuating combined preview for explicit source-less load demand.
+    def _rebuild_multi_day(self):
+        """One Controller forecast for all linked 1..N EVSC Chargers.
 
-        This is NOT the effective Local/Coordinated execution plan and never
-        changes a physical writer or grants a command. Only explicit Charger
-        demand is eligible; no fabricated Vehicle, SoC, consumption or prices.
+        Uses the same proven pure build_plan engine and canonical Vehicle
+        facts. Physical actuation remains independently gated; a forecast
+        is NOT a Charger Start permission.
         """
-        eligible = {}
-        for key, obj in sorted(self.chargers().items()):
-            opts = obj.config_entry.options
-            if get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR):
-                continue
-            if (_number(opts.get("evsc_load_energy_kwh", 0)) or 0) <= 0 and (
-                _number(opts.get("evsc_load_duration_quarters", 0)) or 0
-            ) <= 0:
-                continue
-            eligible[key] = obj
-        if not eligible:
-            return None
+        self.multi_day_plan = None
+        self.multi_day_details = None
+        opts = self.config_entry.options
+        now = dt.utcnow()
+        days = int(opts.get("planning_horizon_days", 2))
+        if not 1 <= days <= 14:
+            self.multi_day_status = "INVALID_HORIZON"
+            return
+        horizon_end = now + timedelta(days=days)
+        # Only full, aligned quarters are eligible, including DST boundaries:
+        # UTC is used for scheduling; presentation groups by HA local date.
+        selected = self.chargers()
+        linked = sorted(selected)
+        if not linked:
+            self.multi_day_status = "NO_LINKED_CHARGERS"
+            return
         try:
-            if len(eligible) > 16:
-                raise ValueError("Too many loads for preview")
-            policy_options = self.config_entry.options
-            budget = _number(policy_options.get("power_budget_kw", 0))
+            descriptions = {
+                key: {
+                    "name": obj.config_entry.title,
+                    "connected": obj.switch_ev_connected,
+                    "max_ac_power_kw": self._source_config(key, obj).get("power_kw"),
+                }
+                for key, obj in selected.items()
+            }
+            contexts = resolve_user_contexts(self.hass, opts, descriptions)
+            assigned = opts.get(ASSIGNMENTS, {})
+            requests = []
+            excluded = []
+            for key, obj in sorted(selected.items()):
+                manual = (
+                    not get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR)
+                    and (
+                        (_number(obj.config_entry.options.get("evsc_load_energy_kwh", 0)) or 0) > 0
+                        or (_number(obj.config_entry.options.get("evsc_load_duration_quarters", 0)) or 0) > 0
+                    )
+                )
+                if key not in assigned and not manual:
+                    excluded.append({
+                        "evsc_entry_id": key,
+                        "status": "UNASSIGNED",
+                        "reason": "No Vehicle or explicit charging demand",
+                    })
+                    continue
+                # Use exactly the same canonical Vehicle/Charger/Intent adapter
+                # for planning independently of physical execution membership.
+                request = self._charger(
+                    key, obj, controller_planning=True, context=contexts[key]
+                )
+                requests.append(request)
+            budget = _number(opts.get("power_budget_kw", 0))
             policy = Policy(
-                max_parallel=int(policy_options.get("max_parallel", 1)),
+                max_parallel=int(opts.get("max_parallel", 1)),
                 group_power_budget_kw=budget if budget and budget > 0 else None,
             )
-            inputs = [
-                replace(self._charger(key, obj), mode="coordinated")
-                for key, obj in eligible.items()
-            ]
-            preview = build_plan(
-                inputs,
-                self._prices(list(eligible.values()), update_cache=False),
-                dt.utcnow(),
-                policy,
-            )
-            entries = []
-            for item in preview.results:
-                slots = [
-                    {
-                        "start": slot.start.isoformat(),
-                        "end": slot.end.isoformat(),
-                        "estimated_grid_kwh": slot.grid_kwh,
-                        "price_eur_per_kwh": slot.price_eur_per_kwh,
-                    }
-                    for slot in preview.assignments
-                    if slot.charger_id == item.charger_id
+            raw_prices = self._prices(list(selected.values()), update_cache=False)
+            limited_prices = {
+                key: [
+                    slot for slot in raw_prices.get(key, ())
+                    if slot.start < horizon_end and slot.end <= horizon_end
                 ]
-                entries.append(
-                    {
-                        "evsc_entry_id": item.charger_id,
-                        "status": item.status,
-                        "reason": item.reason,
-                        "requested_battery_kwh_equivalent": item.requested_battery_kwh,
-                        "unplanned_battery_kwh_equivalent": item.remaining_battery_kwh,
-                        "slots": slots,
-                    }
+                for key in linked
+            }
+            plan = build_plan(requests, limited_prices, now, policy)
+            summary_by_day = {}
+            by_charger = {key: [] for key in linked}
+            for slot in plan.assignments:
+                key = dt.as_local(slot.start).date().isoformat()
+                daily = summary_by_day.setdefault(
+                    key, {"date": key, "planned_grid_kwh": 0.0, "indicative_cost_eur": 0.0}
                 )
-            return {
-                "status": "ADVISORY_ONLY",
+                # An unknown kWh measurement is not equivalent to zero
+                # and cannot produce a reliable total or cost.
+                if slot.grid_kwh is None:
+                    daily["planned_grid_kwh"] = None
+                    daily["indicative_cost_eur"] = None
+                else:
+                    if daily["planned_grid_kwh"] is not None:
+                        daily["planned_grid_kwh"] += slot.grid_kwh
+                    if daily["indicative_cost_eur"] is not None:
+                        daily["indicative_cost_eur"] += (
+                            slot.grid_kwh * slot.price_eur_per_kwh
+                        )
+                by_charger[slot.charger_id].append(slot)
+            for day in summary_by_day.values():
+                for field in ("planned_grid_kwh", "indicative_cost_eur"):
+                    if day[field] is not None:
+                        day[field] = round(day[field], 4)
+            loads = []
+            for result in plan.results:
+                key = result.charger_id
+                slots = by_charger[key]
+                value = (
+                    round(sum(s.grid_kwh for s in slots), 4)
+                    if all(s.grid_kwh is not None for s in slots)
+                    else None
+                )
+                loads.append({
+                    "evsc_entry_id": key,
+                    "assigned_vehicle_id": assigned.get(key),
+                    "status": result.status,
+                    "reason": result.reason,
+                    "requested_battery_kwh": result.requested_battery_kwh,
+                    "planned_battery_kwh": result.planned_battery_kwh,
+                    "remaining_battery_kwh": result.remaining_battery_kwh,
+                    "planned_grid_kwh": value,
+                    "ready_by": (
+                        next((r.ready_by.isoformat() for r in requests if r.id == key and r.ready_by), None)
+                    ),
+                    "slots": [
+                        {
+                            "start": s.start.isoformat(),
+                            "end": s.end.isoformat(),
+                            "estimated_grid_kwh": s.grid_kwh,
+                            "price_eur_per_kwh": s.price_eur_per_kwh,
+                        }
+                        for s in slots
+                    ],
+                })
+            self.multi_day_plan = plan
+            self.multi_day_status = (
+                "INCOMPLETE" if any(
+                    r.status in ("UNKNOWN", "INFEASIBLE", "PENDING_PRICES", "BLOCKED")
+                    for r in plan.results
+                ) else "PROVISIONAL" if (
+                    plan.coverage != "COMPLETE"
+                    or any(r.status == "PROVISIONAL" for r in plan.results)
+                ) else "PLANNED"
+            )
+            self.multi_day_details = {
+                "status": self.multi_day_status,
                 "advisory_only": True,
                 "physical_actuation_authorized": False,
-                "coverage": preview.coverage,
-                "planned_grid_kwh": preview.total_planned_grid_kwh,
-                "indicative_cost_eur": preview.expected_cost_eur,
-                "loads": entries,
+                "planning_horizon_days": days,
+                "horizon_start": now.isoformat(),
+                "horizon_end": horizon_end.isoformat(),
+                "coverage": plan.coverage,
+                "price_horizon_end": (
+                    plan.priced_until.isoformat() if plan.priced_until else None
+                ),
+                "planned_grid_kwh": plan.total_planned_grid_kwh,
+                "indicative_cost_eur": plan.expected_cost_eur,
+                "by_day": [
+                    summary_by_day[key] for key in sorted(summary_by_day)
+                ],
+                "loads": loads,
+                "excluded": excluded,
+                "warnings": list(plan.warnings),
             }
-        except (ValueError, TypeError, OverflowError, AttributeError) as error:
-            _LOGGER.warning("Non-actuating EVSC load preview unavailable: %s", error)
-            return {
-                "status": "INVALID_OR_INCOMPLETE_INPUT",
+        except (ValueError, TypeError, OverflowError, AttributeError, KeyError) as exc:
+            _LOGGER.warning("EVSC multi-day Controller plan invalid: %s", exc)
+            self.multi_day_status = "INVALID_OR_INCOMPLETE_INPUT"
+            self.multi_day_details = {
+                "status": self.multi_day_status,
                 "advisory_only": True,
                 "physical_actuation_authorized": False,
                 "loads": [],
             }
+
+    def load_preview(self):
+        """Compatibility field for older consumers; same canonical plan."""
+        return self.multi_day_details
 
     def plan_payload(self):
         """One read-only, bounded response for the current quarter plan."""
@@ -1273,6 +1399,7 @@ class ChargeSupervisor:
                 for key, value in self.planning_summary().items()
             },
             "chargers": chargers,
+            "multi_day_plan": self.multi_day_details,
             "load_preview": self.load_preview(),
             "peak_price_comparison": self.peak_price_comparison,
         }
@@ -1307,6 +1434,8 @@ class ChargeSupervisor:
                     self.reason = "COORDINATED_SAFETY_HOLD"
                 else:
                     self.rebuild()
+                # Separate view of the SAME planner, never a second writer.
+                self._rebuild_multi_day()
             cost_changed = self._record_actual_costs()
             for key in (
                 self.participants if safety.COORDINATED_ACTUATION_ENABLED else ()
@@ -1442,6 +1571,18 @@ class ChargeSupervisor:
             repr(dict(self.config_entry.options)),
             tuple(sources),
             self._peak_plan_fingerprint(),
+            tuple(
+                (
+                    vid,
+                    profile.get("soc_entity"),
+                    self._sample_state(
+                        profile.get("soc_entity"), include_attributes=True
+                    ),
+                )
+                for vid, profile in sorted(
+                    self.config_entry.options.get(VEHICLES, {}).items()
+                )
+            ),
         )
 
     def _observation_inputs(self):

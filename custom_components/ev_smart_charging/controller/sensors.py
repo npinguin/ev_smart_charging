@@ -32,10 +32,14 @@ class ControllerSensor(SensorEntity):
             "unplanned_energy",
             "planned_today",
             "planned_tomorrow",
+            "multi_day_planned_energy",
         ):
             self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_native_unit_of_measurement = "kWh"
-        elif key.startswith("indicative_cost") or key == "actual_cost_today":
+        elif key.startswith("indicative_cost") or key in (
+            "actual_cost_today",
+            "multi_day_indicative_cost",
+        ):
             self._attr_device_class = SensorDeviceClass.MONETARY
             self._attr_native_unit_of_measurement = "EUR"
 
@@ -82,6 +86,17 @@ class ControllerSensor(SensorEntity):
                 if self.key == "planning_start"
                 else max(end for _, end in intervals)
             )
+        if self.key == "multi_day_status":
+            return self.manager.multi_day_status
+        if self.key in ("multi_day_planned_energy", "multi_day_indicative_cost"):
+            plan = self.manager.multi_day_plan
+            if plan is None:
+                return None
+            return (
+                plan.total_planned_grid_kwh
+                if self.key == "multi_day_planned_energy"
+                else plan.expected_cost_eur
+            )
         summary = self.manager.planning_summary()
         if self.key in summary:
             return summary[self.key]
@@ -104,6 +119,8 @@ class ControllerSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.key == "multi_day_status":
+            return self.manager.multi_day_details
         if self.key == "status":
             return {
                 "mode": "coordinated" if self.manager.participants else "local",
@@ -156,6 +173,21 @@ def controller_sensors(manager):
         ControllerSensor(manager, "planning_end", "Planning end", "mdi:calendar-end"),
         ControllerSensor(
             manager, "planning_status", "Planning status", "mdi:calendar-check"
+        ),
+        ControllerSensor(
+            manager, "multi_day_status", "Multi-day planning", "mdi:calendar-range"
+        ),
+        ControllerSensor(
+            manager,
+            "multi_day_planned_energy",
+            "Multi-day planned energy",
+            "mdi:transmission-tower",
+        ),
+        ControllerSensor(
+            manager,
+            "multi_day_indicative_cost",
+            "Multi-day indicative cost",
+            "mdi:currency-eur",
         ),
         ControllerSensor(
             manager, "price_horizon_end", "Price horizon end", "mdi:clock-outline"

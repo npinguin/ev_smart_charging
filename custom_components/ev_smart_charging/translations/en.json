@@ -85,7 +85,8 @@
           "peak_shaving_enabled": "Enable peak shaving",
           "site_power_sensor": "Site power sensor",
           "peak_target_kw": "Target peak (kW)",
-          "peak_reserve_kw": "Reserve power (kW)"
+          "peak_reserve_kw": "Reserve power (kW)",
+          "planning_horizon_days": "Planning horizon (days, 1–14)"
         }
       },
       "add_vehicle": {
