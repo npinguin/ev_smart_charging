@@ -162,6 +162,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if error is not None:
                 self._errors[error[0]] = error[1]
+            if (
+                user_input.get("evsc_load_energy_kwh", 0) > 0
+                and user_input.get("evsc_load_duration_quarters", 0) > 0
+            ):
+                self._errors["base"] = "exclusive_load_demand"
 
             if not self._errors:
                 return self.async_create_entry(
@@ -259,6 +264,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     False,
                 ),
             ): cv.boolean,
+            # Optional explicit demand for source-less EVSEs and other flexible
+            # loads. For now it feeds an advisory planner, not Local actuation.
+            vol.Optional(
+                "evsc_load_energy_kwh",
+                default=get_parameter(self.config_entry, "evsc_load_energy_kwh", 0),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
+            vol.Optional(
+                "evsc_load_duration_quarters",
+                default=get_parameter(
+                    self.config_entry, "evsc_load_duration_quarters", 0
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=96)),
         }
 
         return self.async_show_form(

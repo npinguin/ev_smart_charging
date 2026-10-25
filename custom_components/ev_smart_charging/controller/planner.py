@@ -59,6 +59,10 @@ class Charger:
     current_battery_kwh: float | None = None
     target_battery_kwh: float | None = None
     enabled: bool = True
+    # Explicit load demand only when there is no vehicle SoC available.
+    # A demand is a planning fact, never native actuation authorization.
+    requested_grid_kwh: float | None = None
+    requested_duration_quarters: int | None = None
 
     def __post_init__(self):
         if not self.id.strip() or self.mode not in ("local", "coordinated"):
@@ -87,6 +91,20 @@ class Charger:
                 raise ValueError("Invalid directly observed battery energy")
         if not 0 < self.efficiency <= 1:
             raise ValueError("Invalid efficiency")
+        if self.requested_grid_kwh is not None and (
+            not isfinite(self.requested_grid_kwh) or self.requested_grid_kwh <= 0
+        ):
+            raise ValueError("Invalid explicit load energy")
+        if self.requested_duration_quarters is not None and (
+            not isinstance(self.requested_duration_quarters, int)
+            or not 1 <= self.requested_duration_quarters <= 96
+        ):
+            raise ValueError("Invalid explicit load duration")
+        if (
+            self.requested_grid_kwh is not None
+            and self.requested_duration_quarters is not None
+        ):
+            raise ValueError("Specify energy or duration, not both")
         if self.actual_power_kw is not None and (
             not isfinite(self.actual_power_kw) or self.actual_power_kw < 0
         ):
@@ -98,7 +116,16 @@ class Charger:
 
     @property
     def required_quarters(self) -> int | None:
-        """Use direct stored kWh when present; preserve legacy %/hour otherwise."""
+        """Use explicit load demand when SoC is absent; otherwise legacy logic."""
+        if self.current_soc is None:
+            if self.requested_duration_quarters is not None:
+                return self.requested_duration_quarters
+            if self.requested_grid_kwh is not None:
+                if self.charge_power_kw is None:
+                    return None
+                return ceil(
+                    self.requested_grid_kwh / (self.charge_power_kw * 0.25) - 1e-9
+                )
         energy = self.required_battery_kwh
         direct = (
             self.current_battery_kwh is not None or self.target_battery_kwh is not None
@@ -123,6 +150,19 @@ class Charger:
 
     @property
     def required_battery_kwh(self) -> float | None:
+        if self.current_soc is None:
+            if self.requested_grid_kwh is not None:
+                return self.requested_grid_kwh * self.efficiency
+            if (
+                self.requested_duration_quarters is not None
+                and self.charge_power_kw is not None
+            ):
+                return (
+                    self.requested_duration_quarters
+                    * self.charge_power_kw
+                    * 0.25
+                    * self.efficiency
+                )
         current = self.current_battery_kwh
         target = self.target_battery_kwh
         if self.usable_capacity_kwh is not None:

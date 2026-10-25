@@ -37,7 +37,9 @@
           "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
           "charger_entity": "Charger control entity (single space to remove)",
           "charging_state_entity": "Charging state entity (single space to remove)",
-          "ev_controlled": "An EV integration will control start/stop of charging"
+          "ev_controlled": "An EV integration will control start/stop of charging",
+          "evsc_load_energy_kwh": "Requested energy (kWh; optional, for source-less load preview only)",
+          "evsc_load_duration_quarters": "Requested duration (15-minute quarters; optional, preview only)"
         },
         "menu_options": {
           "policy": "Charge Controller policy",
@@ -150,7 +152,8 @@
       "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete.",
       "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
       "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names.",
-      "confirm_required": "Confirm the deletion explicitly or return to the previous screen."
+      "confirm_required": "Confirm the deletion explicitly or return to the previous screen.",
+      "exclusive_load_demand": "Configure requested kWh OR duration, not both."
     },
     "abort": {
       "no_vehicles": "No Vehicles configured. Add a Vehicle first."

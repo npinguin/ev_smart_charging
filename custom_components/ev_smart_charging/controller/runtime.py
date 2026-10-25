@@ -20,7 +20,8 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt
 from homeassistant.helpers.storage import Store
 
-from ..const import DOMAIN
+from ..const import DOMAIN, CONF_EV_SOC_SENSOR
+from ..helpers.general import get_parameter
 from ..helpers.coordinator import get_ready_quarter_utc
 from . import safety
 from .monitor import collect
@@ -273,6 +274,17 @@ class ChargeSupervisor:
             if native_capacity is not None and native_capacity > 0
             else _number(attrs.get("capacity_kwh"))
         )
+        # Explicit demand is only considered for an unbound SoC source.
+        # Existing configured Local SoC behavior is never silently replaced.
+        no_soc_binding = not get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR)
+        load_energy = _number(
+            obj.config_entry.options.get("evsc_load_energy_kwh", 0)
+        )
+        load_duration = _number(
+            obj.config_entry.options.get("evsc_load_duration_quarters", 0)
+        )
+        if not no_soc_binding:
+            load_energy, load_duration = None, None
         return Charger(
             id=key,
             mode="coordinated" if key in self.participants else "local",
@@ -292,6 +304,10 @@ class ChargeSupervisor:
                 self.hass, attrs.get("target_battery_sensor"), "energy"
             ),
             enabled=obj.switch_active is True,
+            requested_grid_kwh=load_energy if load_energy and load_energy > 0 else None,
+            requested_duration_quarters=(
+                int(load_duration) if load_duration and load_duration > 0 else None
+            ),
         )
 
     def meters(self):

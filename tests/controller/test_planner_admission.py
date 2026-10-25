@@ -514,3 +514,43 @@ def test_one_to_four_coordinated_chargers_share_one_engine():
     assert len(four.results) == 4
     # The only difference is the cardinality and optional group constraints.
     assert all(item.status != "LOCAL" for item in four.results)
+
+
+def test_explicit_load_without_soc_can_be_planned_without_fake_vehicle_data():
+    """A request for four quarters has no assumed battery SoC."""
+    from dataclasses import replace
+
+    load = replace(
+        charger("load", deadline=T + timedelta(hours=2), kw=4),
+        current_soc=None,
+        target_soc=None,
+        usable_capacity_kwh=None,
+        requested_duration_quarters=4,
+    )
+    assert load.required_quarters == 4
+    assert load.required_battery_kwh == pytest.approx(3.6)
+    plan = build_plan([load], slots(8), T)
+    assert len(plan.assignments) == 4
+    assert result(plan, "load").status == "PLANNED"
+    assert plan.total_planned_grid_kwh == pytest.approx(4.0)
+    assert plan.expected_cost_eur == pytest.approx(0.8)
+
+
+def test_explicit_energy_requires_real_nominal_power_and_is_bounded():
+    from dataclasses import replace
+
+    load = replace(
+        charger("load", deadline=T + timedelta(hours=2), kw=4),
+        current_soc=None,
+        target_soc=None,
+        usable_capacity_kwh=None,
+        requested_grid_kwh=2.0,
+    )
+    assert load.required_quarters == 2
+    assert load.required_battery_kwh == pytest.approx(1.8)
+    assert len(build_plan([load], slots(8), T).assignments) == 2
+    assert replace(load, charge_power_kw=None).required_quarters is None
+    with pytest.raises(ValueError, match="energy or duration"):
+        replace(load, requested_duration_quarters=2)
+    with pytest.raises(ValueError, match="Invalid explicit load"):
+        replace(load, requested_grid_kwh=-1)
