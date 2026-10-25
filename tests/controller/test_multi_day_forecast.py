@@ -137,6 +137,17 @@ async def test_one_controller_uses_canonical_vehicle_facts_over_three_days(hass,
     assert data["indicative_cost_eur"] == pytest.approx(
         sum(item["indicative_cost_eur"] for item in data["by_day"])
     )
+    assert all(
+        item["price_coverage"] in ("COMPLETE", "PARTIAL", "NOT_REQUIRED")
+        for item in data["by_day"]
+    )
+    assert len(data["by_day"]) >= 3
+    assert all(
+        load["indicative_cost_eur"] == pytest.approx(
+            sum(day["indicative_cost_eur"] for day in load["by_day"])
+        )
+        for load in data["loads"]
+    )
     assert manager.price_curves == {"native_local": ["untouched"]}
     assert manager.price_horizons == {"native_local": "unchanged"}
 
@@ -165,6 +176,10 @@ async def test_multi_day_missing_prices_is_not_claimed_as_fully_feasible(hass):
     )
     assert datetime.fromisoformat(data["horizon_end"]) > datetime.fromisoformat(
         data["price_horizon_end"]
+    )
+    assert any(
+        day["price_coverage"] in ("PARTIAL", "UNAVAILABLE")
+        for day in data["by_day"]
     )
 
 

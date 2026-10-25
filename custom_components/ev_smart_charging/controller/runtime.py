@@ -1234,8 +1234,34 @@ class ChargeSupervisor:
                     if all(s.grid_kwh is not None for s in slots)
                     else None
                 )
+                load_by_day = {}
+                for slot in slots:
+                    day_key = dt.as_local(slot.start).date().isoformat()
+                    record = load_by_day.setdefault(
+                        day_key,
+                        {
+                            "date": day_key,
+                            "planned_grid_kwh": 0.0,
+                            "indicative_cost_eur": 0.0,
+                        },
+                    )
+                    if slot.grid_kwh is None:
+                        record["planned_grid_kwh"] = None
+                        record["indicative_cost_eur"] = None
+                    else:
+                        if record["planned_grid_kwh"] is not None:
+                            record["planned_grid_kwh"] += slot.grid_kwh
+                        if record["indicative_cost_eur"] is not None:
+                            record["indicative_cost_eur"] += (
+                                slot.grid_kwh * slot.price_eur_per_kwh
+                            )
+                for record in load_by_day.values():
+                    for field in ("planned_grid_kwh", "indicative_cost_eur"):
+                        if record[field] is not None:
+                            record[field] = round(record[field], 4)
                 loads.append(
                     {
+                        "by_day": [load_by_day[d] for d in sorted(load_by_day)],
                         "evsc_entry_id": key,
                         "assigned_vehicle_id": assigned.get(key),
                         "status": result.status,
@@ -1289,6 +1315,43 @@ class ChargeSupervisor:
                     },
                 )
                 current_day += timedelta(days=1)
+            # Quality is assessed against required price intervals for
+            # each Vehicle up to its deadline, not just observed plan slots.
+            # UTC quarters avoid ambiguous/repeated local DST hours.
+            price_quality = {
+                key: {"expected": 0, "covered": 0}
+                for key in summary_by_day
+            }
+            start_quarter = now.replace(
+                minute=now.minute // 15 * 15, second=0, microsecond=0
+            )
+            for request in requests:
+                if request.ready_by is None:
+                    continue
+                until = min(horizon_end, utc(request.ready_by))
+                available = {
+                    slot.start for slot in limited_prices.get(request.id, ())
+                }
+                point = start_quarter
+                while point + QUARTER <= until:
+                    day_key = dt.as_local(point).date().isoformat()
+                    if day_key in price_quality:
+                        price_quality[day_key]["expected"] += 1
+                        if point in available:
+                            price_quality[day_key]["covered"] += 1
+                    point += QUARTER
+            for day_key, values in price_quality.items():
+                expected = values["expected"]
+                covered = values["covered"]
+                summary_by_day[day_key]["price_coverage"] = (
+                    "NOT_REQUIRED"
+                    if not expected
+                    else "COMPLETE"
+                    if expected == covered
+                    else "PARTIAL"
+                    if covered
+                    else "UNAVAILABLE"
+                )
             self.multi_day_plan = plan
             self.multi_day_status = (
                 "NO_DEMAND"
