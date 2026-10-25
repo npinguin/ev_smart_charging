@@ -242,29 +242,26 @@ def test_controller_never_has_its_own_vehicle_assignment():
     controller = ChargeController(
         "controller",
         "EVSC Charge Controller",
-        mode="local",
         charger_ids=("black", "white"),
     )
-    assert controller.mode == "local"
+    assert not hasattr(controller, "mode")
     assert controller.charger_ids == ("black", "white")
     assert not hasattr(controller, "selected_vehicle_id")
     assert not hasattr(controller, "vehicle_id")
     assert not hasattr(controller, "assignment")
 
 
-@pytest.mark.parametrize("mode", ["local", "coordinated"])
-def test_controller_accepts_no_vehicle_assignment_and_no_chargers(mode):
-    controller = ChargeController("controller", "EVSC Controller", mode=mode)
+def test_controller_accepts_no_vehicle_assignment_and_no_chargers():
+    controller = ChargeController("controller", "EVSC Controller")
     assert controller.charger_ids == ()
     contexts = resolve_charging_contexts({}, {}, (), {}, {}, {})
     assert contexts == {}
 
 
-@pytest.mark.parametrize("mode", ["local", "coordinated"])
-def test_connected_charger_without_assigned_vehicle_is_observed_not_planned(mode):
+def test_connected_charger_without_assigned_vehicle_is_observed_not_planned():
     """None is a valid choice even when charger is physically connected."""
     controller = ChargeController(
-        "controller", "EVSC Controller", mode=mode, charger_ids=("black",)
+        "controller", "EVSC Controller", charger_ids=("black",)
     )
     contexts = resolve_charging_contexts(
         {"black": Charger("black", "Garage Black", max_ac_power_kw=11)},

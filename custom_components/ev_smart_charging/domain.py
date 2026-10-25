@@ -14,9 +14,7 @@ import re
 from unicodedata import normalize
 from typing import Literal
 
-ControllerMode = Literal["local", "coordinated"]
-
-AssignmentStatus = Literal[
+ AssignmentStatus = Literal[
     "ready",
     "unassigned",
     "missing_vehicle",
@@ -142,25 +140,21 @@ class Charger:
 
 @dataclass(frozen=True)
 class ChargeController:
-    """One Local or Coordinated planner scope, never a Vehicle owner.
+    """One planning and policy scope for zero, one or many Chargers.
 
-    A Controller is valid with zero Chargers, or with Chargers assigned to
-    no Vehicle. In Local mode it monitors and schedules each Charger
-    independently; Coordinated adds shared group constraints. Neither mode
-    creates an implicit or default Vehicle assignment.
+    Legacy Local-vs-Controller physical ownership is an execution handoff
+    concern on a Charger, not a permanent Charge Controller planning mode.
+    The Controller never owns a Vehicle assignment or hardware driver.
     """
 
     id: str
     name: str
-    mode: ControllerMode = "local"
     charger_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id or not self.id.strip():
             raise ValueError("controller_id_required")
         _valid_device_name(self.name)
-        if self.mode not in ("local", "coordinated"):
-            raise ValueError("invalid_controller_mode")
         if any(
             not charger_id or not charger_id.strip() for charger_id in self.charger_ids
         ):
