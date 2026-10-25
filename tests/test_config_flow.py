@@ -173,3 +173,49 @@ async def test_unsuccessful_config_flow_option(hass: HomeAssistant):
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
     assert len(result["errors"]) > 0
+
+
+async def test_unbound_ev_charger_config_does_not_require_soc(hass):
+    """Optional missing SoC is valid but an explicitly broken mapping is not."""
+    from custom_components.ev_smart_charging.helpers.config_flow import FlowValidator
+    from custom_components.ev_smart_charging.const import (
+        CONF_PRICE_SENSOR,
+        CONF_EV_SOC_SENSOR,
+        CONF_EV_TARGET_SOC_SENSOR,
+        CONF_CHARGER_ENTITY,
+        CONF_CHARGING_STATE_ENTITY,
+    )
+    from custom_components.ev_smart_charging.coordinator import (
+        EVSmartChargingCoordinator,
+    )
+    from types import SimpleNamespace
+
+    unbound = {
+        CONF_PRICE_SENSOR: "sensor.test_price",
+        CONF_EV_SOC_SENSOR: "",
+        CONF_EV_TARGET_SOC_SENSOR: "",
+        CONF_CHARGER_ENTITY: "",
+        CONF_CHARGING_STATE_ENTITY: "",
+    }
+    hass.states.async_set("sensor.test_price", "0.2")
+    with patch(
+        "custom_components.ev_smart_charging.helpers.config_flow.PriceAdaptor.validate_price_entity",
+        return_value=None,
+    ):
+        assert FlowValidator.validate_step_user(hass, dict(unbound)) is None
+        broken = {**unbound, CONF_EV_SOC_SENSOR: "sensor.nonexistent_soc"}
+        assert FlowValidator.validate_step_user(hass, broken) == (
+            "base",
+            "ev_soc_not_found",
+        )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, entry_id="unbound", data=unbound, version=8
+    )
+    fake = SimpleNamespace(config_entry=entry, hass=hass)
+    assert EVSmartChargingCoordinator.validate_input_sensors(fake) is None
+    hass.states.async_remove("sensor.test_price")
+    assert (
+        EVSmartChargingCoordinator.validate_input_sensors(fake)
+        == "Input sensors not ready."
+    )

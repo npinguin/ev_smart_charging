@@ -53,16 +53,21 @@ class FlowValidator:
         if result is not None:
             return result
 
-        # Validate EV SOC entity
-        entity = hass.states.get(user_input[CONF_EV_SOC_SENSOR])
-        if entity is None:
-            return ("base", "ev_soc_not_found")
-        if not Validator.is_float(entity.state):
-            _LOGGER.debug("EV SOC state is not float")
-            return ("base", "ev_soc_invalid_data")
-        if not 0.0 <= float(entity.state) <= 100.0:
-            _LOGGER.debug("EV SOC state is between 0 and 100")
-            return ("base", "ev_soc_invalid_data")
+        # SoC is optional for a new unbound Charger. Existing bound Local
+        # entries keep exactly the upstream validation and scheduling semantics.
+        # No sensor means UNKNOWN demand, never implicit 0/100% or a Start.
+        source = user_input.get(CONF_EV_SOC_SENSOR) or ""
+        user_input[CONF_EV_SOC_SENSOR] = source.strip()
+        if source.strip():
+            entity = hass.states.get(source.strip())
+            if entity is None:
+                return ("base", "ev_soc_not_found")
+            if not Validator.is_float(entity.state):
+                _LOGGER.debug("EV SOC state is not float")
+                return ("base", "ev_soc_invalid_data")
+            if not 0.0 <= float(entity.state) <= 100.0:
+                _LOGGER.debug("EV SOC state must be between 0 and 100")
+                return ("base", "ev_soc_invalid_data")
 
         # Validate EV Target SOC entity
         # If the set value is only whitespaces, the value will be set to ""

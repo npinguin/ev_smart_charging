@@ -6,7 +6,7 @@
         "data": {
           "device_name": "Name",
           "price_sensor": "Electricity price sensor",
-          "ev_soc_sensor": "EV SOC entity",
+          "ev_soc_sensor": "EV SoC entity (optional; no automatic charging without known demand)",
           "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
           "charger_entity": "Charger control entity (single space to remove)",
           "charging_state_entity": "Charging state entity (single space to remove)",
@@ -33,7 +33,7 @@
         "description": "Configuration of external entities.",
         "data": {
           "price_sensor": "Electricity price sensor",
-          "ev_soc_sensor": "EV SOC entity",
+          "ev_soc_sensor": "EV SoC entity (optional; blank leaves automatic charging inactive)",
           "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
           "charger_entity": "Charger control entity (single space to remove)",
           "charging_state_entity": "Charging state entity (single space to remove)",

@@ -116,7 +116,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(
                 CONF_PRICE_SENSOR, default=user_input[CONF_PRICE_SENSOR]
             ): cv.string,
-            vol.Required(
+            vol.Optional(
                 CONF_EV_SOC_SENSOR, default=user_input[CONF_EV_SOC_SENSOR]
             ): cv.string,
             vol.Optional(
@@ -173,9 +173,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_PRICE_SENSOR,
                 default=get_parameter(self.config_entry, CONF_PRICE_SENSOR),
             ): cv.string,
-            vol.Required(
+            vol.Optional(
                 CONF_EV_SOC_SENSOR,
-                default=get_parameter(self.config_entry, CONF_EV_SOC_SENSOR),
+                default=get_parameter(self.config_entry, CONF_EV_SOC_SENSOR, "") or "",
             ): cv.string,
             vol.Optional(
                 CONF_EV_TARGET_SOC_SENSOR,

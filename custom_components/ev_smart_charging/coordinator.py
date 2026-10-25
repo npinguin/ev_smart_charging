@@ -419,6 +419,14 @@ class EVSmartChargingCoordinator:
                         # Keep charger on.
                         turn_on_charging = True
 
+            # Unbound Charger without SoC/demand has NO automatic permission.
+            # In particular, low-price and keep-on overrides cannot invent
+            # Vehicle demand. Manual native control remains separate.
+            if not self.ev_soc_entity_id:
+                turn_on_charging = False
+                self.low_price_charging_state = STATE_OFF
+                self.low_soc_charging_state = STATE_OFF
+
             # Don't turn on charging if initialization is not complete.
             # Initialization is assumed to be finished in 5 seconds.
             if self.is_during_intialization():
@@ -624,20 +632,22 @@ class EVSmartChargingCoordinator:
         self.price_entity_id = get_parameter(self.config_entry, CONF_PRICE_SENSOR)
         price_state = self.hass.states.get(self.price_entity_id)
         self.price_adaptor.initiate(price_state)
-        self.ev_soc_entity_id = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR)
-        self.ev_target_soc_entity_id = get_parameter(
-            self.config_entry, CONF_EV_TARGET_SOC_SENSOR
+        self.ev_soc_entity_id = (
+            get_parameter(self.config_entry, CONF_EV_SOC_SENSOR) or ""
         )
+        self.ev_target_soc_entity_id = (
+            get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR) or ""
+        )
+        source_entities = [
+            entity for entity in (self.price_entity_id, self.ev_soc_entity_id) if entity
+        ]
 
         if MAJOR_VERSION <= 2023 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 5):
             # Use for Home Assistant 2024.5 or older
             self.listeners.append(
                 async_track_state_change(
                     self.hass,
-                    [
-                        self.price_entity_id,
-                        self.ev_soc_entity_id,
-                    ],
+                    source_entities,
                     self.update_sensors,
                 )
             )
@@ -646,10 +656,7 @@ class EVSmartChargingCoordinator:
             self.listeners.append(
                 async_track_state_change_event(
                     self.hass,
-                    [
-                        self.price_entity_id,
-                        self.ev_soc_entity_id,
-                    ],
+                    source_entities,
                     self.update_sensors_new,
                 )
             )
@@ -1031,7 +1038,11 @@ class EVSmartChargingCoordinator:
                 _LOGGER.error("Price sensor not valid")
                 _LOGGER.error("Price state: %s", price_state)
 
-        ev_soc_state = self.hass.states.get(self.ev_soc_entity_id)
+        ev_soc_state = (
+            self.hass.states.get(self.ev_soc_entity_id)
+            if self.ev_soc_entity_id
+            else None
+        )
         if Validator.is_soc_state(ev_soc_state):
             self.ev_soc_valid = True
             self.sensor.ev_soc = ev_soc_state.state
@@ -1045,6 +1056,12 @@ class EVSmartChargingCoordinator:
                 # Make only one error message per outage.
                 _LOGGER.error("SOC sensor not valid: %s", ev_soc_state)
             self.ev_soc_valid = False
+            if not self.ev_soc_entity_id:
+                # Do not preserve a value when no Vehicle is configured.
+                # Configured but temporarily unavailable upstream sources retain
+                # their historical behavior for backwards compatibility.
+                self.ev_soc = None
+                self.sensor.ev_soc = None
 
         if len(self.ev_target_soc_entity_id) > 0:
             ev_target_soc_state = self.hass.states.get(self.ev_target_soc_entity_id)
@@ -1252,12 +1269,15 @@ class EVSmartChargingCoordinator:
         if price_state is None or price_state.state is None:
             return "Input sensors not ready."
 
-        ev_soc = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR)
-        ev_soc_state = self.hass.states.get(ev_soc)
-        if ev_soc_state is None or ev_soc_state.state is None:
-            return "Input sensors not ready."
+        ev_soc = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR) or ""
+        if ev_soc:
+            ev_soc_state = self.hass.states.get(ev_soc)
+            if ev_soc_state is None or ev_soc_state.state is None:
+                return "Input sensors not ready."
 
-        ev_target_soc = get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR)
+        ev_target_soc = (
+            get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR) or ""
+        )
         if len(ev_target_soc) > 0:  # Check if the sensor exists
             ev_target_soc_state = self.hass.states.get(ev_target_soc)
             if ev_target_soc_state is None or ev_target_soc_state.state is None:
