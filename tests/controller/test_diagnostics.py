@@ -411,9 +411,12 @@ async def test_unconfigured_integration_diagnostics_are_truthful_not_green(hass)
         report = await async_get_config_entry_diagnostics(hass, entry)
         assert report["controller"]["multi_day_planning"]["status"] == "NOT_COMPUTED"
         assert report["controller"]["readiness"]["multi_day_computed"] is False
-        assert "no_vehicle_profiles_configured" in report["controller"]["readiness"][
-            "blockers"
-        ]
-        assert report["controller"]["readiness"]["physical_coordinated_enabled"] is False
+        assert (
+            "no_vehicle_profiles_configured"
+            in report["controller"]["readiness"]["blockers"]
+        )
+        assert (
+            report["controller"]["readiness"]["physical_coordinated_enabled"] is False
+        )
     finally:
         hass.data[DOMAIN].pop(entry.entry_id, None)
