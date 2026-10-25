@@ -419,3 +419,63 @@ def test_vehicle_contexts_are_read_only_and_keep_local_source_independent(hass):
     unavailable = manager.vehicle_contexts()
     assert unavailable["black"]["status"] == "soc_unknown"
     assert unavailable["black"]["required_battery_kwh"] is None
+
+
+def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
+    """A Home Assistant service projection can be inspected before field GO."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.controller.planner import PriceSlot
+
+    manager = object.__new__(ChargeSupervisor)
+    manager.hass = hass
+    manager.config_entry = SimpleNamespace(options={"max_parallel": 1})
+    manager.plan = None
+    deadline = dt.utcnow() + timedelta(hours=2)
+    entry = SimpleNamespace(
+        entry_id="source_less",
+        title="Garage Black",
+        data={"ev_soc_sensor": ""},
+        options={"evsc_load_energy_kwh": 2, "evsc_load_duration_quarters": 0},
+    )
+    charger = SimpleNamespace(
+        config_entry=entry,
+        switch_ev_connected=True,
+        switch_active=True,
+        absolute_ready_by=deadline,
+        ready_quarter_local=0,
+        ev_soc=None,
+        ev_target_soc=None,
+        charging_pct_per_hour=12,
+    )
+    manager.chargers = lambda: {"source_less": charger}
+    manager._source_config = lambda key, obj: {
+        "capacity_kwh": None,
+        "capacity_sensor": None,
+        "current_battery_sensor": None,
+        "target_battery_sensor": None,
+        "power_kw": 4,
+        "power_sensor": None,
+        "energy_sensor": None,
+    }
+    start = dt.utcnow().replace(second=0, microsecond=0)
+    start = start.replace(minute=(start.minute // 15) * 15)
+    start += timedelta(minutes=15)
+    price_slots = [
+        PriceSlot(
+            start + timedelta(minutes=15 * index),
+            start + timedelta(minutes=15 * (index + 1)),
+            0.2,
+        )
+        for index in range(8)
+    ]
+    manager._prices = lambda objects: {"source_less": price_slots}
+    preview = manager.load_preview()
+    assert preview["advisory_only"] is True
+    assert preview["physical_actuation_authorized"] is False
+    assert preview["status"] == "ADVISORY_ONLY"
+    assert len(preview["loads"]) == 1
+    assert preview["planned_grid_kwh"] == pytest.approx(2.0)
+    assert preview["indicative_cost_eur"] == pytest.approx(0.4)
+    assert manager.plan is None
+    assert charger.config_entry.options["evsc_load_energy_kwh"] == 2

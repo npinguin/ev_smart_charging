@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from copy import deepcopy
+from dataclasses import replace
 from itertools import combinations
 from datetime import datetime, timedelta
 from math import isfinite
@@ -277,9 +278,7 @@ class ChargeSupervisor:
         # Explicit demand is only considered for an unbound SoC source.
         # Existing configured Local SoC behavior is never silently replaced.
         no_soc_binding = not get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR)
-        load_energy = _number(
-            obj.config_entry.options.get("evsc_load_energy_kwh", 0)
-        )
+        load_energy = _number(obj.config_entry.options.get("evsc_load_energy_kwh", 0))
         load_duration = _number(
             obj.config_entry.options.get("evsc_load_duration_quarters", 0)
         )
@@ -981,6 +980,86 @@ class ChargeSupervisor:
             }
         return output
 
+    def load_preview(self):
+        """Non-actuating combined preview for explicit source-less load demand.
+
+        This is NOT the effective Local/Coordinated execution plan and never
+        changes a physical writer or grants a command. Only explicit Charger
+        demand is eligible; no fabricated Vehicle, SoC, consumption or prices.
+        """
+        eligible = {}
+        for key, obj in sorted(self.chargers().items()):
+            opts = obj.config_entry.options
+            if get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR):
+                continue
+            if (
+                _number(opts.get("evsc_load_energy_kwh", 0)) or 0
+            ) <= 0 and (
+                _number(opts.get("evsc_load_duration_quarters", 0)) or 0
+            ) <= 0:
+                continue
+            eligible[key] = obj
+        if not eligible:
+            return None
+        try:
+            if len(eligible) > 16:
+                raise ValueError("Too many loads for preview")
+            policy_options = self.config_entry.options
+            budget = _number(policy_options.get("power_budget_kw", 0))
+            policy = Policy(
+                max_parallel=int(policy_options.get("max_parallel", 1)),
+                group_power_budget_kw=budget if budget and budget > 0 else None,
+            )
+            inputs = [
+                replace(self._charger(key, obj), mode="coordinated")
+                for key, obj in eligible.items()
+            ]
+            preview = build_plan(
+                inputs,
+                self._prices(list(eligible.values())),
+                dt.utcnow(),
+                policy,
+            )
+            entries = []
+            for item in preview.results:
+                slots = [
+                    {
+                        "start": slot.start.isoformat(),
+                        "end": slot.end.isoformat(),
+                        "estimated_grid_kwh": slot.grid_kwh,
+                        "price_eur_per_kwh": slot.price_eur_per_kwh,
+                    }
+                    for slot in preview.assignments
+                    if slot.charger_id == item.charger_id
+                ]
+                entries.append(
+                    {
+                        "evsc_entry_id": item.charger_id,
+                        "status": item.status,
+                        "reason": item.reason,
+                        "requested_battery_kwh_equivalent": item.requested_battery_kwh,
+                        "unplanned_battery_kwh_equivalent": item.remaining_battery_kwh,
+                        "slots": slots,
+                    }
+                )
+            return {
+                "status": "ADVISORY_ONLY",
+                "advisory_only": True,
+                "physical_actuation_authorized": False,
+                "coverage": preview.coverage,
+                "planned_grid_kwh": preview.total_planned_grid_kwh,
+                "indicative_cost_eur": preview.expected_cost_eur,
+                "loads": entries,
+            }
+        except (ValueError, TypeError, OverflowError, AttributeError) as error:
+            _LOGGER.warning("Non-actuating EVSC load preview unavailable: %s", error)
+            return {
+                "status": "INVALID_OR_INCOMPLETE_INPUT",
+                "advisory_only": True,
+                "physical_actuation_authorized": False,
+                "loads": [],
+            }
+
     def plan_payload(self):
         """One read-only, bounded response for the current quarter plan."""
         plan = self.plan
@@ -1099,6 +1178,7 @@ class ChargeSupervisor:
                 for key, value in self.planning_summary().items()
             },
             "chargers": chargers,
+            "load_preview": self.load_preview(),
             "peak_price_comparison": self.peak_price_comparison,
         }
 
