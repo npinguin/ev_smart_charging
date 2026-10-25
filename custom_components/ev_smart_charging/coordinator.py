@@ -422,7 +422,7 @@ class EVSmartChargingCoordinator:
             # Unbound Charger without SoC/demand has NO automatic permission.
             # In particular, low-price and keep-on overrides cannot invent
             # Vehicle demand. Manual native control remains separate.
-            if not self.ev_soc_entity_id:
+            if getattr(self, "ev_soc_entity_id", "configured") == "":
                 turn_on_charging = False
                 self.low_price_charging_state = STATE_OFF
                 self.low_soc_charging_state = STATE_OFF

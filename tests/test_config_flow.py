@@ -209,9 +209,7 @@ async def test_unbound_ev_charger_config_does_not_require_soc(hass):
             "ev_soc_not_found",
         )
 
-    entry = MockConfigEntry(
-        domain=DOMAIN, entry_id="unbound", data=unbound, version=8
-    )
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="unbound", data=unbound, version=8)
     fake = SimpleNamespace(config_entry=entry, hass=hass)
     assert EVSmartChargingCoordinator.validate_input_sensors(fake) is None
     hass.states.async_remove("sensor.test_price")
