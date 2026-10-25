@@ -479,3 +479,65 @@ def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
     assert preview["indicative_cost_eur"] == pytest.approx(0.4)
     assert manager.plan is None
     assert charger.config_entry.options["evsc_load_energy_kwh"] == 2
+
+
+def test_assigned_vehicle_drives_coordinated_input_not_original_local(hass):
+    """New Vehicle assignment has no effect on the original Local sources."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+
+    hass.states.async_set("sensor.audi_soc", "30", {"unit_of_measurement": "%"})
+    manager = object.__new__(ChargeSupervisor)
+    manager.hass = hass
+    profile = {
+        "name": "Audi Q8",
+        "soc_entity": "sensor.audi_soc",
+        "target_soc": 80,
+        "usable_battery_kwh": 18,
+        "max_ac_charge_kw": 7.4,
+    }
+    manager.config_entry = SimpleNamespace(
+        options={
+            "participants": ["black"],
+            VEHICLES: {"audi": profile},
+            ASSIGNMENTS: {"black": "audi"},
+        }
+    )
+    charger_entry = SimpleNamespace(
+        entry_id="black",
+        title="Garage Black",
+        data={"ev_soc_sensor": "sensor.old_soc"},
+        options={},
+    )
+    native = SimpleNamespace(
+        config_entry=charger_entry,
+        absolute_ready_by=dt.utcnow() + timedelta(hours=3),
+        ready_quarter_local=0,
+        ev_soc=100,
+        ev_target_soc=80,
+        charging_pct_per_hour=14,
+        switch_ev_connected=True,
+        switch_active=True,
+    )
+    manager._source_config = lambda key, obj: {
+        "capacity_kwh": 20,
+        "capacity_sensor": None,
+        "current_battery_sensor": None,
+        "target_battery_sensor": None,
+        "power_kw": 11,
+        "power_sensor": None,
+        "energy_sensor": None,
+    }
+    coordinated = manager._charger("black", native)
+    assert coordinated.current_soc == 30
+    assert coordinated.target_soc == 80
+    assert coordinated.usable_capacity_kwh == 18
+    assert coordinated.charge_power_kw == 7.4
+    assert coordinated.required_battery_kwh == pytest.approx(9.0)
+
+    manager.config_entry.options["participants"] = []
+    local = manager._charger("black", native)
+    assert local.mode == "local"
+    assert local.current_soc == 100
+    assert local.usable_capacity_kwh == 20
+    assert local.charge_power_kw == 11

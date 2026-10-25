@@ -35,6 +35,7 @@ from ..vehicle_config import (
     VEHICLES,
     read_vehicle_soc,
     resolve_user_contexts,
+    vehicle_from_profile,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -284,24 +285,53 @@ class ChargeSupervisor:
         )
         if not no_soc_binding:
             load_energy, load_duration = None, None
+        mode = "coordinated" if key in self.participants else "local"
+        soc = _number(obj.ev_soc)
+        target_soc = _number(obj.ev_target_soc)
+        capacity = direct_capacity or None
+        power = _number(attrs.get("power_kw")) or None
+        speed = _number(obj.charging_pct_per_hour)
+        battery_current = _meter(
+            self.hass, attrs.get("current_battery_sensor"), "energy"
+        )
+        battery_target = _meter(
+            self.hass, attrs.get("target_battery_sensor"), "energy"
+        )
+        # An opted-in Controller member uses its explicitly selected Vehicle;
+        # Local retains every original source and scheduler input unchanged.
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        if mode == "coordinated" and profiles:
+            vehicle_id = self.config_entry.options.get(ASSIGNMENTS, {}).get(key)
+            profile = profiles.get(vehicle_id)
+            soc = target_soc = capacity = None
+            speed = battery_current = battery_target = None
+            if profile is not None:
+                vehicle = vehicle_from_profile(vehicle_id, profile)
+                soc = read_vehicle_soc(self.hass, profile)
+                target_soc = float(profile.get("target_soc", 80))
+                capacity = vehicle.usable_battery_kwh
+                if vehicle.max_ac_charge_kw is not None:
+                    power = (
+                        min(power, vehicle.max_ac_charge_kw)
+                        if power is not None
+                        else vehicle.max_ac_charge_kw
+                    )
+                if profile.get("soc_entity"):
+                    load_energy = load_duration = None
         return Charger(
             id=key,
-            mode="coordinated" if key in self.participants else "local",
+            mode=mode,
             connected=obj.switch_ev_connected,
-            current_soc=_number(obj.ev_soc),
-            target_soc=_number(obj.ev_target_soc),
-            usable_capacity_kwh=direct_capacity or None,
-            charge_power_kw=_number(attrs.get("power_kw")) or None,
+            current_soc=soc,
+            target_soc=target_soc,
+            usable_capacity_kwh=capacity,
+            charge_power_kw=power,
             ready_by=ready,
             actual_power_kw=_meter(self.hass, attrs.get("power_sensor"), "power"),
             session_energy_kwh=_meter(self.hass, attrs.get("energy_sensor"), "energy"),
-            charging_speed_pct_h=_number(obj.charging_pct_per_hour),
-            current_battery_kwh=_meter(
-                self.hass, attrs.get("current_battery_sensor"), "energy"
-            ),
-            target_battery_kwh=_meter(
-                self.hass, attrs.get("target_battery_sensor"), "energy"
-            ),
+            charging_speed_pct_h=speed,
+            current_battery_kwh=battery_current,
+            target_battery_kwh=battery_target,
             enabled=obj.switch_active is True,
             requested_grid_kwh=load_energy if load_energy and load_energy > 0 else None,
             requested_duration_quarters=(
