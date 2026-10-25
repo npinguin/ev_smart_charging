@@ -294,9 +294,7 @@ class ChargeSupervisor:
         battery_current = _meter(
             self.hass, attrs.get("current_battery_sensor"), "energy"
         )
-        battery_target = _meter(
-            self.hass, attrs.get("target_battery_sensor"), "energy"
-        )
+        battery_target = _meter(self.hass, attrs.get("target_battery_sensor"), "energy")
         # An opted-in Controller member uses its explicitly selected Vehicle;
         # Local retains every original source and scheduler input unchanged.
         profiles = self.config_entry.options.get(VEHICLES, {})
