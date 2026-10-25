@@ -170,3 +170,57 @@ async def test_local_retry_does_not_attempt_unverified_or_coordinated_start(hass
         hass.states.async_set("switch.test_wallbox", STATE_OFF)
         await native.periodic_check_charging_state()
     native.turn_on_charging.assert_not_awaited()
+
+
+async def test_unbound_soc_never_auto_starts_from_low_price_or_keep_on(hass):
+    """Unknown Vehicle demand must not become a physical Start permission."""
+    now = dt.now()
+    native = object.__new__(EVSmartChargingCoordinator)
+    native.hass = hass
+    native.config_entry = SimpleNamespace(entry_id="unbound_local")
+    native.ev_soc_entity_id = ""
+    native.charger_switch = SimpleNamespace(
+        entity_id="switch.test_wallbox", domain="switch"
+    )
+    native.sensor = SimpleNamespace(current_price=0.10, set_state=MagicMock())
+    native.sensor_status = None
+    native._charging_schedule = [
+        {
+            "start": now - timedelta(minutes=2),
+            "end": now + timedelta(minutes=13),
+            "value": 0.5,
+        }
+    ]
+    native.scheduler = SimpleNamespace(
+        charging_stop_time=now + timedelta(hours=1),
+        get_charging_is_planned=lambda: True,
+        get_charging_start_time=lambda: now,
+        get_charging_stop_time=lambda: now + timedelta(hours=1),
+        get_charging_number_of_quarters=lambda: 4,
+    )
+    native.auto_charging_state = STATE_OFF
+    native.ev_soc = None
+    native.ev_target_soc = 80
+    native.number_min_soc = 0
+    native.max_price = 0.2
+    native.switch_apply_limit = False
+    native.switch_active = True
+    native.switch_ev_connected = True
+    native.switch_keep_on = True
+    native.switch_keep_on_completion_time = now - timedelta(hours=1)
+    native.switch_low_price_charging = True
+    native.low_price_charging = 0.2
+    native.switch_low_soc_charging = False
+    native.low_price_charging_state = STATE_OFF
+    native.low_soc_charging_state = STATE_OFF
+    native.after_ev_connected = False
+    native.setup_timestamp = 0
+
+    with patch(
+        "homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock
+    ) as service:
+        await native.update_state()
+        service.assert_not_awaited()
+        assert native.auto_charging_state == STATE_OFF
+        assert native.low_price_charging_state == STATE_OFF
+        assert native.low_soc_charging_state == STATE_OFF
