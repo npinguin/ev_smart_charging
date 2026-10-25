@@ -806,8 +806,6 @@ class ChargeSupervisor:
         """A manual start must first explicitly transfer the charger to Local."""
         if charger_id not in self.participants or self.plan is None:
             return False
-        if not self.gate.start(charger_id, dt.utcnow(), reason).granted:
-            return False
         if charger_id in self.config_entry.options.get("paused_chargers", []):
             return False
         coordinator = self.chargers().get(charger_id)
@@ -816,18 +814,28 @@ class ChargeSupervisor:
         if coordinator.switch_ev_connected is not True:
             return False
         facts = self._charger(charger_id, coordinator)
+        # Admission must use exactly the same resolved planning input that
+        # produced the grant. Legacy Local SoC/target are *not* authoritative
+        # for an explicitly configured Vehicle under the new Controller.
+        if facts.required_quarters is None or facts.required_quarters <= 0:
+            return False
         if (
             facts.current_battery_kwh is not None
             and facts.target_battery_kwh is not None
         ):
             if facts.target_battery_kwh <= facts.current_battery_kwh:
                 return False
-        else:
-            if coordinator.ev_soc is None or coordinator.ev_target_soc is None:
+        elif facts.current_soc is not None and facts.target_soc is not None:
+            if facts.current_soc >= facts.target_soc:
                 return False
-            if coordinator.ev_soc >= coordinator.ev_target_soc:
-                return False
-        return _charger_switch_readback(self.hass, coordinator)
+        elif (
+            facts.requested_grid_kwh is None
+            and facts.requested_duration_quarters is None
+        ):
+            return False
+        if not _charger_switch_readback(self.hass, coordinator):
+            return False
+        return self.gate.start(charger_id, dt.utcnow(), reason).granted
 
     def planning_summary(self):
         """Bounded HA projections from one effective supervised schedule.

@@ -843,3 +843,57 @@ def test_corrupt_duplicate_vehicle_assignment_cannot_reach_controller(hass):
     }
     with pytest.raises(ValueError, match="vehicle_already_assigned"):
         manager._charger("black", charger)
+
+
+def test_supervisor_physical_admission_uses_resolved_vehicle_not_legacy_soc(hass):
+    """Planning and admission cannot use conflicting Vehicle facts."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.controller.planner import (
+        ChargingLoadRequest,
+    )
+
+    charger = SimpleNamespace(
+        config_entry=SimpleNamespace(entry_id="black"),
+        switch_active=True,
+        switch_ev_connected=True,
+        charger_switch=SimpleNamespace(entity_id="switch.black"),
+        ev_soc=100,  # historical Local readback must not veto assigned Audi
+        ev_target_soc=80,
+    )
+    hass.states.async_set("switch.black", "off")
+    manager = object.__new__(ChargeSupervisor)
+    manager.hass = hass
+    manager.config_entry = SimpleNamespace(
+        options={"participants": ["black"], "paused_chargers": []}
+    )
+    manager.plan = SimpleNamespace()
+    approved = []
+    manager.gate = SimpleNamespace(
+        start=lambda *args: (approved.append(args) or SimpleNamespace(granted=True))
+    )
+    manager.chargers = lambda: {"black": charger}
+    manager._charger = lambda key, obj: ChargingLoadRequest(
+        id=key,
+        mode="coordinated",
+        connected=True,
+        current_soc=30,
+        target_soc=80,
+        usable_capacity_kwh=18,
+        charge_power_kw=7.4,
+        ready_by=dt.utcnow() + timedelta(hours=2),
+    )
+    assert manager.allowed("black", "automatic") is True
+    assert len(approved) == 1
+    manager._charger = lambda key, obj: ChargingLoadRequest(
+        id=key,
+        mode="coordinated",
+        connected=True,
+        current_soc=None,
+        target_soc=80,
+        usable_capacity_kwh=18,
+        charge_power_kw=7.4,
+        ready_by=dt.utcnow() + timedelta(hours=2),
+    )
+    assert manager.allowed("black", "automatic") is False
+    assert len(approved) == 1
