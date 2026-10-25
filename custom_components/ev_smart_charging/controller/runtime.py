@@ -1319,8 +1319,7 @@ class ChargeSupervisor:
             # each Vehicle up to its deadline, not just observed plan slots.
             # UTC quarters avoid ambiguous/repeated local DST hours.
             price_quality = {
-                key: {"expected": 0, "covered": 0}
-                for key in summary_by_day
+                key: {"expected": 0, "covered": 0} for key in summary_by_day
             }
             start_quarter = now.replace(
                 minute=now.minute // 15 * 15, second=0, microsecond=0
@@ -1329,9 +1328,7 @@ class ChargeSupervisor:
                 if request.ready_by is None:
                     continue
                 until = min(horizon_end, utc(request.ready_by))
-                available = {
-                    slot.start for slot in limited_prices.get(request.id, ())
-                }
+                available = {slot.start for slot in limited_prices.get(request.id, ())}
                 point = start_quarter
                 while point + QUARTER <= until:
                     day_key = dt.as_local(point).date().isoformat()
@@ -1346,11 +1343,11 @@ class ChargeSupervisor:
                 summary_by_day[day_key]["price_coverage"] = (
                     "NOT_REQUIRED"
                     if not expected
-                    else "COMPLETE"
-                    if expected == covered
-                    else "PARTIAL"
-                    if covered
-                    else "UNAVAILABLE"
+                    else (
+                        "COMPLETE"
+                        if expected == covered
+                        else "PARTIAL" if covered else "UNAVAILABLE"
+                    )
                 )
             self.multi_day_plan = plan
             self.multi_day_status = (

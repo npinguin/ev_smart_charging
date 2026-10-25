@@ -143,9 +143,8 @@ async def test_one_controller_uses_canonical_vehicle_facts_over_three_days(hass,
     )
     assert len(data["by_day"]) >= 3
     assert all(
-        load["indicative_cost_eur"] == pytest.approx(
-            sum(day["indicative_cost_eur"] for day in load["by_day"])
-        )
+        load["indicative_cost_eur"]
+        == pytest.approx(sum(day["indicative_cost_eur"] for day in load["by_day"]))
         for load in data["loads"]
     )
     assert manager.price_curves == {"native_local": ["untouched"]}
@@ -178,8 +177,7 @@ async def test_multi_day_missing_prices_is_not_claimed_as_fully_feasible(hass):
         data["price_horizon_end"]
     )
     assert any(
-        day["price_coverage"] in ("PARTIAL", "UNAVAILABLE")
-        for day in data["by_day"]
+        day["price_coverage"] in ("PARTIAL", "UNAVAILABLE") for day in data["by_day"]
     )
 
 
@@ -218,3 +216,63 @@ def test_dst_fallback_prices_have_unique_utc_quarters_and_correct_local_days():
     assert all(
         slot.start.astimezone(zone).date().isoformat() == "2026-10-25" for slot in slots
     )
+
+
+async def test_three_day_prices_are_read_from_real_home_assistant_tariff_entity(hass):
+    """Production tariff adapter, not a fabricated alternative price planner."""
+    from custom_components.ev_smart_charging.controller.runtime import (
+        ChargeSupervisor,
+    )
+
+    manager = _four_vehicle_controller(hass, count=1, days=3)
+    charger = manager.chargers()["evse_0"]
+    first = _next_quarter()
+    tariff_entity = "sensor.all_in_future_tariff"
+    charger.config_entry.options.update(
+        {
+            "evsc_effective_price_entity": tariff_entity,
+            "evsc_price_validated": True,
+        }
+    )
+    charger.price_entity_id = "sensor.old_spot"
+    hass.states.async_set(
+        tariff_entity,
+        "0.20",
+        {
+            "unit_of_measurement": "EUR/kWh",
+            "currency": "EUR",
+            "price_slots": [
+                {
+                    "start": first.isoformat(),
+                    "end": (first + timedelta(days=3)).isoformat(),
+                    "effective_eur_per_kwh": 0.2,
+                }
+            ],
+        },
+    )
+    # Restore the actual production price parser; other tests isolate the
+    # underlying optimizer with deterministic quarter price fixtures.
+    manager._prices = ChargeSupervisor._prices.__get__(manager)
+    await manager._rebuild_multi_day()
+    report = manager.multi_day_details
+    assert report["status"] in ("PLANNED", "PROVISIONAL")
+    assert report["planned_grid_kwh"] > 0
+    assert report["indicative_cost_eur"] == pytest.approx(
+        report["planned_grid_kwh"] * 0.2
+    )
+    assert report["loads"][0]["assigned_vehicle_id"] == "vehicle_0"
+    # A tariff in the wrong currency must never be silently substituted
+    # by the original native spot price sensor.
+    hass.states.async_set(
+        tariff_entity,
+        "0.20",
+        {
+            "unit_of_measurement": "EUR/kWh",
+            "currency": "USD",
+            "price_slots": [],
+        },
+    )
+    await manager._rebuild_multi_day()
+    assert manager.multi_day_details["status"] == "INCOMPLETE"
+    assert manager.multi_day_details["loads"][0]["status"] == "PENDING_PRICES"
+    assert manager.plan is None
