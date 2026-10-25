@@ -1,5 +1,8 @@
 # Upstream-first contribution strategy and acceptance gates
 
+> **Updated product architecture (25 October 2026):** the original Local all-in-one EVSC controller is the backwards-compatible **transitional runtime**, not the final product architecture. The new three-Device Vehicle→Charger→Controller model will ultimately handle single- and multi-Charger charging through one Controller planning contract. Local persists until parity and safe physical handoff are established, not as a permanent duplicate planner. See [canonical ADR](../architecture/ADR_MOBILITY_LIGHT_CHARGING.md). The eventual upstream contributions remain small, additive, attributable and independently testable; upstream-porting is **deferred until** the new product has been finished and accepted in the fork. The current rc.8 tag remains unchanged.
+
+
 **Status: product/engineering direction, 25 October 2026.** This fork is an engineering workspace, **not** the patch series to submit directly to the upstream maintainer. No upstream submission or acceptance has occurred. The original upstream project is [jonasbkarlsson/ev_smart_charging](https://github.com/jonasbkarlsson/ev_smart_charging).
 
 ## Product boundary

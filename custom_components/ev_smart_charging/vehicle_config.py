@@ -191,8 +191,7 @@ def resolve_user_contexts(hass, options: dict, chargers: dict):
         for vid, (value, quality) in readings.items()
     }
     intents = {
-        vid: intent_from_profile(vid, profile)
-        for vid, profile in profiles.items()
+        vid: intent_from_profile(vid, profile) for vid, profile in profiles.items()
     }
     assignments = tuple(
         Assignment(vehicle_id, charger_id)

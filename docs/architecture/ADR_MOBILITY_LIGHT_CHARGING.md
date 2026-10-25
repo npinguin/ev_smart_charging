@@ -1,75 +1,102 @@
-# ADR — EV Smart Charging Mobility Light: three core concepts
+# ADR — Mobility Light three-device ownership and phased controller migration
 
-**Status:** Architectural direction. Pure reference models and tests in the isolated draft branch `architecture/vehicle-charger-assignment-v1`. **Not wired into Local runtime; not released.** Published HACS rc.7 and the physical Coordinated P0 hold remain unchanged.
+**Decision date:** 25 October 2026
+**Status:** Accepted architecture for development; Phase 1 in progress on Draft PR #6.
+**Deployed baseline:** `v2.6.0-rc.8` is the last published guarded HA drop-in prerelease. The architecture changes above rc.8 are **not released**.
+**Safety:** Coordinated physical actuation remains disabled while [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5) is open.
 
-## Upstream-first product direction (25 October 2026)
+## 1. Architectural decision
 
-**The goal is a set of maintainable contributions back to the original upstream EV Smart Charging project, not a wholesale rewrite or a Robotix-specific fork.** All mature upstream Local features, public HA identifiers, configuration semantics and physical execution remain supported. Vehicle configuration, explicit Charger assignment, optional non-SoC demand, multi-load planning, optional flexible loads and per-load/total metering are **additive capabilities** that should be opt-in. Existing Local users must not be forced to adopt Vehicles, a Controller or a migration.
+Mobility Light is a **Home Assistant-native, modular successor** to the original single-entry, do-everything EV Smart Charging coordinator. It remains an upstream-compatible evolution rather than a parallel RHI framework. The mature upstream behavior is kept as a *temporary Local compatibility/execution path*, **not** the permanent architectural center. A future Controller will own the charging decision in both single-Charger and multi-Charger operation, once behavior and physical command handoff are proven safe.
 
-The upstream Local scheduling algorithm is retained as the reference and default path. Additional multi-load/Coordinated planning **may live alongside it** while sharing narrow source/price and planning contracts; no mandatory engine replacement is required merely for model uniformity. Do not create a second physical actuator owner. Unknown source data remains unknown, but lack of a Vehicle or SoC alone must not prevent use of explicitly configured alternative-duration/energy-based planning. Without sufficient demand or physical authorization, do not invent an automatic start.
+There are exactly **three business/HA Devices**:
 
-For the upstream author, prepare **small independent PRs on the latest upstream `main`**, with legacy parity tests, direct HA-native use and no references or dependencies on RHI/Robotix. See [Upstream contribution gates](../controller/UPSTREAM_CONTRIBUTION.md). The current Draft PR #6 is a development workspace, **not** a candidate to merge upstream wholesale. Physical Coordinated P0 #5 remains open.
-
-## Core model — exactly three device concepts
-
-| Concept | HA Device | Owns | Does not own |
+| Owner | Authoritative data/configuration | Logic/responsibility | Never owns |
 | --- | --- | --- | --- |
-| **Vehicle** | Yes | Stable EVSC ID, user-facing name, optional external identifier/HA user link, user-selected SoC source or manual state, usable battery capacity, vehicle charging limits, default charging preferences | EVSE switch, physical meter, charger identity |
-| **Charger** | Yes | Stable EVSC ID, name, optional external ID, existing native HA control switch and source bindings, EVSE power/phases, readback, meters, availability, **selected Vehicle** | Vehicle battery, duplicate SoC master |
-| **Charge Controller** | Yes, existing singleton | **Local** execution policy for a charger, **Coordinated** 1..N group scheduling, prices, concurrency, peak/site power safety, plans, diagnostics and existing native dispatch | Duplicate vehicle/charger records or a second EVSE driver |
+| **Vehicle** | Stable vehicle ID/name, HA SoC source and source quality, usable battery capacity, vehicle maximum AC kW/phase capability, default target SoC and Ready By; explicit Vehicle/session **Charge Intent** | Demand = desired target minus observed battery state, effective deadline, optional future session-specific override | EVSE physical switch, charger meter, tariff, site/Controller policy |
+| **Charger** | Stable original v8 Charger config entry/HA Device/unique IDs, physical HA control/readback, max/min charge power/current and regulating capability, connected state, session power/energy meters, applicable effective tariff source, selected Vehicle ID or None | Validates physical capabilities and readback; **single native executor** for Start/Stop and future set current/power. Measures session and reports facts | Vehicle battery/SoC/target, shared cost/peak policy, whole-group optimizer |
+| **Charge Controller** | Stable singleton Device, linked Charger IDs, planning horizon, scheduling strategy, global €/kWh filters and total € budgets (Step 3), aggregate kW/concurrency constraints (Step 3), external dynamic limit binding (Step 3), group priority | Reads only canonical resolved facts; computes/owns plans for one or N Chargers, allocates budgets and control permissions, aggregates cost/quality and enforces constraints | Duplicate Vehicle/Charger master data, OEM/EVSE hardware writer, tariff data authority |
 
-There are **three core concepts, not five or six**. `Assignment`, `ChargeIntent`, `VehicleState` and effective charging context are small **internal value objects / attributes** of the three concepts, NOT additional HA devices, config-entry types or independent integrations.
+**No additional HA Devices** for Charge Intent, Assignment, Vehicle State, Load, tariff, controller policy or plan. Those are **value objects, attributes, sensors, policies, or internal scheduling inputs**, not independent integration/config entries. Vehicle assignment is a Charger attribute stored today in the Controller's `vehicle_assignments` Options mapping to preserve native HA config-entry compatibility.
 
-- **Assignment** = `Charger.selected_vehicle_id: str | None` with an optional vehicle/charger-pair-specific historical `%SoC/h` estimate. The user can explicitly select **None / No vehicle**. That is valid, even if the Charger is physically connected: the Charger remains visible and measurable, but generates no vehicle-specific charging demand or automatic Start. An unassigned Charger does not silently become Guest. One vehicle can be assigned to no charger or one charger. Conflict is explicit: do not select an arbitrary winner.
-- **Charge Intent** = target SoC, Ready By, minimum SoC, price/keep-on/opportunistic/low-SoC policy and user preference associated with the relevant Vehicle/session and evaluated by the Controller. Not a standalone device.
-- **Vehicle State** = current SoC, quality/freshness, optional timestamp; user maps an existing Home Assistant source. Do not implement OEM vehicle adapters.
-- **Identity** = immutable EVSC internal ID + editable display name for Vehicle and Charger; external reference optional. Optional `ha_user_id` on Vehicle is association/attribution only, **never an implicit authorization** to charge, start a charger or access another user's data.
+**The relationship is Vehicle (0..1 active Charger) → Charger (0..1 assigned Vehicle) → Controller (0..N linked Chargers).** A Charger may be empty, a Vehicle may be unassigned, and a Controller may have no linked Chargers. Physical cable connected is not proof of which Vehicle is assigned; never infer an OEM, Guest, or SoC. A Vehicle may not simultaneously claim two Chargers. Assignment conflict or missing source is explicit and must not enable Start.
 
-## One Controller, two operating scopes
+## 2. Canonical logic and source-of-truth boundary
 
-**The Charge Controller never has a Vehicle Assignment.** Its only membership is a set of Charger IDs. A Controller with zero Chargers is valid, and a Controller with connected but unassigned Chargers is also valid. Both Local and Coordinated still monitor native state and measurements while excluding those Chargers from vehicle-specific automatic plans. `None` is a supported user selection on each Charger, not a missing Controller configuration or a request to fabricate a default Vehicle. This contract does not change existing v8 Local execution until the migration is proven feature-equivalent.
+```text
+Vehicle profile + VehicleState + ChargeIntent
+                        |
+Charger configuration + actual HA physical feedback + Tariff observations
+                        |
+            Explicit Vehicle↔Charger Assignment
+                        |
+           ONE effective charging context
+                        |
+       Charge Controller planning / constraints
+                        |
+         Atomic admission / ownership / readback
+                        |
+        Charger native EVSE command executor
+```
 
-**Local:** Each Charger retains the original upstream Local scheduling and native Start/Stop by default. A single Local Charger must not need a Vehicle profile, Controller membership, another Charger or a runtime migration to operate. Shared pure quarter/price helpers may be extracted only with proven upstream behavior parity.
+Concrete implementation contracts:
 
-**Coordinated:** Optional additive planning handles multiple Chargers and later appropriate flexible loads, adding group concurrency, site power/peak constraints and load cost accounting. It may coexist with the original Local algorithm through explicit shared prices/constraints and resolved load facts; avoid a forced replacement of the proven Local scheduler. It never creates another EVSE native writer. Charger identity and Local policy remain stable; opt-in handoff is reversible and must never leave a charger without an execution owner.
+- `domain.py`: pure business types `Vehicle`, physical `Charger`, `ChargeIntent`, `VehicleState`, `Assignment`, `EffectiveChargingContext`; no HA imports or commands.
+- `vehicle_config.py`: current HA-backed adapter from persisted Vehicle profiles, assignments, live SoC with freshness, charger capability descriptions and absolute timezone-aware `ready_by` to **the same** resolved `EffectiveChargingContext`.
+- `controller/runtime.py`: aggregates configured linked Chargers, per-Charger price/meter sources, reads the *resolved* context for opted-in future Controller planning. It may not fall back to old Local car SoC, target, charge-speed %/hour or Ready By whenever an explicit Vehicle assignment exists. An invalid/missing assignment fails closed.
+- `controller/planner.py`: currently exposes an internal **planning-load projection** named `Charger` (historic name); it is **not** another physical Charger identity. Rename/reduce this projection to an explicit `ChargingLoadRequest` before Step 2 so no second physical or Vehicle master model remains.
+- `coordinator.py`: **legacy Local compatibility scheduler + sole existing native physical command writer**. For every existing Charger not explicitly admitted to the new executor, it continues to own the Local plan and physical Start/Stop. Never replace or rename existing v8 entities just to improve architecture.
+- `controller/admission.py` / `controller/safety.py`: one-and-only-one physical command owner per EVSE, reversible atomic handoff, observed OEM readback and bounded polling/retries. While P0 #5 is open, admission into physical Coordinated remains blocked with `COORDINATED_ACTUATION_ENABLED=False`.
+- HA entities are **projections** of their respective owners; configuring through HA Options/number/select must update one authoritative source, not parallel fields in multiple Config Entries. Tariff sourcing is on the Charger; global economic **policy** is on the Controller.
 
-**P0 rule:** no admission of a new Coordinated participant and no automatic Coordinated Start/Stop while `COORDINATED_ACTUATION_ENABLED=False`. Architecture and synthetic tests are NOT authorization for physical migration. Incident #5 remains open.
+**Do not confuse** Charger→Controller **link** with physical admission. Link is a persistent association; it does not disable legacy Local scheduling or grant Coordinated physical ownership. The existing `participants` set is a guarded transitional execution-membership field. In the final design, one Controller operates with one or N Chargers; it does not have competing Local/Coordinated planner semantics.
 
-## User experience and native HA entity names
+Current ownership debt is explicit and tracked: legacy Local `%SoC/hour`, Ready By, SoC, target, min-SoC and price thresholds remain on the original Charger for backward compatibility; Vehicle target/Ready By are authoritative **only on the new Controller path**. Manual assignment without physical admission does **not** yet switch Local to the assigned Vehicle. No silent migration of the four installed Chargers is allowed.
 
-Users configure **Vehicles**, **Chargers** and **Charge Controller** in Home Assistant. They select raw HA entities instead of installing brand-specific abstractions.
+## 3. Step 1 — correct architecture and effective single-Charger contract
 
-- Vehicle: e.g. `Audi Q8`, `Mercedes GLA`, `Guest`; edit SoC input, battery capability, default target/deadline and optional HA user association.
-- Charger: e.g. `Garage Black`, `Garage White`, `Peblar Outside`, `Utility Plug`; edit native control/readback, rated power, metering and **Assigned Vehicle: Audi Q8 / Guest / None**. Selecting **None** is a normal, reversible state, not a configuration error.
-- Controller: Local/Coordinated status, global policies, plans, physical execution trace, group site budget, source quality and diagnostics.
+**Scope:** make the **implemented** Devices/configuration consistent; no new group optimization and no activation of physical Coordinated.
 
-**New entities default to the HA Device display name + meaningful metric name**, e.g. `sensor.audi_q8_soc`, `number.audi_q8_target_soc`, `sensor.garage_black_charging_power` and `select.garage_black_assigned_vehicle`. Never default to generated `charger_1`, `charger_2`, `vehicle_3`, etc. Check slug collisions **before creating entities** and report the conflict; do not silently append `_2`. No collision-based automatic renaming. Device renames should not silently churn already registered entity IDs.
+1. Maintain genuine HA Vehicle, Charger and Charge Controller Devices, editable profile/charger options, explicit links and assignments (including None).
+2. Bind Vehicle SoC/source freshness, battery facts, target and absolute timezone-aware `ready_by` to one canonical context; physical Charger capabilities, measured sessions and effective tariff remain Charger-owned.
+3. Ensure new Controller planner consumes canonical resolved Vehicle/Charger/Intent facts rather than **legacy Local** car fields; reject stale, missing, duplicate or disconnected source evidence.
+4. Keep Local v8 config entries, original scheduler and OEM writer behavior unchanged until proven migration. Keep Controller physical admission P0-blocked.
+5. Remove ambiguity between master `domain.Charger` and planner load DTO, while retaining the existing mature cost meter, price parser, HA options and diagnostics.
+6. No RHI/Robotix/commercial package references or runtime dependencies in community EVSC.
 
-**Backward compatibility is stricter than new naming conventions:** already installed v8 Local entity IDs, device registry identifiers and config-entry IDs must remain unchanged, including any old names the user customized. Names are defaults for **new** devices/entities; no mass renaming or replacement of four physical charger devices. Avoid copying vendor device identifiers/connections into EVSC to manufacture “connected devices”.
+**Exit Gate 1:** 1 and 4 original Local entries survive restart/options/rename/unload with stable IDs and unchanged charging decisions; one configured Vehicle↔Charger↔Controller relationship can be resolved deterministically; known/unknown SoC and deadlines, duplicate assignments, missing capabilities, disconnection and rollback are tested; no second physical writer. Unit/HA CI and P0 safety tests are green. **No claim of full operational new Controller admission** before the later live safety gate.
 
-## Canonical ownership and Energy Basic reuse
+## 4. Step 2 — coordinated multi-Vehicle charging and X-day planning
 
-Vehicle battery properties belong to Vehicle. Charger power, availability, control and physical metering belong to Charger. Selected Vehicle and charger-specific charge-rate estimate belong to Charger/Assignment. Intent is a Vehicle/session preference read by Controller. Shared price normalization, plans and peak/concurrency safety belong to Charge Controller. Only the **existing native EVSC executor** writes the configured HA charger switch.
+One Controller schedules **1..N Chargers** and their assigned Vehicles from the canonical Step 1 context. Define `planning_horizon_days` (bounded/configurable X, default and maximum to be selected against real price coverage and performance). Use explicit 15-minute intervals, timezone-aware deadlines and DST-correct UTC intervals.
 
-Energy Basic may read EVSC **published** power/energy/status/plan/cost and their quality indicators. It can reuse pure calculation contracts where appropriate. It does not create another EVSC planner, take native EVSE control or become a runtime dependency. Likewise, EVSC needs **no** RHI Foundation, RHI Mobility, vehicle-brand provider, generic integration-discovery layer or custom IAM.
+- One Vehicle active on at most one Charger. One Charger has at most one assigned Vehicle; no automatic guesses.
+- Calculate battery demand from target SoC/usable capacity or an explicit alternative energy/duration intent where legitimately configured. Unknown required energy remains unknown; do not transform missing SoC into zero or full.
+- Compute a price-aware schedule independently of which actual physical Charger adapter is used. Track feasible/unserved kWh, start/end, deadline satisfaction, partial price horizon and day-by-day totals for today/tomorrow/X days.
+- Controller works unchanged for **one** and multiple Chargers. New ownerless intermediate models, extra hardware writers and parallel planners are prohibited.
+- Strategy should minimize cost subject to real feasibility; existing quarter planner can be evolved, not duplicated. Incremental planning commits may need stable active-slot retention to avoid charge flapping.
 
-## Backward-compatibility boundary: what is protected vs replaceable
+**Exit Gate 2:** deterministic one-/two-/four-Charger HA tests with 1..X day prices, 15/60-min price data, overnight and DST, missing/late prices, deadline feasibility, disconnect/reconnect and changing SoC. Compare original single-Charger schedules where the semantics match. Controlled physical mode acceptance **remains separate** until P0 safety evidence permits native command handoff.
 
-**Protected, already used Local functionality:** existing four Local config entries, Options, physical native switch binding, device/entity/unique IDs, price curves and limits, SoC/target semantics, minimum SoC, low-price and low-SoC overrides, opportunistic charging, keep-on, Ready By, 15-minute scheduling/DST, status sensors, diagnostics, physical Start/Stop/retry, manual controls, restart/unload safety. Protect user-facing behavior **and** stored configuration.
+## 5. Step 3 — multi-Vehicle control with restrictions, price and kW
 
-**Replaceable with no retention burden:** unused experimental Controller extension options, duplicated future planning fields, speculative RHI-specific bridge helpers and unshipped models. Do not keep two “compatible” implementations or alias chains simply to preserve unused extension code. An internal one-time migration may be developed and tested; its support lifetime must be explicit and the final release cannot keep dead duplicate paths.
+Expand the same planner/Controller, **not** a new competing engine:
 
-A versioned, idempotent **one-time migration** must map existing Local per-charger facts to the right Vehicle, Charger and intent fields, without guessing identities. Preserve old IDs and mappings; display unresolved assignments/source quality for human choice. Migration must be atomic, resumable after HA restart and covered by rollback fixtures.
+- **€ total session/group budget**: “charge as much as possible up to €10”. Account for consumed, verified cost and reserved planned costs; differentiate actual and forecast coverage and enforce a clear session reset boundary. This is **not** the older per-kWh max-price threshold.
+- **€/kWh price cap**: prohibit or discourage individual expensive price intervals as explicitly configured, separate from total € budget.
+- **Static kW group limit**: e.g. maximum total active charging 5 kW. Account for all governed Chargers, including ongoing reservations and meter coverage.
+- **External dynamic kW limit**: reference a configured HA source (e.g. site available charging power). Require fresh values and quality; if missing, fail conservatively; never pretend future site headroom is known from one observation.
+- **Charger controllability**: only promise `set_current` / `set_power` where the actual EVSE integration supports verified control and readback; ON/OFF-only 11 kW Chargers cannot magically operate at 5 kW. Model min/max/step/phase behavior and conservative fallback instead of guessing.
+- **Priorities**: honor vehicle urgency/targets/deadlines and operator pause, and never bypass manual Stop.
+- **Per-load and group metering**: measured vs estimated kWh/€ separated, no double counting and explicit source quality; reconciliation and alerts for unavailable charging/cost sources.
 
-**“0% technical debt” release criterion** = no known duplicate planners, ownerless capabilities, dead extension paths, unsafe migration hacks or unused abstractions in released code. This is a release gate, not a statement that the current prototype is ready.
+**Exit Gate 3:** one- and multi-Charger constrained-planning tests (budget exhaustion, variable/fixed power, source dropouts, cost ledger partials, live power changes, restarts, price errors), OEM readback and bounded service calls. Only enable physical Coordinated after a separate reviewed on-target P0 closure, initially one Charger and then multiple, and only if both original Local and new executor cannot command the same EVSE.
 
-## Acceptance and implementation sequence
+## 6. Versioning, release and upstream contribution
 
-1. Pure three-concept domain model with explicit identities, deterministic assignment conflict behavior and no new HA dependencies.
-2. HA-native Vehicle + Charger user setup, per-device named entities and assignment as a Charger select/configuration attribute; Controller remains the only policy/group scope.
-3. One-time existing Local configuration conversion with unchanged HA unique IDs, Options semantics and test fixtures for 1 and 4 Local chargers. **No silent renames or data loss.**
-4. Refactor Controller's unused new extension directly to consume resolved Vehicle/Charger contexts; achieve behavioral parity with existing Local planning before removing old planner path.
-5. Single native execution ownership, diagnostic trace from source → decision → command → readback, and full lifecycle/error/restart/rollback safety.
-6. Full source, HACS/Hassfest, Python-version and feature-parity gates. Physical Coordinated gate remains closed until separately reviewed live acceptance. Only then transition one charger at a time, followed by 2, 3 and 4.
+- The published `v2.6.0-rc.8` remains a **guarded drop-in Local compatibility release**, not implementation evidence for the three-step end state. No automatic update of that tag or stable release.
+- Continue on `architecture/vehicle-charger-assignment-v1` / Draft PR #6 through the three gates. Every code change must include focused tests and an exact SHA green CI. The project must not create another forked runtime or mock-only “product”.
+- When complete and validated, create a **new clean branch from then-current upstream main**, port finished additive changes in independently reviewable commits, maintain upstream attribution, and preserve backward compatibility. Do **not** submit Draft PR #6 or the engineering history wholesale.
+- Product release requires explicit software + HA device/source + rollback proof; physical multi-Charger operation requires separate live safety acceptance. Backward compatibility includes user-renamed HA entity IDs, native config-entry/Device Registry IDs, stored v8 Options and real Local decision behavior.
 
-**Scope control:** work proceeds in the separate architecture draft branch. Current rc.7 Local installations are not modified or migrated by this ADR.
+**Normative precedence:** this ADR supersedes conflicting earlier descriptions of “permanent Local and Coordinated planners side-by-side”. Transitional coexistence is allowed for compatibility **until** the new Controller can safely and accurately take ownership.

@@ -223,3 +223,5 @@ Read first: `docs/architecture/ADR_MOBILITY_LIGHT_CHARGING.md` and `docs/archite
 Review the files in section 4, then implement work package A → B → C → D. Keep PR #6 draft until release gates pass. No physical EVSE commands or manual edit of HA storage during architecture development.
 
 **End of handover.**
+
+> **Authoritative architecture update, 25 October 2026:** [ADR_MOBILITY_LIGHT_CHARGING.md](../architecture/ADR_MOBILITY_LIGHT_CHARGING.md) defines the three-phase roadmap, future single Controller owner, transitional upstream Local compatibility, and no physical Coordinated admission while P0 #5 remains open. Earlier handover references to permanently independent Local/Coordinated planners are superseded. The published rc.8 tag is unchanged; this is Draft PR #6 development work, not a release.

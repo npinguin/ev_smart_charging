@@ -341,6 +341,8 @@ class ChargeSupervisor:
             ready = None
             load_energy = load_duration = None
             if assigned_id:
+                if assigned_id not in profiles:
+                    raise ValueError("missing_vehicle")
                 if sum(v == assigned_id for v in assignments.values()) != 1:
                     raise ValueError("vehicle_already_assigned")
                 context = resolve_user_contexts(
