@@ -1,7 +1,7 @@
 # ADR — Mobility Light three-device ownership and phased controller migration
 
 **Decision date:** 25 October 2026
-**Status:** Accepted architecture for development; Phase 1 in progress on Draft PR #6.
+**Status:** Accepted architecture; Phase 1 canonical ownership implemented, Phase 2 multi-day software planning implemented on Draft PR #6. Physical Coordinated cutover remains blocked by P0 #5.
 **Deployed baseline:** `v2.6.0-rc.8` is the last published guarded HA drop-in prerelease. The architecture changes above rc.8 are **not released**.
 **Safety:** Coordinated physical actuation remains disabled while [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5) is open.
 
@@ -77,6 +77,19 @@ One Controller schedules **1..N Chargers** and their assigned Vehicles from the 
 - Strategy should minimize cost subject to real feasibility; existing quarter planner can be evolved, not duplicated. Incremental planning commits may need stable active-slot retention to avoid charge flapping.
 
 **Exit Gate 2:** deterministic one-/two-/four-Charger HA tests with 1..X day prices, 15/60-min price data, overnight and DST, missing/late prices, deadline feasibility, disconnect/reconnect and changing SoC. Compare original single-Charger schedules where the semantics match. Controlled physical mode acceptance **remains separate** until P0 safety evidence permits native command handoff.
+
+### Phase 2 software implementation (25 October 2026)
+
+- Existing `controller/planner.py` `build_plan` is the **only** joint quarter scheduler. There is one canonical `ChargingLoadRequest` (no second physical Charger class or production alias); optimized over one or many resolved Vehicle/Charger facts. The original v8 Local executor is protected, not migrated.
+- Controller Options configures `planning_horizon_days` from **1 through 14** (default 2). UTC 15-minute slots make DST unambiguous; display aggregates by Home Assistant local calendar day. Source prices beyond the requested horizon are not used.
+- `ChargeSupervisor._rebuild_multi_day` reads existing HA Vehicle SoC/intent/assignment and Charger capability/tariff sources on the HA event loop, then offloads the **pure** optimizer to `hass.async_add_executor_job`. It caches one Controller forecast and never binds it to physical admission while the P0 safety gate remains active.
+- `get_charge_plan.multi_day_plan` exposes per-Vehicle/Charger demand, status, UTC slots, daily allocated kWh/EUR, group daily totals and **per-day validated tariff coverage**. `load_preview` remains a compatibility alias of the same computed data, not a second planner. Separate scalar HA Controller sensors expose multi-day status, planned kWh and indicative EUR; full per-quarter lists are not attached to sensor state attributes.
+- Existing Local native Start/Stop, options, entities and registry ownership remain unchanged. Validated effective EUR/kWh price sources are mandatory for financial scheduling. Price gaps, invalid currency, unavailable sources, unmet deadlines and unassigned Chargers are never reported as fully feasible.
+- Software acceptance tests cover one, two and four assigned Vehicles, SoC change, missing or truncated tariff horizons, real HA effective-tariff attribute parsing, wrong currency, no invented Guest, requested horizon bounds, local daily totals and the 100-quarter Brussels fall-back day. Python matrix/CI evidence must be recorded against the **exact final SHA**.
+
+**The complete Step 2 product gate remains OPEN:** this software forecast is not yet the **physical execution owner** of the linked Chargers. Native coordinated control, real HA four-Charger field parity and recovery, absolute Ready By usability in current installation, restart/rollback under load, and [P0 #5](https://github.com/npinguin/ev_smart_charging/issues/5) must be accepted before asserting end-to-end coordinated charging is complete. Legacy Local operational schedule and new Controller forecast are transitional; removing the former before verified handoff is **feature loss**, not debt elimination. Do not publish a stable release or report "zero technical debt" while this gate is open.
+
+[Step 2 field/software acceptance runbook](../engineering/STEP2_MULTIDAY_ACCEPTANCE_2026-10-25.md)
 
 ## 5. Step 3 — multi-Vehicle control with restrictions, price and kW
 
