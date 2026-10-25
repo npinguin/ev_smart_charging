@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.8
+      VERSION: 2.6.0-rc.9
     steps:
       - uses: actions/checkout@v7
 
@@ -92,7 +92,10 @@ jobs:
           assert Path("tests/controller/test_vehicle_config.py").exists()
           assert Path("tests/controller/test_ha_managed_bootstrap.py").exists()
           assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
-          assert Path("docs/controller/RC8_DROPIN_TEST.md").exists()
+          assert Path("docs/controller/RC9_DROPIN_TEST.md").exists()
+          assert Path("tests/controller/test_multi_day_forecast.py").exists()
+          assert "planning_horizon_days" in config_code
+          assert "async_add_executor_job(" in runtime
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -110,7 +113,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc8-dropin-manual-zip
+          name: evsc-guarded-rc9-multiday-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -135,4 +138,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "GUARDED MOBILITY LIGHT DROP-IN TEST PRERELEASE, NOT STABLE. Four original v8 Local EVSC Charger entries and their native Start/Stop, pricing and user entity IDs remain the default and must be tested unchanged. A persistent HA Charge Controller Device is auto-created; link Chargers from Controller Configure -> Link Chargers or the native Charger Charge Controller select, without any physical mode switch. Vehicles are managed in Controller Options and assigned with the native Assigned Vehicle select per Charger. These are real HA Options and Devices, not mocks or a separate RHI package. Non-SoC loads have an optional kWh/quarter demand and read-only multi-load preview. Physical Coordinated actuation and admission remain HARD DISABLED while P0 #5 is open: do NOT select or test physical Coordinated on Peblar or other real EVSEs. Before drop-in update, make full HA backup; capture old Charger config-entry/device/entity IDs and native controls; keep independent OEM/EVSE control. If HA health changes or any source mapping is wrong, restore rc.7 and the backup. This is a field validation prerelease, NOT proof of physical coordinated safety. Exact-head software CI gate passed. No main merge. Source commit: $GITHUB_SHA; Draft PR #6."
+            --notes "GUARDED MULTI-DAY HA DROP-IN TEST, NOT STABLE. Existing four v8 Local Chargers retain original native charging, options and registry IDs. Vehicle/Charger/Controller are native HA Devices and linked via real Options/Select entities. Controller now plans 1..N Vehicles over 1..14 days, using canonical Vehicle SoC, target, Ready By and real HA effective EUR/kWh future tariffs; per-day and per-Charger kWh/EUR are shown in get_charge_plan.multi_day_plan and new Controller sensors. Planner runs in HA executor, not blocking event loop. PHYSICAL COORDINATED ACTUATION REMAINS DISABLED under open P0 #5. These plans are not native Start permission; unchanged Local still controls actual charging. Back up HA and preserve vendor control; restore rc.8 if Local behavior regresses. Exact-source CI and physical field acceptance are separate. No main/upstream merge. Source $GITHUB_SHA; PR #6."
