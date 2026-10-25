@@ -97,7 +97,8 @@
           "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
           "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
           "external_identifier": "External vehicle reference (optional)",
-          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)"
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)",
+          "soc_max_age_minutes": "SoC freshness limit (minutes; 0 = no enforced age limit)"
         }
       },
       "edit_vehicle": {
@@ -115,7 +116,8 @@
           "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
           "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
           "external_identifier": "External vehicle reference (optional)",
-          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)"
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)",
+          "soc_max_age_minutes": "SoC freshness limit (minutes; 0 = no enforced age limit)"
         }
       },
       "assign_vehicle": {

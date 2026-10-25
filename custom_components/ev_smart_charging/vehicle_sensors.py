@@ -6,9 +6,14 @@ No native charger commands, bridge scripts or vehicle-brand integrations.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.device_registry import async_get as async_device_registry_get
 from homeassistant.helpers.entity_registry import (
     async_get as async_entity_registry_get,
@@ -21,6 +26,7 @@ from .vehicle_config import (
     VEHICLES,
     VEHICLE_FACT_KEYS,
     read_vehicle_soc,
+    vehicle_soc_reading,
     vehicle_from_profile,
 )
 
@@ -87,9 +93,7 @@ class EVSCVehicleSensor(SensorEntity):
                 if soc is not None and capacity
                 else None
             )
-        if not self.profile.get("soc_entity"):
-            return "not_configured"
-        return "valid" if soc is not None else "unavailable"
+        return vehicle_soc_reading(self.hass, self.profile)[1]
 
     @property
     def extra_state_attributes(self):
@@ -113,6 +117,18 @@ class EVSCVehicleSensor(SensorEntity):
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass, [entity], self._source_changed
+                )
+            )
+        # Freshness changes with time even if the source does not fire events.
+        if self.profile.get("soc_max_age_minutes", 0) and self.key in (
+            "soc",
+            "battery_energy",
+            "energy_required",
+            "source_status",
+        ):
+            self.async_on_remove(
+                async_track_time_interval(
+                    self.hass, self._source_changed, timedelta(minutes=1)
                 )
             )
 

@@ -400,6 +400,10 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                         default=defaults.get("usable_battery_kwh", ""),
                     ): vol.Any("", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     vol.Optional(
+                        "soc_max_age_minutes",
+                        default=defaults.get("soc_max_age_minutes", 0),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+                    vol.Optional(
                         "max_ac_charge_kw",
                         default=defaults.get("max_ac_charge_kw", ""),
                     ): vol.Any("", vol.All(vol.Coerce(float), vol.Range(min=0.01))),

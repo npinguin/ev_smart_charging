@@ -7,8 +7,11 @@ No supplier/OEM/RHI bridge or extra ConfigEntry is needed.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from math import isfinite
 from typing import Any
+
+from homeassistant.util import dt
 
 from .domain import (
     Assignment,
@@ -68,6 +71,14 @@ def validate_profiles(vehicles: dict[str, dict], charger_names: dict[str, str]):
             raise ValueError("invalid_soc_entity")
         target = profile.get("target_soc", 80)
         ChargeIntent("validation", target_soc_percent=float(target))
+        freshness = profile.get("soc_max_age_minutes", 0)
+        if (
+            not isinstance(freshness, int)
+            or isinstance(freshness, bool)
+            or freshness < 0
+            or freshness > 1440
+        ):
+            raise ValueError("invalid_soc_freshness_limit")
     return models
 
 
@@ -93,22 +104,42 @@ def validate_assignments(
     return cleaned
 
 
-def read_vehicle_soc(hass, profile: dict) -> float | None:
-    """Read the user-selected cached HA state; never call cloud or OEM APIs."""
+def vehicle_soc_reading(hass, profile: dict) -> tuple[float | None, str]:
+    """Read source and optional freshness without inventing SoC or permission."""
     entity_id = profile.get("soc_entity")
     if not entity_id:
-        return None
+        return None, "not_configured"
     state = hass.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable"):
-        return None
+    if state is None:
+        return None, "entity_missing"
+    if state.state in ("unknown", "unavailable"):
+        return None, "unavailable"
     try:
         value = float(state.state)
     except (ValueError, TypeError, OverflowError):
-        return None
+        return None, "invalid"
     if not isfinite(value) or value < 0 or value > 100:
-        return None
+        return None, "invalid"
     unit = state.attributes.get("unit_of_measurement")
-    return value if unit in (None, "%") else None
+    if unit not in (None, "%"):
+        return None, "invalid_unit"
+    max_age = profile.get("soc_max_age_minutes", 0)
+    if max_age:
+        # Prefer explicit reports on newer HA; older releases use last_updated.
+        observed = getattr(state, "last_reported", None) or getattr(
+            state, "last_updated", None
+        )
+        if observed is None or observed.tzinfo is None:
+            return None, "timestamp_unknown"
+        age = dt.utcnow() - observed
+        if age < timedelta(0) or age > timedelta(minutes=max_age):
+            return None, "stale"
+    return value, "valid"
+
+
+def read_vehicle_soc(hass, profile: dict) -> float | None:
+    """Read a Vehicle's known SoC; stale/missing/invalid sources stay unknown."""
+    return vehicle_soc_reading(hass, profile)[0]
 
 
 def resolve_user_contexts(hass, options: dict, chargers: dict):

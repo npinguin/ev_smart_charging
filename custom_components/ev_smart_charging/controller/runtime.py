@@ -34,6 +34,7 @@ from ..vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
     read_vehicle_soc,
+    vehicle_soc_reading,
     resolve_user_contexts,
     vehicle_from_profile,
 )
@@ -1002,6 +1003,11 @@ class ChargeSupervisor:
                 "estimated_quarters": context.estimated_quarters,
                 "effective_max_ac_kw": context.effective_max_ac_kw,
                 "source_configured": bool(profile.get("soc_entity")),
+                "soc_source_status": (
+                    vehicle_soc_reading(self.hass, profile)[1]
+                    if profile
+                    else "not_configured"
+                ),
                 "physical_connection_confirmed": (
                     descriptions[key]["connected"] is True
                 ),

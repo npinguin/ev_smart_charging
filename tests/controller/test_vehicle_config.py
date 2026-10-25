@@ -17,6 +17,7 @@ from custom_components.ev_smart_charging.vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
     read_vehicle_soc,
+    vehicle_soc_reading,
     resolve_user_contexts,
     validate_assignments,
     validate_profiles,
@@ -547,3 +548,30 @@ def test_assigned_vehicle_drives_coordinated_input_not_original_local(hass):
     assert local.current_soc == 100
     assert local.usable_capacity_kwh == 20
     assert local.charge_power_kw == 11
+
+
+def test_vehicle_soc_freshness_does_not_reuse_stale_value():
+    from datetime import timedelta
+    from homeassistant.util import dt
+
+    now = dt.utcnow()
+    state = SimpleNamespace(
+        state="45",
+        attributes={"unit_of_measurement": "%"},
+        last_updated=now - timedelta(hours=3),
+    )
+    hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity: state))
+    limited = {"name": "Audi Q8", "soc_entity": "sensor.audi", "soc_max_age_minutes": 30}
+    assert vehicle_soc_reading(hass, limited) == (None, "stale")
+    assert read_vehicle_soc(hass, limited) is None
+    unlimited = {**limited, "soc_max_age_minutes": 0}
+    assert vehicle_soc_reading(hass, unlimited) == (45, "valid")
+    state.last_updated = now
+    assert vehicle_soc_reading(hass, limited) == (45, "valid")
+    state.state = "unknown"
+    assert vehicle_soc_reading(hass, limited) == (None, "unavailable")
+    with pytest.raises(ValueError, match="invalid_soc_freshness_limit"):
+        validate_profiles(
+            {"audi": {**limited, "soc_max_age_minutes": -1}},
+            {"charger": "Garage Black"},
+        )
