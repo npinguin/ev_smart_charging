@@ -1266,7 +1266,8 @@ class ChargeSupervisor:
                 else (
                     "INCOMPLETE"
                     if any(
-                        r.status in ("UNKNOWN", "INFEASIBLE", "PENDING_PRICES", "BLOCKED")
+                        r.status
+                        in ("UNKNOWN", "INFEASIBLE", "PENDING_PRICES", "BLOCKED")
                         for r in plan.results
                     )
                     else (
