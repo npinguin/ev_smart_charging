@@ -14,7 +14,7 @@ import re
 from unicodedata import normalize
 from typing import Literal
 
- AssignmentStatus = Literal[
+AssignmentStatus = Literal[
     "ready",
     "unassigned",
     "missing_vehicle",
