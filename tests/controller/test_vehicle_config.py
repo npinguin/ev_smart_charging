@@ -435,7 +435,7 @@ def test_vehicle_contexts_are_read_only_and_keep_local_source_independent(hass):
     assert unavailable["black"]["required_battery_kwh"] is None
 
 
-def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
+async def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
     """A Home Assistant service projection can be inspected before field GO."""
     from datetime import timedelta
     from homeassistant.util import dt
@@ -488,7 +488,7 @@ def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
     manager._prices = lambda objects, **kwargs: (
         {"source_less": price_slots} if kwargs.get("update_cache") is False else {}
     )
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     preview = manager.load_preview()
     assert preview["advisory_only"] is True
     assert preview["physical_actuation_authorized"] is False

@@ -1111,7 +1111,7 @@ class ChargeSupervisor:
             }
         return output
 
-    def _rebuild_multi_day(self):
+    async def _rebuild_multi_day(self):
         """One Controller forecast for all linked 1..N EVSC Chargers.
 
         Uses the same proven pure build_plan engine and canonical Vehicle
@@ -1193,7 +1193,13 @@ class ChargeSupervisor:
                 ]
                 for key in linked
             }
-            plan = build_plan(requests, limited_prices, now, policy)
+            # Pure CPU-bound optimization runs outside the HA event loop.
+            # It uses immutable DTOs and never touches HA APIs or hardware.
+            plan = await self.hass.async_add_executor_job(
+                build_plan, requests, limited_prices, now, policy
+            )
+            if getattr(self, "_stopped", False):
+                return
             summary_by_day = {}
             by_charger = {key: [] for key in linked}
             for slot in plan.assignments:
@@ -1238,6 +1244,15 @@ class ChargeSupervisor:
                         "planned_battery_kwh": result.planned_battery_kwh,
                         "remaining_battery_kwh": result.remaining_battery_kwh,
                         "planned_grid_kwh": value,
+                        "indicative_cost_eur": (
+                            round(
+                                sum(s.grid_kwh * s.price_eur_per_kwh for s in slots),
+                                4,
+                            )
+                            if all(s.grid_kwh is not None for s in slots)
+                            and result.status in ("PLANNED", "PROVISIONAL", "COMPLETE")
+                            else None
+                        ),
                         "ready_by": (
                             next(
                                 (
@@ -1259,6 +1274,21 @@ class ChargeSupervisor:
                         ],
                     }
                 )
+            # Fill all local calendar dates spanned by the actual UTC
+            # planning window. Empty days remain visible, not omitted.
+            current_day = dt.as_local(now).date()
+            final_day = dt.as_local(horizon_end).date()
+            while current_day <= final_day:
+                key = current_day.isoformat()
+                summary_by_day.setdefault(
+                    key,
+                    {
+                        "date": key,
+                        "planned_grid_kwh": 0.0,
+                        "indicative_cost_eur": 0.0,
+                    },
+                )
+                current_day += timedelta(days=1)
             self.multi_day_plan = plan
             self.multi_day_status = (
                 "NO_DEMAND"
@@ -1286,6 +1316,9 @@ class ChargeSupervisor:
                 "horizon_start": now.isoformat(),
                 "horizon_end": horizon_end.isoformat(),
                 "coverage": plan.coverage,
+                "full_horizon_priced": bool(requests) and all(
+                    r.status in ("PLANNED", "COMPLETE") for r in plan.results
+                ),
                 "price_horizon_end": (
                     plan.priced_until.isoformat() if plan.priced_until else None
                 ),
@@ -1464,7 +1497,9 @@ class ChargeSupervisor:
                 else:
                     self.rebuild()
                 # Separate view of the SAME planner, never a second writer.
-                self._rebuild_multi_day()
+                await self._rebuild_multi_day()
+                if self._stopped:
+                    return
             cost_changed = self._record_actual_costs()
             for key in (
                 self.participants if safety.COORDINATED_ACTUATION_ENABLED else ()

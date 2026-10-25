@@ -109,9 +109,9 @@ def _four_vehicle_controller(hass, count=4, *, days=3, price_days=3, budget=None
 
 
 @pytest.mark.parametrize("count", [1, 2, 4])
-def test_one_controller_uses_canonical_vehicle_facts_over_three_days(hass, count):
+async def test_one_controller_uses_canonical_vehicle_facts_over_three_days(hass, count):
     manager = _four_vehicle_controller(hass, count=count)
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     data = manager.load_preview()
     assert manager.plan is None
     assert data["physical_actuation_authorized"] is False
@@ -141,22 +141,22 @@ def test_one_controller_uses_canonical_vehicle_facts_over_three_days(hass, count
     assert manager.price_horizons == {"native_local": "unchanged"}
 
 
-def test_vehicle_source_change_updates_multi_day_charge_requirement(hass):
+async def test_vehicle_source_change_updates_multi_day_charge_requirement(hass):
     manager = _four_vehicle_controller(hass, count=1)
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     initial = manager.multi_day_plan.results[0].requested_battery_kwh
     source = manager.config_entry.options[VEHICLES]["vehicle_0"]["soc_entity"]
     hass.states.async_set(source, "60", {"unit_of_measurement": "%"})
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     next_energy = manager.multi_day_plan.results[0].requested_battery_kwh
     assert initial > next_energy
     assert next_energy == pytest.approx(3.2)
     assert manager.plan is None
 
 
-def test_multi_day_missing_prices_is_not_claimed_as_fully_feasible(hass):
+async def test_multi_day_missing_prices_is_not_claimed_as_fully_feasible(hass):
     manager = _four_vehicle_controller(hass, count=2, days=3, price_days=1)
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     data = manager.multi_day_details
     assert data["status"] in ("INCOMPLETE", "PROVISIONAL")
     assert data["coverage"] in ("COMPLETE", "PARTIAL")
@@ -168,20 +168,20 @@ def test_multi_day_missing_prices_is_not_claimed_as_fully_feasible(hass):
     )
 
 
-def test_invalid_horizon_does_not_create_a_plan(hass):
+async def test_invalid_horizon_does_not_create_a_plan(hass):
     manager = _four_vehicle_controller(hass, count=1)
     manager.config_entry.options["planning_horizon_days"] = 15
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     assert manager.multi_day_status == "INVALID_HORIZON"
     assert manager.multi_day_plan is None
     assert manager.plan is None
 
 
-def test_no_vehicle_or_explicit_request_does_not_infer_guest(hass):
+async def test_no_vehicle_or_explicit_request_does_not_infer_guest(hass):
     manager = _four_vehicle_controller(hass, count=1)
     manager.config_entry.options[VEHICLES] = {}
     manager.config_entry.options[ASSIGNMENTS] = {}
-    manager._rebuild_multi_day()
+    await manager._rebuild_multi_day()
     assert manager.multi_day_status == "NO_DEMAND"
     assert manager.multi_day_plan.assignments == ()
     assert manager.multi_day_details["excluded"][0]["status"] == "UNASSIGNED"

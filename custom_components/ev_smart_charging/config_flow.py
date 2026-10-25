@@ -275,7 +275,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 default=get_parameter(
                     self.config_entry, "evsc_load_duration_quarters", 0
                 ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=96)),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=14 * 96)),
         }
 
         return self.async_show_form(
