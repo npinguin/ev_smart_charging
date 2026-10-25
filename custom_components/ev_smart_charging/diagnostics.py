@@ -541,9 +541,7 @@ def _vehicle_diagnostics(hass, manager):
                 "usable_battery_kwh": _finite(profile.get("usable_battery_kwh")),
                 "max_ac_charge_kw": _finite(profile.get("max_ac_charge_kw")),
                 "ready_by_configured": bool(profile.get("ready_by")),
-                "soc_freshness_limit_minutes": profile.get(
-                    "soc_max_age_minutes", 0
-                ),
+                "soc_freshness_limit_minutes": profile.get("soc_max_age_minutes", 0),
             }
         )
     return {
@@ -590,8 +588,7 @@ def _controller_diagnostics(hass, manager):
     if unlinked:
         blockers.append("charger_not_linked_to_controller")
     if any(
-        item["source_health"]["charger_switch"]["status"]
-        not in ("present",)
+        item["source_health"]["charger_switch"]["status"] not in ("present",)
         for item in entries.values()
     ):
         blockers.append("charger_control_source_unavailable")
@@ -660,8 +657,7 @@ def _controller_diagnostics(hass, manager):
             "source_coverage_complete": not any(
                 code
                 for code in blockers
-                if code.startswith("charger_")
-                or code.startswith("effective_price_")
+                if code.startswith("charger_") or code.startswith("effective_price_")
             ),
             "physical_coordinated_enabled": safety.COORDINATED_ACTUATION_ENABLED,
             "blockers": blockers,

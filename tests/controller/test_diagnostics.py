@@ -56,6 +56,14 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
         assert result["entry_type"] == "charge_controller"
         assert result["coordinated_hard_safety_hold"] is True
         assert result["controller"]["status"] == "LOCAL_MONITORING"
+        assert result["diagnostics_schema_version"] == "1.2"
+        assert (
+            result["controller"]["diagnostic_scope"]
+            == "entire_ev_smart_charging_installation"
+        )
+        assert "multi_day_planning" in result["controller"]
+        assert "vehicle_profiles" in result["controller"]
+        assert "readiness" in result["controller"]
         assert result["controller"]["chargers"]["total"] == 4
         assert result["controller"]["runtime"]["five_second_sampler_active"]
         assert not result["controller"]["runtime"]["source_event_subscription_active"]
@@ -271,3 +279,141 @@ def test_generic_source_reference_matches_home_assistant_sha256_without_leaking_
     assert report["source_ref"] == hashlib.sha256(entity.encode()).hexdigest()[:12]
     assert "private_vehicle" not in json.dumps(report)
     assert "entity_id" not in report
+
+
+async def test_entire_installation_diagnostics_include_real_vehicle_and_multiday(
+    hass,
+):
+    """One native HA Controller download covers all feature owners and sources."""
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="PRIVATE_CONTROLLER_ID",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={
+            "planning_horizon_days": 3,
+            "participants": [],
+            "vehicles": {
+                "PRIVATE_VEHICLE_ID": {
+                    "name": "PRIVATE VEHICLE NAME",
+                    "soc_entity": "sensor.private_vehicle_soc",
+                    "target_soc": 85,
+                    "usable_battery_kwh": 20,
+                    "max_ac_charge_kw": 7.4,
+                    "ready_by": "2026-10-27T07:00:00+01:00",
+                }
+            },
+            "vehicle_assignments": {"PRIVATE_CHARGER_ID": "PRIVATE_VEHICLE_ID"},
+        },
+        title="PRIVATE HOME CONTROLLER",
+        version=8,
+    )
+    controller.add_to_hass(hass)
+    hass.states.async_set(
+        "sensor.private_vehicle_soc", "35", {"unit_of_measurement": "%"}
+    )
+    manager = ChargeSupervisor(hass, controller)
+    manager.chargers = lambda: {}
+    manager.multi_day_status = "PLANNED"
+    manager.multi_day_plan = SimpleNamespace()
+    manager.multi_day_details = {
+        "status": "PLANNED",
+        "planning_horizon_days": 3,
+        "coverage": "COMPLETE",
+        "full_horizon_priced": True,
+        "planned_grid_kwh": 10,
+        "indicative_cost_eur": 1.6,
+        "by_day": [
+            {
+                "date": "2026-10-26",
+                "planned_grid_kwh": 10,
+                "indicative_cost_eur": 1.6,
+                "price_coverage": "COMPLETE",
+            }
+        ],
+        "loads": [
+            {
+                "evsc_entry_id": "PRIVATE_CHARGER_ID",
+                "assigned_vehicle_id": "PRIVATE_VEHICLE_ID",
+                "status": "PLANNED",
+                "ready_by": "2026-10-27T07:00:00+01:00",
+                "planned_grid_kwh": 10,
+                "indicative_cost_eur": 1.6,
+                "slots": [
+                    {
+                        "start": "2026-10-26T01:00:00+00:00",
+                        "end": "2026-10-26T01:15:00+00:00",
+                    }
+                ],
+                "by_day": [
+                    {
+                        "date": "2026-10-26",
+                        "planned_grid_kwh": 10,
+                        "indicative_cost_eur": 1.6,
+                    }
+                ],
+            }
+        ],
+        "excluded": [],
+    }
+    manager.rebuild = MagicMock()
+    manager.async_refresh = AsyncMock()
+    hass.data.setdefault(DOMAIN, {})[controller.entry_id] = manager
+    try:
+        report = await async_get_config_entry_diagnostics(hass, controller)
+        state = report["controller"]
+        assert state["vehicle_profiles"]["configured"] == 1
+        vehicle = state["vehicle_profiles"]["profiles"][0]
+        assert vehicle["soc_percent"] == 35
+        assert vehicle["target_soc_percent"] == 85
+        assert vehicle["soc_source_status"] == "valid"
+        assert vehicle["ready_by_configured"] is True
+        plan = state["multi_day_planning"]
+        assert plan["status"] == "PLANNED"
+        assert plan["computed"] is True
+        assert plan["load_count"] == 1
+        assert plan["loads"][0]["scheduled_quarters"] == 1
+        assert plan["by_day"][0]["price_coverage"] == "COMPLETE"
+        assert plan["planned_grid_kwh"] == 10
+        assert state["readiness"]["multi_day_feasible"] is True
+        assert state["readiness"]["physical_coordinated_enabled"] is False
+        assert "coordinated_physical_safety_hold" in state["readiness"]["blockers"]
+        exports = json.dumps(report)
+        for secret in (
+            "PRIVATE_CONTROLLER_ID",
+            "PRIVATE_VEHICLE_ID",
+            "PRIVATE_CHARGER_ID",
+            "PRIVATE VEHICLE NAME",
+            "private_vehicle_soc",
+            "PRIVATE HOME CONTROLLER",
+        ):
+            assert secret not in exports
+        assert '"slots"' not in exports
+        manager.rebuild.assert_not_called()
+        manager.async_refresh.assert_not_awaited()
+    finally:
+        hass.data[DOMAIN].pop(controller.entry_id, None)
+
+
+async def test_unconfigured_integration_diagnostics_are_truthful_not_green(hass):
+    """No demand, no forecasts and no field proof must not look ready."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="empty_controller",
+        data={"__evsc_entry_type": "charge_controller"},
+        options={"participants": []},
+        version=8,
+    )
+    entry.add_to_hass(hass)
+    manager = ChargeSupervisor(hass, entry)
+    manager.chargers = lambda: {}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
+    try:
+        report = await async_get_config_entry_diagnostics(hass, entry)
+        assert report["controller"]["multi_day_planning"]["status"] == "NOT_COMPUTED"
+        assert report["controller"]["readiness"]["multi_day_computed"] is False
+        assert "no_vehicle_profiles_configured" in report["controller"]["readiness"][
+            "blockers"
+        ]
+        assert report["controller"]["readiness"]["physical_coordinated_enabled"] is False
+    finally:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
