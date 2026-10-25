@@ -405,8 +405,8 @@ class ChargeSupervisor:
                 changed = True
         return changed
 
-    def _prices(self, objects):
-        """Different rates and missing horizons are independent per EVSC."""
+    def _prices(self, objects, *, update_cache=True):
+        """Parse independently validated rates; advisory reads keep cache intact."""
         prices = {}
         for obj in objects:
             key = obj.config_entry.entry_id
@@ -482,18 +482,19 @@ class ChargeSupervisor:
                 _LOGGER.warning("Invalid EVSC price intervals for %s", key)
                 slots = []
             prices[key] = slots
-        now = dt.utcnow()
-        self.price_curves = prices
-        self.price_horizons = {}
-        for key, slots in prices.items():
-            frontier = now
-            for slot in sorted(slots, key=lambda item: item.start):
-                if slot.end <= frontier:
-                    continue
-                if slot.start > frontier:
-                    break
-                frontier = slot.end
-            self.price_horizons[key] = frontier if frontier > now else None
+        if update_cache:
+            now = dt.utcnow()
+            self.price_curves = prices
+            self.price_horizons = {}
+            for key, slots in prices.items():
+                frontier = now
+                for slot in sorted(slots, key=lambda item: item.start):
+                    if slot.end <= frontier:
+                        continue
+                    if slot.start > frontier:
+                        break
+                    frontier = slot.end
+                self.price_horizons[key] = frontier if frontier > now else None
         return prices
 
     def _peak_headroom(self, chargers):
@@ -1042,7 +1043,7 @@ class ChargeSupervisor:
             ]
             preview = build_plan(
                 inputs,
-                self._prices(list(eligible.values())),
+                self._prices(list(eligible.values()), update_cache=False),
                 dt.utcnow(),
                 policy,
             )

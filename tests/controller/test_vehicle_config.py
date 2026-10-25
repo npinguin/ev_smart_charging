@@ -469,7 +469,11 @@ def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
         )
         for index in range(8)
     ]
-    manager._prices = lambda objects: {"source_less": price_slots}
+    manager.price_curves = {"other_local": ["existing"]}
+    manager.price_horizons = {"other_local": "unchanged"}
+    manager._prices = lambda objects, **kwargs: (
+        {"source_less": price_slots} if kwargs.get("update_cache") is False else {}
+    )
     preview = manager.load_preview()
     assert preview["advisory_only"] is True
     assert preview["physical_actuation_authorized"] is False
@@ -478,6 +482,8 @@ def test_explicit_no_soc_load_preview_has_no_physical_execution(hass):
     assert preview["planned_grid_kwh"] == pytest.approx(2.0)
     assert preview["indicative_cost_eur"] == pytest.approx(0.4)
     assert manager.plan is None
+    assert manager.price_curves == {"other_local": ["existing"]}
+    assert manager.price_horizons == {"other_local": "unchanged"}
     assert charger.config_entry.options["evsc_load_energy_kwh"] == 2
 
 
