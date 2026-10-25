@@ -12,11 +12,11 @@ from collections import deque
 from dataclasses import replace
 from datetime import timedelta
 
-from .planner import Assignment, Policy, PriceSlot, Charger, utc
+from .planner import Assignment, Policy, PriceSlot, ChargingLoadRequest, utc
 
 
 def optimize_future(
-    chargers: list[Charger],
+    chargers: list[ChargingLoadRequest],
     price_map: dict[str, list[PriceSlot]],
     assignments: list[Assignment],
     now,

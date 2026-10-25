@@ -181,11 +181,6 @@ class ChargingLoadRequest:
         return max(0.0, target - current)
 
 
-# Temporary compatibility name for existing internal planner tests/imports.
-# One dataclass, not a second physical Charger model or another runtime owner.
-Charger = ChargingLoadRequest
-
-
 @dataclass(frozen=True)
 class Assignment:
     charger_id: str
@@ -243,7 +238,7 @@ class Policy:
         return min(values) if values else None
 
 
-def aggregate_actual(chargers: list[Charger]) -> dict:
+def aggregate_actual(chargers: list[ChargingLoadRequest]) -> dict:
     """Unknown readings remain None, never zero, and coverage is explicit."""
     connected = sum(c.connected is True for c in chargers)
     connection_unknown = sum(c.connected is None for c in chargers)
@@ -264,7 +259,7 @@ def aggregate_actual(chargers: list[Charger]) -> dict:
 
 
 def build_plan(
-    chargers: list[Charger],
+    chargers: list[ChargingLoadRequest],
     prices: list[PriceSlot] | Mapping[str, list[PriceSlot]],
     now: datetime,
     policy: Policy = Policy(),
