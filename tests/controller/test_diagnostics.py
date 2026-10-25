@@ -68,7 +68,19 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
         assert result["controller"]["runtime"]["five_second_sampler_active"]
         assert not result["controller"]["runtime"]["source_event_subscription_active"]
         assert len(result["controller"]["charger_details"]) == 4
+        assert result["controller"]["loaded_charger_count"] == 4
         assert result["controller"]["chargers"]["power_meter_coverage"] == 0
+
+        # An unlinked Charger remains visible in an installation-wide export.
+        hass.config_entries.async_update_entry(
+            controller,
+            options={**controller.options, "linked_chargers": [originals[0].entry_id]},
+        )
+        entire_report = await async_get_config_entry_diagnostics(hass, controller)
+        assert entire_report["controller"]["linked_charger_count"] == 1
+        assert entire_report["controller"]["loaded_charger_count"] == 4
+        assert len(entire_report["controller"]["charger_details"]) == 4
+        assert len(entire_report["controller"]["unlinked_charger_refs"]) == 3
         assert (
             result["controller"]["unavailable_explanations"]["actual_power_kw"]
             == "actual_power_meter_coverage_incomplete"

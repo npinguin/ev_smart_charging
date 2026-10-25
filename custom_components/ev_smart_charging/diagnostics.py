@@ -554,12 +554,21 @@ def _vehicle_diagnostics(hass, manager):
 
 def _controller_diagnostics(hass, manager):
     chargers = manager.chargers()
+    # The full installation report covers *all* Charger config entries,
+    # not just currently linked/plannable Chargers. Otherwise an unlinked
+    # broken Charger disappears precisely when diagnostics is needed.
+    loaded = {
+        key: obj
+        for key, obj in hass.data.get(DOMAIN, {}).items()
+        if key != manager.config_entry.entry_id
+        and getattr(getattr(obj, "config_entry", None), "entry_id", None) == key
+    }
     snapshot = manager.snapshot()
     summary = manager.planning_summary()
     metrics = manager.meters()
     cost = manager.actual_cost_summary()
     entries = {}
-    for index, (_, charger) in enumerate(sorted(chargers.items()), start=1):
+    for index, (_, charger) in enumerate(sorted(loaded.items()), start=1):
         entries[f"charger_{index}"] = _charger_diagnostics(hass, charger, manager)
     status = manager.reason
     total = len(chargers)
@@ -644,6 +653,7 @@ def _controller_diagnostics(hass, manager):
         "status": status,
         "diagnostic_scope": "entire_ev_smart_charging_installation",
         "configured_charger_count": len(configured_chargers),
+        "loaded_charger_count": len(loaded),
         "linked_charger_count": total,
         "unlinked_charger_refs": unlinked,
         "unloaded_charger_refs": unloaded,
