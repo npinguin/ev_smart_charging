@@ -7,7 +7,7 @@ from custom_components.ev_smart_charging.controller.mixed_optimizer import (
 )
 from custom_components.ev_smart_charging.controller.planner import (
     Assignment,
-    ChargingLoadRequest,
+    ChargingLoadRequest as Charger,
     Policy,
     PriceSlot,
 )
@@ -16,7 +16,7 @@ T = datetime(2026, 10, 23, 10, tzinfo=timezone.utc)
 
 
 def charger(name, power):
-    return ChargingLoadRequest(
+    return Charger(
         id=name,
         mode="coordinated",
         connected=True,

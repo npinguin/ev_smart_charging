@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from custom_components.ev_smart_charging.controller.planner import (
-    ChargingLoadRequest,
+    ChargingLoadRequest as Charger,
     Policy,
     PriceSlot,
     aggregate_actual,
@@ -27,7 +27,7 @@ def slots(n=96):
 
 
 def charger(name="a", deadline=T + timedelta(days=1), mode="coordinated", kw=4):
-    return ChargingLoadRequest(name, mode, True, 50, 70, 40, kw, deadline)
+    return Charger(name, mode, True, 50, 70, 40, kw, deadline)
 
 
 def result(plan, name="a"):
@@ -141,8 +141,8 @@ def test_admission_requires_confirmation_to_go_local():
 
 
 def test_independent_price_curves_allow_different_rates():
-    a = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
-    b = ChargingLoadRequest("b", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
+    a = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
+    b = Charger("b", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
     prices = {
         "a": [
             PriceSlot(T, T + timedelta(minutes=15), 0.10),
@@ -164,7 +164,7 @@ def test_independent_price_curves_allow_different_rates():
 
 
 def test_current_quarter_remains_available_mid_quarter():
-    tiny = ChargingLoadRequest("a", "coordinated", True, 50, 51, 40, 4, T + timedelta(hours=1))
+    tiny = Charger("a", "coordinated", True, 50, 51, 40, 4, T + timedelta(hours=1))
     prices = {
         "a": [
             PriceSlot(T, T + timedelta(minutes=15), 0.01),
@@ -187,7 +187,7 @@ def test_price_horizons_independent():
 
 
 def test_peak_budget_preserves_committed_current_quarter():
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(hours=1))
     source = {"a": slots(4)}
     first = build_plan([c], source, T)
     second = build_plan(
@@ -198,7 +198,7 @@ def test_peak_budget_preserves_committed_current_quarter():
 
 
 def test_time_only_with_existing_evsc_percentage_speed():
-    c = ChargingLoadRequest(
+    c = Charger(
         "a",
         "coordinated",
         True,
@@ -217,7 +217,7 @@ def test_time_only_with_existing_evsc_percentage_speed():
 
 
 def test_time_only_rejected_under_explicit_kw_budget_without_rate():
-    c = ChargingLoadRequest(
+    c = Charger(
         "a",
         "coordinated",
         True,
@@ -234,8 +234,8 @@ def test_time_only_rejected_under_explicit_kw_budget_without_rate():
 
 
 def test_price_cost_of_delay_swap():
-    a = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
-    b = ChargingLoadRequest("b", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
+    a = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
+    b = Charger("b", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(minutes=30))
     a_slots = [
         PriceSlot(T, T + timedelta(minutes=15), 0.10),
         PriceSlot(T + timedelta(minutes=15), T + timedelta(minutes=30), 0.11),
@@ -252,7 +252,7 @@ def test_price_cost_of_delay_swap():
 
 
 def test_committed_slot_can_be_revoked_when_budget_no_longer_allows_power():
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 4, T + timedelta(hours=1))
     source = {"a": slots(4)}
     p = build_plan([c], source, T)
     limited = build_plan(
@@ -267,7 +267,7 @@ def test_committed_slot_can_be_revoked_when_budget_no_longer_allows_power():
 
 def test_instantaneous_peak_headroom_only_restricts_current_quarter():
     """A low house headroom now cannot be projected into tomorrow's prices."""
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
     p = build_plan(
         [c],
         {"a": slots(4)},
@@ -281,14 +281,14 @@ def test_instantaneous_peak_headroom_only_restricts_current_quarter():
 
 def test_live_peak_zero_retains_future_provisional_slots():
     """A full pause now must not delete known future prices or user goals."""
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
     p = build_plan([c], {"a": slots(4)}, T, live_peak_headroom_kw=0)
     assert not grant_for(p, "a", T)
     assert p.assignments and all(a.start > T for a in p.assignments)
 
 
 def test_live_peak_cannot_preserve_now_invalid_committed_grant():
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
     prices = {"a": slots(4)}
     original = build_plan([c], prices, T)
     assert grant_for(original, "a", T)
@@ -304,7 +304,7 @@ def test_live_peak_cannot_preserve_now_invalid_committed_grant():
 
 
 def test_static_group_budget_remains_valid_for_future_quarters():
-    c = ChargingLoadRequest("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
+    c = Charger("a", "coordinated", True, 50, 52.25, 40, 7.2, T + timedelta(hours=1))
     p = build_plan(
         [c],
         {"a": slots(4)},
@@ -315,7 +315,7 @@ def test_static_group_budget_remains_valid_for_future_quarters():
 
 
 def test_mid_quarter_replan_does_not_double_count_committed_energy():
-    c = ChargingLoadRequest(
+    c = Charger(
         "a",
         "coordinated",
         True,
@@ -345,7 +345,7 @@ def test_mid_quarter_replan_does_not_double_count_committed_energy():
 
 
 def test_partial_current_quarter_allocates_future_quarter_if_target_requires_it():
-    c = ChargingLoadRequest(
+    c = Charger(
         "a",
         "coordinated",
         True,
@@ -370,7 +370,7 @@ def test_partial_current_quarter_allocates_future_quarter_if_target_requires_it(
 
 
 def test_native_kwh_planning_works_without_usable_capacity_or_soc():
-    c = ChargingLoadRequest(
+    c = Charger(
         "native_energy",
         "coordinated",
         True,
@@ -395,7 +395,7 @@ def test_native_kwh_planning_works_without_usable_capacity_or_soc():
 
 
 def test_direct_energy_surplus_never_commands_charge():
-    c = ChargingLoadRequest(
+    c = Charger(
         "full",
         "coordinated",
         True,
@@ -414,7 +414,7 @@ def test_direct_energy_surplus_never_commands_charge():
 
 
 def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
-    c = ChargingLoadRequest(
+    c = Charger(
         "hybrid",
         "coordinated",
         True,
@@ -431,7 +431,7 @@ def test_mixed_native_target_kwh_with_soc_current_without_duplicate_capacity():
 
 
 def test_stored_energy_exceeding_usable_capacity_is_rejected():
-    c = ChargingLoadRequest(
+    c = Charger(
         "invalid",
         "coordinated",
         True,
@@ -448,7 +448,7 @@ def test_stored_energy_exceeding_usable_capacity_is_rejected():
 
 
 def test_operator_disabled_coordinated_charger_cannot_claim_planned_slots():
-    c = ChargingLoadRequest(
+    c = Charger(
         "disabled",
         "coordinated",
         True,
@@ -466,7 +466,7 @@ def test_operator_disabled_coordinated_charger_cannot_claim_planned_slots():
 
 
 def test_operator_disable_revokes_existing_active_quarter_grant():
-    charger_on = ChargingLoadRequest(
+    charger_on = Charger(
         "a",
         "coordinated",
         True,

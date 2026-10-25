@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from custom_components.ev_smart_charging.controller.planner import (
     Assignment,
-    ChargingLoadRequest,
+    ChargingLoadRequest as Charger,
     Policy,
     PriceSlot,
     build_plan,
@@ -15,7 +15,7 @@ T = datetime(2026, 10, 23, 10, 0, tzinfo=timezone.utc)
 
 
 def car(key, power=4):
-    return ChargingLoadRequest(
+    return Charger(
         id=key,
         mode="coordinated",
         connected=True,
