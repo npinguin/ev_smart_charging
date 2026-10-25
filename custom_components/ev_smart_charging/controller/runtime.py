@@ -1316,9 +1316,8 @@ class ChargeSupervisor:
                 "horizon_start": now.isoformat(),
                 "horizon_end": horizon_end.isoformat(),
                 "coverage": plan.coverage,
-                "full_horizon_priced": bool(requests) and all(
-                    r.status in ("PLANNED", "COMPLETE") for r in plan.results
-                ),
+                "full_horizon_priced": bool(requests)
+                and all(r.status in ("PLANNED", "COMPLETE") for r in plan.results),
                 "price_horizon_end": (
                     plan.priced_until.isoformat() if plan.priced_until else None
                 ),
