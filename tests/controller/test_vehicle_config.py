@@ -306,7 +306,9 @@ async def test_delete_vehicle_confirms_and_unassigns_without_local_changes(hass)
         result["flow_id"], {"confirm": True}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert controller.options[VEHICLES] == {"guest": {"name": "Guest", "target_soc": 90}}
+    assert controller.options[VEHICLES] == {
+        "guest": {"name": "Guest", "target_soc": 90}
+    }
     assert controller.options[ASSIGNMENTS] == {}
     assert controller.options["participants"] == []
     assert charger.options["maximum_price"] == 0.30
@@ -349,14 +351,20 @@ def test_vehicle_registry_cleanup_preserves_retained_vehicle_and_charger(hass):
         name="Garage Black",
     )
     deleted_sensor = entities.async_get_or_create(
-        "sensor", DOMAIN, f"{DOMAIN}_vehicle_audi_soc",
+        "sensor",
+        DOMAIN,
+        f"{DOMAIN}_vehicle_audi_soc",
         suggested_object_id="audi_q8_soc",
-        config_entry=controller, device_id=stale.id,
+        config_entry=controller,
+        device_id=stale.id,
     )
     retained_sensor = entities.async_get_or_create(
-        "sensor", DOMAIN, f"{DOMAIN}_vehicle_guest_soc",
+        "sensor",
+        DOMAIN,
+        f"{DOMAIN}_vehicle_guest_soc",
         suggested_object_id="guest_soc",
-        config_entry=controller, device_id=retained.id,
+        config_entry=controller,
+        device_id=retained.id,
     )
     cleanup_orphan_vehicle_registry(hass, controller)
     assert entities.async_get(deleted_sensor.entity_id) is None

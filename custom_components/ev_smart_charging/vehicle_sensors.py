@@ -136,7 +136,9 @@ def cleanup_orphan_vehicle_registry(hass, entry) -> None:
     active = set(entry.options.get(VEHICLES, {}))
     entity_registry = async_entity_registry_get(hass)
     prefix = f"{DOMAIN}_vehicle_"
-    for entity in tuple(async_entries_for_config_entry(entity_registry, entry.entry_id)):
+    for entity in tuple(
+        async_entries_for_config_entry(entity_registry, entry.entry_id)
+    ):
         if entity.platform != DOMAIN or entity.domain != "sensor":
             continue
         if not entity.unique_id.startswith(prefix):

@@ -296,7 +296,13 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         """Simple navigation, without an extra device or configuration layer."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["policy", "add_vehicle", "edit_vehicle", "delete_vehicle", "assign_vehicle"],
+            menu_options=[
+                "policy",
+                "add_vehicle",
+                "edit_vehicle",
+                "delete_vehicle",
+                "assign_vehicle",
+            ],
         )
 
     async def async_step_policy(self, user_input=None):
