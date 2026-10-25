@@ -161,11 +161,17 @@ async def test_controller_vehicle_add_and_clear_assignment_with_flow(hass):
     assert result["type"] == FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"name": "Audi Q8", "soc_entity": "sensor.audi_soc", "target_soc": 80},
+        {
+            "name": "Audi Q8",
+            "soc_entity": "sensor.audi_soc",
+            "target_soc": 80,
+            "ready_by": "2026-11-04T07:00:00+01:00",
+        },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     profiles = controller.options[VEHICLES]
     assert len(profiles) == 1
+    assert next(iter(profiles.values()))["ready_by"] == "2026-11-04T07:00:00+01:00"
     vehicle_id = next(iter(profiles))
 
     result = await hass.config_entries.options.async_init(controller.entry_id)

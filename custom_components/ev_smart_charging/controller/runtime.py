@@ -302,7 +302,15 @@ class ChargeSupervisor:
 
     def _charger(self, key, obj):
         attrs = self._source_config(key, obj)
-        ready = obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
+        mode = "coordinated" if key in self.participants else "local"
+        profiles = self.config_entry.options.get(VEHICLES, {})
+        # Old Ready By belongs exclusively to the old Local compatibility
+        # path. An explicitly configured Vehicle can never borrow it.
+        ready = (
+            obj.absolute_ready_by or get_ready_quarter_utc(obj.ready_quarter_local)
+            if mode == "local" or not profiles
+            else None
+        )
         native_capacity = _meter(self.hass, attrs.get("capacity_sensor"), "energy")
         direct_capacity = (
             native_capacity
@@ -318,7 +326,6 @@ class ChargeSupervisor:
         )
         if not no_soc_binding:
             load_energy, load_duration = None, None
-        mode = "coordinated" if key in self.participants else "local"
         soc = _number(obj.ev_soc)
         target_soc = _number(obj.ev_target_soc)
         capacity = direct_capacity or None
@@ -331,7 +338,6 @@ class ChargeSupervisor:
         # New Controller input: canonical Vehicle + Charge Intent + Charger
         # capabilities. Never use the old Local Vehicle/Ready By as fallback.
         # Original Local execution is untouched and retains its v8 sources.
-        profiles = self.config_entry.options.get(VEHICLES, {})
         if mode == "coordinated" and profiles:
             options = self.config_entry.options
             assignments = options.get(ASSIGNMENTS, {})
