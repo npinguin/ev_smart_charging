@@ -1,19 +1,24 @@
-# Guarded HACS source prerelease request — v2.6.0-rc.7
+# Requested drop-in HACS prerelease — v2.6.0-rc.8
 
-**Scope, 2026-10-24:** operator reported 14 Home Assistant Core 2026.10.3 thread-safety exceptions in ten seconds at EVSC `sensor.py:323`; native EVSC sensor listener used an undecorated synchronous lambda to invoke `async_write_ha_state` from the executor. This is an EVSC custom integration error, not a Home Assistant Core bug.
+**Operator scope, 25 October 2026:** deliver Mobility Light to the existing Home Assistant EV Smart Charging installation for actual on-target testing without replacing the four existing v8 Local Chargers or creating a competing integration.
 
-**Deliver only a Local-capable P0-quarantined update**, not approval to switch chargers to Coordinated. Continue to enforce `COORDINATED_ACTUATION_ENABLED = False`. The first real Coordinated transition had previously frozen Home Assistant; P0 #5 remains open.
+## Non-negotiable acceptance
 
-## Required release gate
+1. **All existing original upstream EVSC Local functionality**: entities, user custom IDs, pricing, scheduled and manual native controls, recharge/readback and stored configuration unchanged.
+2. A separately visible **EVSC Charge Controller Home Assistant Device** with operational status, linked Charger count, local plan/actual meter projections and diagnostics.
+3. **Native Charger Devices** remain independently configurable and can be linked/unlinked from the Controller Options menu OR the native Charger `Charge Controller` select. These are real persistent options; a link does not switch physical mode.
+4. **Native Vehicle Devices** configurable on the Controller Options menu with a source-backed SoC, target, capacity and status sensors, and selectable `Assigned vehicle` (including `None`) on Charger Devices. Preserve original Charger physical ownership.
 
-- Publish only from this exact release-request commit on `fix/local-bootstrap-lifecycle`, never from main or a historical green run. All nine full exact-head CI gates on Python 3.11–3.14, Local behaviour, native start/stop/retry, controller regressions, coverage >=90% where applicable, Black, HACS/Hassfest and upstream compatibility must pass.
-- Both integration manifest and const must say `2.6.0-rc.7`; this tag must be a new immutable **GitHub prerelease** only. HACS source tree is `custom_components/ev_smart_charging/`, and a separate workflow ZIP is optional manual fallback, not a required HACS asset.
-- Verify all source sensor listeners use the named event-loop `@callback` in `sensor.py`, with no `lambda _event: self.async_write_ha_state()`. HA-level regression emits source changes and verifies event-loop affinity and listener unload. No hardware polling or commands are introduced by this fix.
-- P0 safety UI protects Local: `ControllerOptionsFlow` rejects **new** `participants` when Coordinated is quarantined, leaves Local scheduling and Options unchanged, and permits removals of persisted participants to restore Local. Tests cover new-admission denial and rollback, including older and newer Home Assistant OptionsFlow initialization.
-- Preserve all four existing v8 Local entries, IDs, functions, schedules, historic data and native source bindings. No installed Robotix scripts, tests or private Home Assistant-specific mapping rules.
-- Keep diagnostics for per-charger source quality and local execution, without private IDs/secrets. Repair of the *independent* Garage Black vehicle SoC discrepancy (bridge 100% versus real reported 30%) is outside generic EVSC release scope and remains mandatory before live testing.
-- On release, label clearly **Local-only quarantined safety update**. No main merge, stable promotion, Coordinated physical testing or deletion of safety hold. Existing manual charger overrides and rollback must remain accessible.
+## Hard P0 shipping restrictions
 
-## Field qualification after patch
+P0 incident [#5](https://github.com/npinguin/ev_smart_charging/issues/5) remains OPEN. `controller/safety.py` **must contain `COORDINATED_ACTUATION_ENABLED = False`**. New physical Coordinated membership/actuation stays blocked. No real Peblar/EVSE test of Local→Coordinated is approved by this packaging request. Original Local native execution remains enabled.
 
-Operator backs up HA, installs source-native HACS rc7, verifies no recurring thread safety exceptions, Local planning and native Start/Stop/readback on real hardware, source SoC/price freshness and consistent value ownership; then performs non-actuating coordinated plan comparison for one EVSE. Only a later explicit hardware-reviewed acceptance can allow controlled physical Coordinated migration one charger at a time. No claim of Coordinated readiness is made here.
+New generic flexible loads and native coordinated physical dispatch are **not** claimed complete by rc.8; explicit kWh/quarter demand and multi-load financial preview are present but have no additional physical owner. The release title/notes must not claim otherwise.
+
+## Gate and publication
+
+- Run exact-head full HA/Python 3.11–3.14 pytest matrix (required coverage), Black, HACS/Hassfest, Local native smoke, Controller tests, P0 event storm and HA registry/device tests.
+- Require the manifest and `const.py` both say `2.6.0-rc.8`, never reuse or overwrite rc.7's tested tag.
+- Release `v2.6.0-rc.8` **only if all exact-source gates succeed** as a clearly labelled *prerelease* from `architecture/vehicle-charger-assignment-v1`; do not merge main or upstream or mark PR #6 Ready.
+- HACS installs native integration source folder (`hacs.json` not ZIP mode). Provide an optional manual ZIP artifact in the exact-source workflow.
+- The current installed rc.7 and complete HA backup are the rollback path. Operator tests one Local Charger first and then the other three, as detailed in [rc.8 test guide](RC8_DROPIN_TEST.md). Actual host/hardware acceptance is separate.
