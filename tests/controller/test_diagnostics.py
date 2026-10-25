@@ -91,7 +91,8 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
             hass, controller, controller_device
         )
         assert device_report["scope"] == "device"
-        assert device_report["controller"]["chargers"]["total"] == 4
+        assert device_report["controller"]["chargers"]["total"] == 1
+        assert device_report["controller"]["loaded_charger_count"] == 4
 
         for entry in originals:
             own = await async_get_config_entry_diagnostics(hass, entry)
