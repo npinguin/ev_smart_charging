@@ -176,6 +176,7 @@ class VehicleState:
     vehicle_id: str
     soc_percent: float | None
     observed_at: datetime | None = None
+    source_status: str = "unknown"
 
     def __post_init__(self) -> None:
         _soc("soc_percent", self.soc_percent)
@@ -223,6 +224,10 @@ class EffectiveChargingContext:
     estimated_quarters: int | None
     target_soc_percent: float | None
     ready_by: datetime | None
+    # Canonical resolved planning facts, never native physical permission.
+    current_soc_percent: float | None = None
+    usable_battery_kwh: float | None = None
+    source_status: str = "unknown"
 
     @property
     def planning_ready(self) -> bool:
@@ -271,13 +276,18 @@ def resolve_charging_contexts(
             status = "vehicle_claim_conflict"
         elif assignment.vehicle_id not in vehicles:
             status = "missing_vehicle"
-        elif physical_connection.get(charger_id) is not True:
-            status = "not_connected"
         else:
             vehicle = vehicles[assignment.vehicle_id]
             state = vehicle_states.get(vehicle.id)
             intent = intents.get(vehicle.id)
-            if state is None or state.soc_percent is None:
+            # Resolve stable capability/intent independently of connection.
+            # An unplugged Vehicle may still show its SoC and target in HA.
+            power = charger.max_ac_power_kw
+            if power is not None and vehicle.max_ac_charge_kw is not None:
+                power = min(power, vehicle.max_ac_charge_kw)
+            if physical_connection.get(charger_id) is not True:
+                status = "not_connected"
+            elif state is None or state.soc_percent is None:
                 status = "soc_unknown"
             elif intent is None:
                 status = "intent_missing"
@@ -286,8 +296,6 @@ def resolve_charging_contexts(
                 energy = 0.0
                 quarters = 0
             else:
-                # The historical %SoC/h figure is charger+vehicle specific.
-                # Preserve it on this Assignment, not on the vehicle hardware.
                 if vehicle.usable_battery_kwh is not None:
                     energy = round(
                         vehicle.usable_battery_kwh
@@ -295,11 +303,6 @@ def resolve_charging_contexts(
                         / 100,
                         6,
                     )
-                if (
-                    charger.max_ac_power_kw is not None
-                    and vehicle.max_ac_charge_kw is not None
-                ):
-                    power = min(charger.max_ac_power_kw, vehicle.max_ac_charge_kw)
                 if power is not None and energy is not None:
                     from math import ceil
 
@@ -326,5 +329,8 @@ def resolve_charging_contexts(
             estimated_quarters=quarters,
             target_soc_percent=intent.target_soc_percent if intent else None,
             ready_by=intent.ready_by if intent else None,
+            current_soc_percent=state.soc_percent if state else None,
+            usable_battery_kwh=vehicle.usable_battery_kwh if vehicle else None,
+            source_status=state.source_status if state else "not_configured",
         )
     return result

@@ -7,7 +7,7 @@ No supplier/OEM/RHI bridge or extra ConfigEntry is needed.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from math import isfinite
 from typing import Any
 
@@ -56,6 +56,26 @@ def vehicle_from_profile(vehicle_id: str, profile: dict) -> Vehicle:
     )
 
 
+def intent_from_profile(vehicle_id: str, profile: dict) -> ChargeIntent:
+    """Vehicle/session owns target and absolute timezone-aware Ready By."""
+    raw = profile.get("ready_by")
+    ready = None
+    if raw:
+        if not isinstance(raw, str):
+            raise ValueError("invalid_ready_by")
+        try:
+            ready = datetime.fromisoformat(raw)
+        except ValueError as error:
+            raise ValueError("invalid_ready_by") from error
+        if ready.tzinfo is None or ready.utcoffset() is None:
+            raise ValueError("ready_by_must_be_timezone_aware")
+    return ChargeIntent(
+        vehicle_id,
+        target_soc_percent=float(profile.get("target_soc", 80)),
+        ready_by=ready,
+    )
+
+
 def validate_profiles(vehicles: dict[str, dict], charger_names: dict[str, str]):
     """Validate names and physical facts before committing controller Options."""
     models = {
@@ -69,8 +89,7 @@ def validate_profiles(vehicles: dict[str, dict], charger_names: dict[str, str]):
         source = profile.get("soc_entity")
         if source and (not isinstance(source, str) or "." not in source):
             raise ValueError("invalid_soc_entity")
-        target = profile.get("target_soc", 80)
-        ChargeIntent("validation", target_soc_percent=float(target))
+        intent_from_profile("validation", profile)
         freshness = profile.get("soc_max_age_minutes", 0)
         if (
             not isinstance(freshness, int)
@@ -164,12 +183,15 @@ def resolve_user_contexts(hass, options: dict, chargers: dict):
     valid_assignments = validate_assignments(
         selected, profiles, {key: obj.name for key, obj in charger_models.items()}
     )
+    readings = {
+        vid: vehicle_soc_reading(hass, profile) for vid, profile in profiles.items()
+    }
     states = {
-        vid: VehicleState(vid, read_vehicle_soc(hass, profile))
-        for vid, profile in profiles.items()
+        vid: VehicleState(vid, value, source_status=quality)
+        for vid, (value, quality) in readings.items()
     }
     intents = {
-        vid: ChargeIntent(vid, float(profile.get("target_soc", 80)))
+        vid: intent_from_profile(vid, profile)
         for vid, profile in profiles.items()
     }
     assignments = tuple(

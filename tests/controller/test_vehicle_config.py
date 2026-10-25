@@ -22,6 +22,7 @@ from custom_components.ev_smart_charging.select import (
 from custom_components.ev_smart_charging.vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
+    intent_from_profile,
     read_vehicle_soc,
     vehicle_soc_reading,
     resolve_user_contexts,
@@ -547,6 +548,10 @@ def test_assigned_vehicle_drives_coordinated_input_not_original_local(hass):
     assert coordinated.usable_capacity_kwh == 18
     assert coordinated.charge_power_kw == 7.4
     assert coordinated.required_battery_kwh == pytest.approx(9.0)
+    # The new Controller must NOT take a deadline or charge-rate estimate
+    # from the old Local coordinator if no Vehicle intent was configured.
+    assert coordinated.ready_by is None
+    assert coordinated.charging_speed_pct_h is None
 
     manager.config_entry.options["participants"] = []
     local = manager._charger("black", native)
@@ -712,3 +717,123 @@ async def test_charger_controller_select_links_and_unlinks_without_native_comman
     with pytest.raises(ValueError, match="Local before unlinking"):
         await select.async_select_option("Not linked")
     assert "garage_black" in controller.options["linked_chargers"]
+
+
+def test_canonical_vehicle_charge_intent_owns_deadline_and_source(hass):
+    """Configured Vehicle intent is the planning owner, independent of Local."""
+    from datetime import datetime
+    from custom_components.ev_smart_charging.domain import ChargeIntent
+
+    deadline = "2026-11-04T07:00:00+01:00"
+    profile = {
+        "name": "Audi Q8",
+        "soc_entity": "sensor.audi_soc",
+        "target_soc": 85,
+        "ready_by": deadline,
+        "usable_battery_kwh": 20,
+        "max_ac_charge_kw": 7.4,
+    }
+    hass.states.async_set("sensor.audi_soc", "35", {"unit_of_measurement": "%"})
+    options = {
+        VEHICLES: {"audi": profile},
+        ASSIGNMENTS: {"black": "audi"},
+    }
+    chargers = {
+        "black": {"name": "Garage Black", "connected": True, "max_ac_power_kw": 11}
+    }
+    assert intent_from_profile("audi", profile) == ChargeIntent(
+        "audi",
+        target_soc_percent=85,
+        ready_by=datetime.fromisoformat(deadline),
+    )
+    context = resolve_user_contexts(hass, options, chargers)["black"]
+    assert context.planning_ready
+    assert context.current_soc_percent == 35
+    assert context.target_soc_percent == 85
+    assert context.usable_battery_kwh == 20
+    assert context.ready_by == datetime.fromisoformat(deadline)
+    assert context.effective_max_ac_kw == 7.4
+    assert context.required_battery_kwh == 10
+    assert context.source_status == "valid"
+    for bad in ("2026-11-04T07:00:00", "not-a-date"):
+        with pytest.raises(ValueError):
+            validate_profiles(
+                {"audi": {**profile, "ready_by": bad}},
+                {"black": "Garage Black"},
+            )
+
+
+def test_disconnected_vehicle_preserves_facts_but_never_becomes_ready(hass):
+    """Vehicle state can be shown when unplugged; automatic readiness is false."""
+    hass.states.async_set("sensor.audi_soc", "30", {"unit_of_measurement": "%"})
+    context = resolve_user_contexts(
+        hass,
+        {
+            VEHICLES: {
+                "audi": {
+                    "name": "Audi Q8",
+                    "soc_entity": "sensor.audi_soc",
+                    "target_soc": 80,
+                    "usable_battery_kwh": 18,
+                }
+            },
+            ASSIGNMENTS: {"black": "audi"},
+        },
+        {
+            "black": {
+                "name": "Garage Black",
+                "max_ac_power_kw": 11,
+                "connected": False,
+            }
+        },
+    )["black"]
+    assert context.status == "not_connected"
+    assert context.current_soc_percent == 30
+    assert context.target_soc_percent == 80
+    assert context.planning_ready is False
+
+
+def test_corrupt_duplicate_vehicle_assignment_cannot_reach_controller(hass):
+    """Runtime rejects duplicate persisted assignments even if UI was bypassed."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+
+    hass.states.async_set("sensor.audi_soc", "30", {"unit_of_measurement": "%"})
+    manager = object.__new__(ChargeSupervisor)
+    manager.hass = hass
+    manager.config_entry = SimpleNamespace(
+        options={
+            "participants": ["black"],
+            VEHICLES: {
+                "audi": {
+                    "name": "Audi Q8",
+                    "soc_entity": "sensor.audi_soc",
+                    "target_soc": 80,
+                }
+            },
+            ASSIGNMENTS: {"black": "audi", "white": "audi"},
+        }
+    )
+    charger = SimpleNamespace(
+        config_entry=SimpleNamespace(
+            entry_id="black", title="Garage Black", data={}, options={}
+        ),
+        absolute_ready_by=dt.utcnow() + timedelta(hours=2),
+        ready_quarter_local=0,
+        switch_ev_connected=True,
+        switch_active=True,
+        ev_soc=100,
+        ev_target_soc=80,
+        charging_pct_per_hour=10,
+    )
+    manager._source_config = lambda key, obj: {
+        "power_kw": 11,
+        "capacity_kwh": 20,
+        "capacity_sensor": None,
+        "power_sensor": None,
+        "energy_sensor": None,
+        "current_battery_sensor": None,
+        "target_battery_sensor": None,
+    }
+    with pytest.raises(ValueError, match="vehicle_already_assigned"):
+        manager._charger("black", charger)

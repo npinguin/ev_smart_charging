@@ -74,6 +74,18 @@
         "data": {
           "linked_chargers": "Gekoppelde laadpunten"
         }
+      },
+      "add_vehicle": {
+        "title": "Voertuig toevoegen",
+        "data": {
+          "ready_by": "Klaar tegen (datum en uur, optioneel)"
+        }
+      },
+      "update_vehicle": {
+        "title": "Voertuig wijzigen",
+        "data": {
+          "ready_by": "Klaar tegen (datum en uur, optioneel)"
+        }
       }
     },
     "error": {

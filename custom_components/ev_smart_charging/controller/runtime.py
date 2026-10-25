@@ -33,10 +33,7 @@ from .planner import Charger, Policy, PriceSlot, QUARTER, build_plan, utc
 from ..vehicle_config import (
     ASSIGNMENTS,
     VEHICLES,
-    read_vehicle_soc,
-    vehicle_soc_reading,
     resolve_user_contexts,
-    vehicle_from_profile,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -331,27 +328,44 @@ class ChargeSupervisor:
             self.hass, attrs.get("current_battery_sensor"), "energy"
         )
         battery_target = _meter(self.hass, attrs.get("target_battery_sensor"), "energy")
-        # An opted-in Controller member uses its explicitly selected Vehicle;
-        # Local retains every original source and scheduler input unchanged.
+        # New Controller input: canonical Vehicle + Charge Intent + Charger
+        # capabilities. Never use the old Local Vehicle/Ready By as fallback.
+        # Original Local execution is untouched and retains its v8 sources.
         profiles = self.config_entry.options.get(VEHICLES, {})
         if mode == "coordinated" and profiles:
-            vehicle_id = self.config_entry.options.get(ASSIGNMENTS, {}).get(key)
-            profile = profiles.get(vehicle_id)
+            options = self.config_entry.options
+            assignments = options.get(ASSIGNMENTS, {})
+            assigned_id = assignments.get(key)
             soc = target_soc = capacity = None
-            speed = battery_current = battery_target = None
-            if profile is not None:
-                vehicle = vehicle_from_profile(vehicle_id, profile)
-                soc = read_vehicle_soc(self.hass, profile)
-                target_soc = float(profile.get("target_soc", 80))
-                capacity = vehicle.usable_battery_kwh
-                if vehicle.max_ac_charge_kw is not None:
-                    power = (
-                        min(power, vehicle.max_ac_charge_kw)
-                        if power is not None
-                        else vehicle.max_ac_charge_kw
-                    )
-                if profile.get("soc_entity"):
-                    load_energy = load_duration = None
+            battery_current = battery_target = speed = None
+            ready = None
+            load_energy = load_duration = None
+            if assigned_id:
+                if sum(v == assigned_id for v in assignments.values()) != 1:
+                    raise ValueError("vehicle_already_assigned")
+                context = resolve_user_contexts(
+                    self.hass,
+                    {
+                        VEHICLES: {assigned_id: profiles[assigned_id]},
+                        ASSIGNMENTS: {key: assigned_id},
+                    },
+                    {
+                        key: {
+                            "name": obj.config_entry.title,
+                            "connected": obj.switch_ev_connected,
+                            "max_ac_power_kw": power,
+                        }
+                    },
+                )[key]
+                soc = context.current_soc_percent
+                target_soc = context.target_soc_percent
+                capacity = context.usable_battery_kwh
+                power = context.effective_max_ac_kw
+                ready = context.ready_by
+                # A missing/stale source, disconnected EVSE or missing intent
+                # can never silently inherit unrelated Local demand.
+                if context.status not in ("ready", "target_met"):
+                    soc = None
         return Charger(
             id=key,
             mode=mode,
@@ -1030,19 +1044,16 @@ class ChargeSupervisor:
             output[key] = {
                 "status": context.status,
                 "assigned_vehicle": profile.get("name"),
-                "soc_percent": (
-                    read_vehicle_soc(self.hass, profile) if profile else None
-                ),
+                "soc_percent": context.current_soc_percent,
                 "target_soc_percent": context.target_soc_percent,
+                "ready_by": (
+                    context.ready_by.isoformat() if context.ready_by else None
+                ),
                 "required_battery_kwh": context.required_battery_kwh,
                 "estimated_quarters": context.estimated_quarters,
                 "effective_max_ac_kw": context.effective_max_ac_kw,
                 "source_configured": bool(profile.get("soc_entity")),
-                "soc_source_status": (
-                    vehicle_soc_reading(self.hass, profile)[1]
-                    if profile
-                    else "not_configured"
-                ),
+                "soc_source_status": context.source_status,
                 "physical_connection_confirmed": (
                     descriptions[key]["connected"] is True
                 ),

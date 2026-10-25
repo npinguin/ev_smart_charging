@@ -427,6 +427,11 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         "target_soc", default=defaults.get("target_soc", 80)
                     ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                    (
+                        vol.Optional("ready_by", default=defaults["ready_by"])
+                        if defaults.get("ready_by")
+                        else vol.Optional("ready_by")
+                    ): selector.DateTimeSelector(),
                     vol.Optional(
                         "usable_battery_kwh",
                         default=defaults.get("usable_battery_kwh", ""),
