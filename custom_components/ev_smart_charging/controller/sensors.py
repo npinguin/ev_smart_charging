@@ -120,7 +120,24 @@ class ControllerSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         if self.key == "multi_day_status":
-            return self.manager.multi_day_details
+            # HA state attributes should remain small even at a 14-day horizon.
+            # Full per-quarter results are available from get_charge_plan.
+            details = self.manager.multi_day_details or {}
+            return {
+                field: details.get(field)
+                for field in (
+                    "status",
+                    "planning_horizon_days",
+                    "horizon_start",
+                    "horizon_end",
+                    "coverage",
+                    "price_horizon_end",
+                    "planned_grid_kwh",
+                    "indicative_cost_eur",
+                    "by_day",
+                    "warnings",
+                )
+            }
         if self.key == "status":
             return {
                 "mode": "coordinated" if self.manager.participants else "local",

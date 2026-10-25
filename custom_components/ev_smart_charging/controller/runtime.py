@@ -1148,19 +1148,30 @@ class ChargeSupervisor:
             requests = []
             excluded = []
             for key, obj in sorted(selected.items()):
-                manual = (
-                    not get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR)
-                    and (
-                        (_number(obj.config_entry.options.get("evsc_load_energy_kwh", 0)) or 0) > 0
-                        or (_number(obj.config_entry.options.get("evsc_load_duration_quarters", 0)) or 0) > 0
+                manual = not get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR) and (
+                    (
+                        _number(obj.config_entry.options.get("evsc_load_energy_kwh", 0))
+                        or 0
                     )
+                    > 0
+                    or (
+                        _number(
+                            obj.config_entry.options.get(
+                                "evsc_load_duration_quarters", 0
+                            )
+                        )
+                        or 0
+                    )
+                    > 0
                 )
                 if key not in assigned and not manual:
-                    excluded.append({
-                        "evsc_entry_id": key,
-                        "status": "UNASSIGNED",
-                        "reason": "No Vehicle or explicit charging demand",
-                    })
+                    excluded.append(
+                        {
+                            "evsc_entry_id": key,
+                            "status": "UNASSIGNED",
+                            "reason": "No Vehicle or explicit charging demand",
+                        }
+                    )
                     continue
                 # Use exactly the same canonical Vehicle/Charger/Intent adapter
                 # for planning independently of physical execution membership.
@@ -1176,7 +1187,8 @@ class ChargeSupervisor:
             raw_prices = self._prices(list(selected.values()), update_cache=False)
             limited_prices = {
                 key: [
-                    slot for slot in raw_prices.get(key, ())
+                    slot
+                    for slot in raw_prices.get(key, ())
                     if slot.start < horizon_end and slot.end <= horizon_end
                 ]
                 for key in linked
@@ -1187,7 +1199,8 @@ class ChargeSupervisor:
             for slot in plan.assignments:
                 key = dt.as_local(slot.start).date().isoformat()
                 daily = summary_by_day.setdefault(
-                    key, {"date": key, "planned_grid_kwh": 0.0, "indicative_cost_eur": 0.0}
+                    key,
+                    {"date": key, "planned_grid_kwh": 0.0, "indicative_cost_eur": 0.0},
                 )
                 # An unknown kWh measurement is not equivalent to zero
                 # and cannot produce a reliable total or cost.
@@ -1215,37 +1228,54 @@ class ChargeSupervisor:
                     if all(s.grid_kwh is not None for s in slots)
                     else None
                 )
-                loads.append({
-                    "evsc_entry_id": key,
-                    "assigned_vehicle_id": assigned.get(key),
-                    "status": result.status,
-                    "reason": result.reason,
-                    "requested_battery_kwh": result.requested_battery_kwh,
-                    "planned_battery_kwh": result.planned_battery_kwh,
-                    "remaining_battery_kwh": result.remaining_battery_kwh,
-                    "planned_grid_kwh": value,
-                    "ready_by": (
-                        next((r.ready_by.isoformat() for r in requests if r.id == key and r.ready_by), None)
-                    ),
-                    "slots": [
-                        {
-                            "start": s.start.isoformat(),
-                            "end": s.end.isoformat(),
-                            "estimated_grid_kwh": s.grid_kwh,
-                            "price_eur_per_kwh": s.price_eur_per_kwh,
-                        }
-                        for s in slots
-                    ],
-                })
+                loads.append(
+                    {
+                        "evsc_entry_id": key,
+                        "assigned_vehicle_id": assigned.get(key),
+                        "status": result.status,
+                        "reason": result.reason,
+                        "requested_battery_kwh": result.requested_battery_kwh,
+                        "planned_battery_kwh": result.planned_battery_kwh,
+                        "remaining_battery_kwh": result.remaining_battery_kwh,
+                        "planned_grid_kwh": value,
+                        "ready_by": (
+                            next(
+                                (
+                                    r.ready_by.isoformat()
+                                    for r in requests
+                                    if r.id == key and r.ready_by
+                                ),
+                                None,
+                            )
+                        ),
+                        "slots": [
+                            {
+                                "start": s.start.isoformat(),
+                                "end": s.end.isoformat(),
+                                "estimated_grid_kwh": s.grid_kwh,
+                                "price_eur_per_kwh": s.price_eur_per_kwh,
+                            }
+                            for s in slots
+                        ],
+                    }
+                )
             self.multi_day_plan = plan
             self.multi_day_status = (
-                "INCOMPLETE" if any(
-                    r.status in ("UNKNOWN", "INFEASIBLE", "PENDING_PRICES", "BLOCKED")
-                    for r in plan.results
-                ) else "PROVISIONAL" if (
-                    plan.coverage != "COMPLETE"
-                    or any(r.status == "PROVISIONAL" for r in plan.results)
-                ) else "PLANNED"
+                "NO_DEMAND"
+                if not requests
+                else (
+                    "INCOMPLETE"
+                    if any(
+                        r.status in ("UNKNOWN", "INFEASIBLE", "PENDING_PRICES", "BLOCKED")
+                        for r in plan.results
+                    )
+                    else (
+                        "PROVISIONAL"
+                        if plan.coverage != "COMPLETE"
+                        or any(r.status == "PROVISIONAL" for r in plan.results)
+                        else "PLANNED"
+                    )
+                )
             )
             self.multi_day_details = {
                 "status": self.multi_day_status,
@@ -1260,9 +1290,7 @@ class ChargeSupervisor:
                 ),
                 "planned_grid_kwh": plan.total_planned_grid_kwh,
                 "indicative_cost_eur": plan.expected_cost_eur,
-                "by_day": [
-                    summary_by_day[key] for key in sorted(summary_by_day)
-                ],
+                "by_day": [summary_by_day[key] for key in sorted(summary_by_day)],
                 "loads": loads,
                 "excluded": excluded,
                 "warnings": list(plan.warnings),
