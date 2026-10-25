@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.9
+      VERSION: 2.6.0-rc.10
     steps:
       - uses: actions/checkout@v7
 
@@ -93,6 +93,11 @@ jobs:
           assert Path("tests/controller/test_ha_managed_bootstrap.py").exists()
           assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
           assert Path("docs/controller/RC9_DROPIN_TEST.md").exists()
+          assert Path("docs/controller/RC10_WHOLE_INSTALLATION_DIAGNOSTICS.md").exists()
+          assert 'SCHEMA_VERSION = "1.2"' in diagnostics
+          assert '"multi_day_planning": multi_day' in diagnostics
+          assert '"vehicle_profiles": vehicles' in diagnostics
+          assert '"diagnostic_scope": "entire_ev_smart_charging_installation"' in diagnostics
           assert Path("tests/controller/test_multi_day_forecast.py").exists()
           assert "planning_horizon_days" in config_code
           assert "async_add_executor_job(" in runtime
@@ -113,7 +118,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc9-multiday-manual-zip
+          name: evsc-guarded-rc10-diagnostics-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -138,4 +143,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "GUARDED MULTI-DAY HA DROP-IN TEST, NOT STABLE. Existing four v8 Local Chargers retain original native charging, options and registry IDs. Vehicle/Charger/Controller are native HA Devices and linked via real Options/Select entities. Controller now plans 1..N Vehicles over 1..14 days, using canonical Vehicle SoC, target, Ready By and real HA effective EUR/kWh future tariffs; per-day and per-Charger kWh/EUR are shown in get_charge_plan.multi_day_plan and new Controller sensors. Planner runs in HA executor, not blocking event loop. PHYSICAL COORDINATED ACTUATION REMAINS DISABLED under open P0 #5. These plans are not native Start permission; unchanged Local still controls actual charging. Back up HA and preserve vendor control; restore rc.8 if Local behavior regresses. Exact-source CI and physical field acceptance are separate. No main/upstream merge. Source $GITHUB_SHA; PR #6."
+            --notes "GUARDED EVSC COMPLETE-INSTALLATION DIAGNOSTICS TEST RELEASE. V2.6.0-rc.10 extends rc.9 without altering four original Local Charger config entries, EVSE Start/Stop or HA identity. Controller Device / Config Entry Download Diagnostics is now one privacy-safe support export for ALL configured Charger entries (including unlinked), Vehicle profiles/SoC source quality/assignments, complete 1..14-day multi-day plan status, bounded per-Vehicle/day kWh and indicative EUR, source/meter coverage, lifecycle and explicit readiness blockers. It exposes no raw personal names, HA entity IDs, Charger ConfigEntry IDs or full quarter schedules and does not issue charging commands or trigger replans. Legacy per-Charger diagnostics remain available. PHYSICAL COORDINATED ACTUATION IS STILL DISABLED under open P0 #5; this diagnostics release does not authorize physical Local-to-Coordinated migration. Continue existing Local EVSE control; back up HA and retain rc.9 for rollback. Source commit $GITHUB_SHA; Draft PR #6. Do not merge upstream or main."
