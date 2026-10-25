@@ -41,9 +41,12 @@ async def test_managed_local_setup_imports_only_one_controller(
         # A drop-in update must expose actual native HA Devices/entities,
         # not only the Python controller runtime or response service.
         device_registry = async_device_registry_get(hass)
-        assert device_registry.async_get_device(
-            identifiers={(DOMAIN, "charge_controller")}
-        ) is not None
+        assert (
+            device_registry.async_get_device(
+                identifiers={(DOMAIN, "charge_controller")}
+            )
+            is not None
+        )
         entity_registry = async_entity_registry_get(hass)
         native_entities = async_entries_for_config_entry(
             entity_registry, charger.entry_id
