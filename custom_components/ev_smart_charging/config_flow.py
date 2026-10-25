@@ -343,9 +343,9 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             step_id="link_chargers",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        "linked_chargers", default=selected
-                    ): cv.multi_select(known)
+                    vol.Optional("linked_chargers", default=selected): cv.multi_select(
+                        known
+                    )
                 }
             ),
             errors=errors,

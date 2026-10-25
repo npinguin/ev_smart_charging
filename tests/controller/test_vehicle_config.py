@@ -634,10 +634,12 @@ async def test_dropin_controller_link_flow_preserves_four_native_local_entries(h
     manager = object.__new__(ChargeSupervisor)
     manager.config_entry = controller
     manager.hass = SimpleNamespace(
-        data={DOMAIN: {
-            entry.entry_id: SimpleNamespace(config_entry=entry)
-            for entry in chargers
-        }}
+        data={
+            DOMAIN: {
+                entry.entry_id: SimpleNamespace(config_entry=entry)
+                for entry in chargers
+            }
+        }
     )
     assert set(manager.chargers()) == {"native_0", "native_2"}
 
