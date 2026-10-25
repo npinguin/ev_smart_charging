@@ -992,9 +992,7 @@ class ChargeSupervisor:
             opts = obj.config_entry.options
             if get_parameter(obj.config_entry, CONF_EV_SOC_SENSOR):
                 continue
-            if (
-                _number(opts.get("evsc_load_energy_kwh", 0)) or 0
-            ) <= 0 and (
+            if (_number(opts.get("evsc_load_energy_kwh", 0)) or 0) <= 0 and (
                 _number(opts.get("evsc_load_duration_quarters", 0)) or 0
             ) <= 0:
                 continue
