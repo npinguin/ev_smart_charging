@@ -7,7 +7,8 @@
           "v2_controller": "Add Charge Controller (one planner)",
           "v2_vehicle": "Add Vehicle",
           "v2_charger": "Add Charger",
-          "legacy_local": "Add classic Local Smart Charger"
+          "legacy_local": "Add classic Local Smart Charger",
+          "v2_migrate": "Migrate an existing Local Charger"
         }
       },
       "legacy_local": {
@@ -62,6 +63,33 @@
           "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
           "cost_budget_eur": "Maximum indicative session cost (EUR)"
         }
+      },
+      "v2_migrate": {
+        "title": "Select original Local Charger and Controller",
+        "data": {
+          "legacy_entry_id": "Existing Local Charger",
+          "controller_uid": "New Charge Controller",
+          "vehicle_uid": "Assign Vehicle (optional)"
+        }
+      },
+      "v2_migrate_confirm": {
+        "title": "Review and confirm non-destructive V2 mapping",
+        "data": {
+          "legacy_entry_id": "Existing Local Charger",
+          "controller_uid": "New Charge Controller",
+          "vehicle_uid": "Assign Vehicle (optional)",
+          "confirmed": "Create new V2 Charger (original Local stays active)",
+          "name": "New V2 Charger name",
+          "control_entity": "Existing native control entity",
+          "connected_entity": "Physical cable connected source",
+          "charging_entity": "Physical charging-state source",
+          "tariff_entity": "Effective validated EUR/kWh tariff",
+          "power_entity": "Charging power source",
+          "energy_entity": "Session energy source",
+          "max_ac_kw": "Known maximum AC power (kW)",
+          "phase_count": "Known charging phase count",
+          "max_current_a": "Known maximum charging current (A)"
+        }
       }
     },
     "error": {
@@ -78,7 +106,10 @@
       "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
     },
     "abort": {
-      "create_controller_first": "Create a Charge Controller before adding a Charger."
+      "create_controller_first": "Create a Charge Controller before adding a Charger.",
+      "no_legacy_chargers_to_migrate": "No unmapped original Local Chargers found.",
+      "invalid_v2_migration_source": "Original Local source or Controller unavailable.",
+      "already_migrated": "This original Local Charger is already mapped."
     }
   },
   "options": {
