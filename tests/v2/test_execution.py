@@ -278,3 +278,54 @@ def test_stale_native_switch_state_is_not_valid_physical_readback(hass, monkeypa
     )
     monkeypatch.setattr(hass.states, "get", lambda entity_id: current)
     assert _current_readback(hass, "switch.native_charger") is False
+
+
+async def test_denied_budget_actively_stops_an_already_running_v2_owned_evse(
+    hass, charger, monkeypatch
+):
+    """A budget fault must revoke power rather than leave a stale ON command."""
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    events = []
+
+    async def stop(call):
+        events.append(("off", call.data.get("entity_id")))
+        hass.states.async_set("switch.native_charger", "off")
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    capped = {**_snapshot(), "cost_budget_eur": 0.01}
+    try:
+        result = await writer.async_reconcile(
+            capped, NOW, connected=True, measured_power_kw=7.4,
+            group_capacity_certified=True, actual_budget_certified=False,
+        )
+        assert result == "SAFETY_STOP_BUDGET_UNCERTAIN"
+        assert events == [("off", "switch.native_charger")]
+    finally:
+        await writer.async_close()
+
+
+async def test_stale_plan_revokes_an_already_running_v2_evse(
+    hass, charger, monkeypatch
+):
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    events = []
+
+    async def stop(call):
+        events.append(call.data.get("entity_id"))
+        hass.states.async_set("switch.native_charger", "off")
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    try:
+        stale = _snapshot(NOW - timedelta(minutes=3))
+        result = await writer.async_reconcile(
+            stale, NOW, connected=True, measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        assert result == "SAFETY_STOP_STALE_PLAN"
+        assert events == ["switch.native_charger"]
+    finally:
+        await writer.async_close()
