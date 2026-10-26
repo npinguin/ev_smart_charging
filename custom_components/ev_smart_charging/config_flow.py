@@ -43,6 +43,8 @@ from .v2 import (
     TYPES as V2_TYPES,
 )
 from .v2.flow import create as create_v2, V2OptionsFlow
+from .v2.catalog import details as v2_details, entries_of as v2_entries, check_proposed as v2_validate
+from .v2.migration import discover as discover_legacy, by_legacy_id, proposed_charger
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("EVChargingControlConfigFlow.__init__")
         self._errors = {}
         self.user_input = {}
+        self._v2_migrate_selection = None
 
     async def async_step_import(self, user_input=None):
         """Create one persistent, internal controller config entry per HA instance."""
@@ -87,7 +90,10 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_legacy_local(user_input)
         return self.async_show_menu(
             step_id="user",
-            menu_options=["v2_controller", "v2_vehicle", "v2_charger", "legacy_local"],
+            menu_options=[
+                "v2_controller", "v2_vehicle", "v2_charger",
+                "v2_migrate", "legacy_local"
+            ],
         )
 
     async def async_step_v2_controller(self, user_input=None):
@@ -98,6 +104,115 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_v2_charger(self, user_input=None):
         return await create_v2(self, V2_CHARGER, user_input)
+
+    async def async_step_v2_migrate(self, user_input=None):
+        """Select an original Local Charger and new V2 Controller to map."""
+        controllers = {
+            item.data["uid"]: v2_details(item)["name"]
+            for item in v2_entries(self.hass, V2_CONTROLLER)
+        }
+        candidates = {
+            row["legacy_entry_id"]: row["name"]
+            for row in discover_legacy(self.hass) if not row["mapped"]
+        }
+        if not controllers:
+            return self.async_abort(reason="create_controller_first")
+        if not candidates:
+            return self.async_abort(reason="no_legacy_chargers_to_migrate")
+        vehicles = {
+            "": "None",
+            **{
+                item.data["uid"]: v2_details(item)["name"]
+                for item in v2_entries(self.hass, V2_VEHICLE)
+            },
+        }
+        if user_input is not None:
+            if (
+                user_input.get("legacy_entry_id") not in candidates
+                or user_input.get("controller_uid") not in controllers
+                or user_input.get("vehicle_uid", "") not in vehicles
+            ):
+                return self.async_abort(reason="invalid_v2_migration_source")
+            self._v2_migrate_selection = dict(user_input)
+            return await self.async_step_v2_migrate_confirm()
+        return self.async_show_form(
+            step_id="v2_migrate",
+            data_schema=vol.Schema({
+                vol.Required("legacy_entry_id"): vol.In(candidates),
+                vol.Required("controller_uid"): vol.In(controllers),
+                vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+            }),
+        )
+
+    async def async_step_v2_migrate_confirm(self, user_input=None):
+        """Operator confirms mapped fields; original Local stays unchanged."""
+        selected = self._v2_migrate_selection
+        if not selected:
+            return self.async_abort(reason="invalid_v2_migration_source")
+        source_id = selected["legacy_entry_id"]
+        if source_id not in {
+            row["legacy_entry_id"] for row in discover_legacy(self.hass)
+            if not row["mapped"]
+        }:
+            return self.async_abort(reason="already_migrated")
+        candidate = proposed_charger(
+            by_legacy_id(self.hass, source_id),
+            selected["controller_uid"],
+            vehicle_uid=selected.get("vehicle_uid", ""),
+        )
+        defaults = {
+            "name": candidate["name"],
+            "control_entity": candidate.get("control_entity", ""),
+            "connected_entity": candidate.get("connected_entity", ""),
+            "charging_entity": candidate.get("charging_entity", ""),
+            "tariff_entity": candidate.get("tariff_entity", ""),
+            "power_entity": candidate.get("power_entity", ""),
+            "energy_entity": candidate.get("energy_entity", ""),
+            "max_ac_kw": candidate.get("max_ac_kw") or 0,
+            "phase_count": 0,
+            "max_current_a": 0,
+        }
+        if user_input is not None and user_input.get("confirmed"):
+            changes = {
+                key: value for key, value in user_input.items()
+                if key in defaults and value not in (None, "", 0)
+            }
+            candidate = proposed_charger(
+                by_legacy_id(self.hass, source_id),
+                selected["controller_uid"],
+                vehicle_uid=selected.get("vehicle_uid", ""),
+                overrides=changes,
+            )
+            try:
+                v2_validate(self.hass, V2_CHARGER, candidate)
+            except (ValueError, KeyError, TypeError):
+                return self.async_show_form(
+                    step_id="v2_migrate_confirm",
+                    data_schema=vol.Schema({
+                        vol.Required("confirmed", default=False): cv.boolean,
+                    }),
+                    errors={"base": "invalid_v2_configuration"},
+                )
+            return self.async_create_entry(title=candidate["name"], data=candidate)
+        data_schema = {
+            vol.Required("confirmed", default=False): cv.boolean,
+            vol.Required("name", default=defaults["name"]): cv.string,
+        }
+        for field in (
+            "control_entity", "connected_entity", "charging_entity",
+            "power_entity", "energy_entity", "tariff_entity",
+        ):
+            data_schema[vol.Optional(field, default=defaults[field])] = cv.string
+        data_schema[vol.Optional("max_ac_kw", default=defaults["max_ac_kw"])] = vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=1000)
+        )
+        data_schema[vol.Optional("phase_count", default=0)] = vol.In([0, 1, 2, 3])
+        data_schema[vol.Optional("max_current_a", default=0)] = vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=500)
+        )
+        return self.async_show_form(
+            step_id="v2_migrate_confirm", data_schema=vol.Schema(data_schema),
+        )
 
     async def async_step_legacy_local(self, user_input=None):
         _LOGGER.debug("EVChargingControlConfigFlow.async_step_legacy_local")
