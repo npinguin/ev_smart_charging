@@ -180,7 +180,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await obj.async_start()
         except Exception:
             if isinstance(obj, V2ControllerRuntime):
-                obj.stop()
+                await obj.async_stop()
             hass.data[DOMAIN].pop(entry.entry_id, None)
             raise
         return True
@@ -266,13 +266,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.data.get(CONTROLLER_ENTRY_MARKER) in V2_TYPES:
         from .v2.runtime import V2ControllerRuntime
 
+        obj = hass.data[DOMAIN].get(entry.entry_id)
+        if isinstance(obj, V2ControllerRuntime):
+            # Stop command-owner first, then release sensors and Config Entry.
+            await obj.async_stop()
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
         )
         if unloaded:
-            obj = hass.data[DOMAIN].pop(entry.entry_id, None)
-            if isinstance(obj, V2ControllerRuntime):
-                obj.stop()
+            hass.data[DOMAIN].pop(entry.entry_id, None)
         return unloaded
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
