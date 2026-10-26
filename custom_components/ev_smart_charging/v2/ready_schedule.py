@@ -46,6 +46,7 @@ def validate_ready_schedule(vehicle) -> None:
         if not vehicle.ready_by:
             raise ReadyScheduleError("ready_by_required")
         from .model import ready_by_utc
+
         ready_by_utc(vehicle.ready_by)
         return
     if mode == "daily":
@@ -99,9 +100,7 @@ def normalize_once_ready_by(raw: str, timezone_name: str) -> str:
         zone = ZoneInfo(timezone_name)
     except (KeyError, ZoneInfoNotFoundError, TypeError) as exc:
         raise ReadyScheduleError("installation_timezone_invalid") from exc
-    return _wall_clock_to_utc(
-        selected.date(), selected.time(), zone
-    ).isoformat()
+    return _wall_clock_to_utc(selected.date(), selected.time(), zone).isoformat()
 
 
 def next_ready_deadline(vehicle, now: datetime, timezone_name: str) -> datetime | None:
@@ -113,6 +112,7 @@ def next_ready_deadline(vehicle, now: datetime, timezone_name: str) -> datetime 
     mode = normalized_mode(vehicle)
     if mode == "once":
         from .model import ready_by_utc
+
         deadline = ready_by_utc(vehicle.ready_by)
         return deadline.astimezone(UTC) if deadline > now_utc else None
     try:
