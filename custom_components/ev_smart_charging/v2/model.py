@@ -48,7 +48,7 @@ class Vehicle:
     user_id: str = ""
     ready_by: str = ""
     ready_mode: str = ""
-    ready_time: str = "07:00"
+    ready_time: str = "08:00"
     ready_weekly: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
