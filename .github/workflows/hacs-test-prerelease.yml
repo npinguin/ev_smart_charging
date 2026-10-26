@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.10
+      VERSION: 2.6.0-rc.11
     steps:
       - uses: actions/checkout@v7
 
@@ -66,8 +66,14 @@ jobs:
               "Diagnostics regressions required in the exact-head release"
           )
           native = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
-          assert "source = self.charging_state_entity_id or self.charger_switch.entity_id" in native, (
+          assert "last_retry = getattr(self, \"_last_local_retry_at\", None)" in native, (
               "Missing bounded Local native-switch readback retry"
+          )
+          assert "charging_readback(charging_state.state)" in native, (
+              "Do not retry when actual charging-state sensor confirms charging"
+          )
+          assert "self.hass.states.get(self.charger_switch.entity_id) is None" in native, (
+              "Missing original HA ConfigEntryNotReady startup source validation"
           )
           assert Path("tests/controller/test_local_native_execution.py").exists(), (
               "Missing Local native Start/Stop/retry regression"
@@ -94,7 +100,14 @@ jobs:
           assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
           assert Path("docs/controller/RC9_DROPIN_TEST.md").exists()
           assert Path("docs/controller/RC10_WHOLE_INSTALLATION_DIAGNOSTICS.md").exists()
-          assert 'SCHEMA_VERSION = "1.2"' in diagnostics
+          assert 'SCHEMA_VERSION = "1.3"' in diagnostics
+          observation = Path("custom_components/ev_smart_charging/charger_observation.py").read_text()
+          assert "def observe_charger(" in observation
+          assert "availability_enable" in observation and "power_relay" in observation
+          assert '"physical_observation": observation' in diagnostics
+          assert '"reconciliation_status": (' in diagnostics
+          assert "evsc_control_semantics" in config_code
+          assert Path("docs/controller/RC11_CONTROL_SEMANTICS_AND_RUNTIME.md").exists()
           assert '"multi_day_planning": multi_day' in diagnostics
           assert '"vehicle_profiles": vehicles' in diagnostics
           assert '"diagnostic_scope": "entire_ev_smart_charging_installation"' in diagnostics
@@ -118,7 +131,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc10-diagnostics-manual-zip
+          name: evsc-guarded-rc11-control-semantics-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -143,4 +156,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "GUARDED EVSC COMPLETE-INSTALLATION DIAGNOSTICS TEST RELEASE. V2.6.0-rc.10 extends rc.9 without altering four original Local Charger config entries, EVSE Start/Stop or HA identity. Controller Device / Config Entry Download Diagnostics is now one privacy-safe support export for ALL configured Charger entries (including unlinked), Vehicle profiles/SoC source quality/assignments, complete 1..14-day multi-day plan status, bounded per-Vehicle/day kWh and indicative EUR, source/meter coverage, lifecycle and explicit readiness blockers. It exposes no raw personal names, HA entity IDs, Charger ConfigEntry IDs or full quarter schedules and does not issue charging commands or trigger replans. Legacy per-Charger diagnostics remain available. PHYSICAL COORDINATED ACTUATION IS STILL DISABLED under open P0 #5; this diagnostics release does not authorize physical Local-to-Coordinated migration. Continue existing Local EVSE control; back up HA and retain rc.9 for rollback. Source commit $GITHUB_SHA; Draft PR #6. Do not merge upstream or main."
+            --notes "GUARDED EVSC LOCAL COMPATIBILITY AND CHARGER OBSERVATION FIX. v2.6.0-rc.11 preserves original four v8 Local Charger entries, original entity/device IDs and all native Local scheduling and manual controls. New per-Charger Options control semantics: unspecified (non-guessing default), charge_request, availability_enable (for verified Wallbox/Peblar-style permit switch), power_relay (for a verified physical relay). Diagnostics schema 1.3 distinguishes Charger enabled, EVSC connected flag, active charging-state feedback and measured power, and no longer flags an unplugged but enabled EVSE as an erroneous active charge. Real measurement/readback contradictions remain visible. Local retry is rate-limited to at most one attempt per 15 minutes and requires active EVSC, connected Vehicle, unmet target and native control OFF; it never retries simply because an enabled charger is idle. Native service domain remains bound across temporary HA source outages without losing original ConfigEntryNotReady when the source is absent at bootstrap. Validated effective electricity price is not inferred from mere sensor presence. ONE full installation diagnostics still includes all linked/unlinked Chargers and Vehicles. BACK UP HA before HACS update, verify original Local operation, use rc.10 + full HA backup for rollback. PHYSICAL COORDINATED ACTUATION REMAINS HARD DISABLED because P0 #5 is OPEN; this release is NOT a Coordinated hardware GO or a stable release. Full exact-head Python 3.11–3.14 + HACS + native parity CI gate required. Source $GITHUB_SHA, Draft PR #6."
