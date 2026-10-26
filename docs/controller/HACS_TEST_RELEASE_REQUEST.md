@@ -1,25 +1,23 @@
-# Explicit HACS test prerelease request — v2.6.0-rc.12
+# Explicit guarded HACS test release request — v2.6.0-rc.13
 
-Requested by the EV Smart Charging product owner on 26 October 2026.
+Requested by the EV Smart Charging product owner (2026-10-26): produce the next HACS build including Vehicle Ready By calendar and the V2 operational refactor.
 
-## Exact-source publication gate
+## Exact-source publication gate — required
 
-Publish v2.6.0-rc.12 as **GitHub prerelease only**, from this isolated V2 branch and exact source SHA, ONLY AFTER the new request-triggered full GitHub Actions gate passes: Black, HACS, Hassfest, Python 3.11–3.14, full pytest with at least 90% overall coverage, original Local / Controller smoke and dedicated V2 functional/HA lifecycle tests. Release workflow must not overwrite any existing tag, change main or submit upstream.
+Run the full CI workflow on this **exact release-request commit**. Publish v2.6.0-rc.13 as GitHub/HACS **prerelease only** if and only if every gate passes:
 
-## Scope
+- Python 3.11, 3.12, 3.13, 3.14 full pytest and >=90% coverage
+- HACS/Hassfest, complete Python compilation, Black style
+- Original v8 Local Charger operation and Config Entries unchanged
+- Controller lifecycle, HA event-loop/thread safety, 1,000-event storm and physical-command ownership tests
+- V2 once/daily/weekly Ready By (default 08:00, HA time zone and DST), multiple independent Controllers and exclusive assignments
+- Isolated native adapters and group kW/current admission regression
+- No retag, overwrite, main merge, or stable-release promotion
 
-- V2 Vehicle, Charger and Charge Controller each have independent HA Config Entry and HA Device identities.
-- One Charge Controller = one planner; many independent controllers are supported.
-- Each Charger has exactly one Controller, can be reassigned, and has 0..1 Vehicle.
-- Each Vehicle is assigned to at most one Charger; None is valid.
-- Read-only per-Controller 15-minute / multi-day plan uses existing planner, with concurrency, group kW, validated effective EUR/kWh cap and strictly advisory cost cap.
-- Known source data derived from cached Home Assistant readings; unknown does not become zero or asserted hardware status.
-- Explicit HA-user picklist association; user association is not HA permission authorization.
-- All original v8 Local Charger Config Entries, original IDs, legacy scheduler, native Start/Stop and diagnostics remain unchanged.
-- **Physical Coordinated Actuation hard OFF** under still-open P0 #5. No V2 physical writer.
+## Acceptance contract
 
-## Operator acceptance / rollback
+Install only on a backed-up HA instance following docs/engineering/V2_RC13_TEST_ACCEPTANCE.md. The current V2 physical coordinated hardware admission has not passed the Peblar P0 #5 real-device check, so the test release **must keep** its hard physical safety hold. A current synthetic green test never qualifies physical operation. This package is for software acceptance and future field qualification and is not described as a finished operational or tech-debt-free production release.
 
-Follow docs/engineering/V2_RC12_TEST_ACCEPTANCE.md. Make full Home Assistant backup before installation; use previous v2.6.0-rc.11 and backup to roll back if required. This is NOT a stable release or final physical acceptance; migration assistant and physical admission remain future gates. Leave PR #7 in draft.
+The strict session-euro-budget physical control and final Local→V2 physical cutover require separate acceptance and are not falsely marked complete.
 
-**No publish unless every named gate passes for the exact release commit.**
+**Publish only after all named exact-commit software gates pass.**
