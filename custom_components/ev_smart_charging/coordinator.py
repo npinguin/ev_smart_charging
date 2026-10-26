@@ -137,6 +137,7 @@ class EVSmartChargingCoordinator:
         # One bounded source-event worker per Local Charger. All source values
         # are read from HA when the worker runs; events need not be queued.
         self._source_refresh_task = None
+        self._source_refresh_unsub = None
         self._source_refresh_dirty = False
         self._source_target_changed = False
         self._source_refresh_lock = asyncio.Lock()
@@ -324,6 +325,9 @@ class EVSmartChargingCoordinator:
         """Remove HA callbacks and cancel any pending source refresh."""
         self._stopped = True
         self._source_refresh_dirty = False
+        if self._source_refresh_unsub is not None:
+            self._source_refresh_unsub()
+            self._source_refresh_unsub = None
         task = self._source_refresh_task
         if task is not None and not task.done():
             task.cancel()
@@ -1009,29 +1013,46 @@ class EVSmartChargingCoordinator:
             and self.ev_target_soc_entity_id
         ):
             self._source_target_changed = True
+        # A HA timer is not a pending HA task. async_block_till_done
+        # and HA unload can complete while the debounce window is open.
+        if (
+            self._source_refresh_unsub is None
+            and (self._source_refresh_task is None or self._source_refresh_task.done())
+        ):
+            self._source_refresh_unsub = async_call_later(
+                self.hass, 0.2, self._source_timer_fired
+            )
+
+    @callback
+    def _source_timer_fired(self, _now):
+        self._source_refresh_unsub = None
+        if self._stopped or not self._source_refresh_dirty:
+            return
         if self._source_refresh_task is None or self._source_refresh_task.done():
             self._source_refresh_task = self.hass.async_create_task(
                 self._drain_source_updates()
             )
 
     async def _drain_source_updates(self):
-        """At most one running source worker, with a bounded feedback rate."""
+        """Process one batch, then defer any feedback to a future HA timer."""
         try:
-            await asyncio.sleep(0.2)
-            while self._source_refresh_dirty and not self._stopped:
-                self._source_refresh_dirty = False
-                config_changed = self._source_target_changed
-                self._source_target_changed = False
-                await self.update_sensors(
-                    entity_id=self.ev_target_soc_entity_id if config_changed else None,
-                    configuration_updated=config_changed,
-                )
-                if self._source_refresh_dirty and not self._stopped:
-                    await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            raise
+            if not self._source_refresh_dirty or self._stopped:
+                return
+            self._source_refresh_dirty = False
+            config_changed = self._source_target_changed
+            self._source_target_changed = False
+            await self.update_sensors(
+                entity_id=self.ev_target_soc_entity_id if config_changed else None,
+                configuration_updated=config_changed,
+            )
         finally:
             self._source_refresh_task = None
+            # Physical source updates arriving DURING the refresh cannot
+            # create a spin loop or hold a HA-tracked sleeping task open.
+            if self._source_refresh_dirty and not self._stopped:
+                self._source_refresh_unsub = async_call_later(
+                    self.hass, 1, self._source_timer_fired
+                )
 
     async def update_sensors(
         self,
