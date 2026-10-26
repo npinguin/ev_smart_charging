@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from math import isfinite
 from typing import Mapping
@@ -47,6 +47,9 @@ class Vehicle:
     phase_count: int | None = None
     user_id: str = ""
     ready_by: str = ""
+    ready_mode: str = ""
+    ready_time: str = "07:00"
+    ready_weekly: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.uid or not self.name.strip():
@@ -54,6 +57,9 @@ class Vehicle:
         optional_soc(self.target_soc)
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("vehicle_phases_invalid")
+        from .ready_schedule import validate_ready_schedule
+
+        validate_ready_schedule(self)
 
 
 @dataclass(frozen=True)
