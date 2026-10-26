@@ -212,8 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         validation_error = coordinator.validate_control_entities()
     if validation_error is not None:
         _LOGGER.debug("%s", validation_error)
-        for unsub in coordinator.listeners:
-            unsub()
+        coordinator.unsubscribe_listeners()
         raise ConfigEntryNotReady(validation_error)
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -297,8 +296,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     )
     if unloaded:
-        for unsub in coordinator.listeners:
-            unsub()
+        coordinator.unsubscribe_listeners()
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unloaded
