@@ -97,7 +97,6 @@ def read_inputs(hass, chargers, vehicles):
                 hass.states.get(charger.energy_entity) if charger.energy_entity else None,
                 "energy",
             ),
-            ),
         }
     return result
 
