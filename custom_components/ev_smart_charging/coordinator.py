@@ -82,6 +82,7 @@ from .const import (
 )
 from .controller.deadlines import effective_deadline, price_coverage_reaches_deadline
 from .controller import safety
+from .charger_observation import charging_readback
 from .controller.runtime import is_supervised, physical_grant
 from .helpers.coordinator import (
     Scheduler,
@@ -282,6 +283,16 @@ class EVSmartChargingCoordinator:
         target = getattr(self, "ev_target_soc", None)
         if soc is not None and target is not None and soc >= target:
             return
+        # An actual charging-state sensor confirming ON also suppresses
+        # retries, even if a separately managed enable switch is OFF.
+        state_id = self.charging_state_entity_id
+        if state_id:
+            charging_state = self.hass.states.get(state_id)
+            if (
+                charging_state is not None
+                and charging_readback(charging_state.state) is True
+            ):
+                return
         # This control switch is a command/enable readback, not a charging
         # sensor. A physically idle EVSE with an enabled control is healthy.
         source = self.charger_switch.entity_id

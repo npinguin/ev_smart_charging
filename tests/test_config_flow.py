@@ -134,6 +134,7 @@ async def test_successful_config_flow_option(
         "evsc_actual_power_entity": "",
         "evsc_actual_energy_entity": "",
         "evsc_price_validated": False,
+        "evsc_control_semantics": "unspecified",
         "evsc_load_energy_kwh": 0.0,
         "evsc_load_duration_quarters": 0,
     }
