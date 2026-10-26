@@ -140,6 +140,8 @@ def compile_advisory(
         return {
             "status": "NO_ELIGIBLE_DEMAND" if excluded else "NO_CHARGERS",
             "controller_uid": controller.uid,
+            "generated_at": now.isoformat(),
+            "cost_budget_eur": controller.cost_budget_eur,
             "advisory_only": True,
             "physical_actuation_authorized": False,
             "excluded": excluded,
@@ -232,6 +234,8 @@ def compile_advisory(
             else ("PLANNED" if covered else "INCOMPLETE_OR_UNVERIFIED")
         ),
         "controller_uid": controller.uid,
+        "generated_at": now.isoformat(),
+        "cost_budget_eur": controller.cost_budget_eur,
         "advisory_only": True,
         "physical_actuation_authorized": False,
         "excluded": excluded,
