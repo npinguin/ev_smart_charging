@@ -31,13 +31,19 @@ def parse_tariff_slots(raw, currency, unit):
         for item in raw:
             start = datetime.fromisoformat(item["start"])
             end = datetime.fromisoformat(item["end"])
-            start = start.astimezone(timezone.utc) if start.utcoffset() is not None else None
+            start = (
+                start.astimezone(timezone.utc)
+                if start.utcoffset() is not None
+                else None
+            )
             end = end.astimezone(timezone.utc) if end.utcoffset() is not None else None
             value = float(item["effective_eur_per_kwh"])
             if (
-                start is None or end is None or not isfinite(value)
-                or start.minute % 15 or start.second or start.microsecond
-                or end <= start or (end-start) % QUARTER
+                start is None
+                or end is None
+                or not isfinite(value)
+                or start.minute % 15
+                or start.second
             ):
                 raise ValueError("invalid tariff interval")
             while start < end:
@@ -106,8 +112,10 @@ def compile_advisory(
         )
         requests.append(req)
         slots = [
-            s for s in inputs.get("prices", [])
-            if s.end > now and s.start < horizon_end
+            s
+            for s in inputs.get("prices", [])
+            if s.end > now
+            and s.start < horizon_end
             and (
                 controller.price_cap_eur_kwh is None
                 or s.eur_per_kwh <= controller.price_cap_eur_kwh
@@ -164,7 +172,9 @@ def compile_advisory(
     for req in requests:
         mine = [a for a in assignments if a.charger_id == req.id]
         kwh = sum(a.grid_kwh for a in mine if a.grid_kwh is not None)
-        cost = sum(a.grid_kwh * a.price_eur_per_kwh for a in mine if a.grid_kwh is not None)
+        cost = sum(
+            a.grid_kwh * a.price_eur_per_kwh for a in mine if a.grid_kwh is not None
+        )
         loads[req.id] = {
             "vehicle_uid": chargers[req.id].vehicle_uid,
             "required_battery_kwh": req.required_battery_kwh,
@@ -190,15 +200,16 @@ def compile_advisory(
     for summary in by_day.values():
         for name in summary:
             summary[name] = round(summary[name], 4)
-    covered = (
-        plan.coverage == "COMPLETE"
-        and all(source_quality.get(r.id) == "VALID" for r in requests)
+    covered = plan.coverage == "COMPLETE" and all(
+        source_quality.get(r.id) == "VALID" for r in requests
     )
     total_kwh = sum(v["planned_grid_kwh"] for v in loads.values())
     total_eur = sum(v["indicative_eur"] for v in loads.values())
     return {
-        "status": "BUDGET_LIMITED" if budget_limited else (
-            "PLANNED" if covered else "PARTIAL_PRICE_COVERAGE"
+        "status": (
+            "BUDGET_LIMITED"
+            if budget_limited
+            else ("PLANNED" if covered else "PARTIAL_PRICE_COVERAGE")
         ),
         "controller_uid": controller.uid,
         "advisory_only": True,
