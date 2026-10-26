@@ -96,20 +96,23 @@ class V2Fact(SensorEntity):
             if self.key == "connected":
                 status = _connected(
                     self.hass.states.get(obj.connected_entity)
-                    if obj.connected_entity else None
+                    if obj.connected_entity
+                    else None
                 )
-                return "connected" if status is True else (
-                    "disconnected" if status is False else "unknown"
+                return (
+                    "connected"
+                    if status is True
+                    else ("disconnected" if status is False else "unknown")
                 )
             if self.key == "power_kw":
                 return _number(
-                    self.hass.states.get(obj.power_entity)
-                    if obj.power_entity else None
+                    self.hass.states.get(obj.power_entity) if obj.power_entity else None
                 )
             if self.key == "energy_kwh":
                 return _number(
                     self.hass.states.get(obj.energy_entity)
-                    if obj.energy_entity else None
+                    if obj.energy_entity
+                    else None
                 )
         elif self.kind == ENTRY_CONTROLLER:
             manager = self.hass.data[DOMAIN].get(self.entry.entry_id)
@@ -127,8 +130,17 @@ def sensors_for_entry(entry):
     if kind == ENTRY_VEHICLE:
         return [
             V2Fact(entry, kind, "soc", "SoC", SensorDeviceClass.BATTERY, "%"),
-            V2Fact(entry, kind, "target_soc", "Target SoC", SensorDeviceClass.BATTERY, "%"),
-            V2Fact(entry, kind, "required_battery_kwh", "Required battery energy", SensorDeviceClass.ENERGY, "kWh"),
+            V2Fact(
+                entry, kind, "target_soc", "Target SoC", SensorDeviceClass.BATTERY, "%"
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "required_battery_kwh",
+                "Required battery energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
             V2Fact(entry, kind, "source_quality", "Source quality"),
         ]
     if kind == ENTRY_CHARGER:
@@ -136,13 +148,36 @@ def sensors_for_entry(entry):
             V2Fact(entry, kind, "controller", "Charge Controller"),
             V2Fact(entry, kind, "vehicle", "Assigned Vehicle"),
             V2Fact(entry, kind, "connected", "Connection"),
-            V2Fact(entry, kind, "power_kw", "Charging power", SensorDeviceClass.POWER, "kW"),
-            V2Fact(entry, kind, "energy_kwh", "Session energy", SensorDeviceClass.ENERGY, "kWh"),
+            V2Fact(
+                entry, kind, "power_kw", "Charging power", SensorDeviceClass.POWER, "kW"
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "energy_kwh",
+                "Session energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
         ]
     if kind == ENTRY_CONTROLLER:
         return [
             V2Fact(entry, kind, "planning_status", "Planning status"),
-            V2Fact(entry, kind, "planned_kwh", "Planned energy", SensorDeviceClass.ENERGY, "kWh"),
-            V2Fact(entry, kind, "indicative_cost", "Indicative cost", SensorDeviceClass.MONETARY, "EUR"),
+            V2Fact(
+                entry,
+                kind,
+                "planned_kwh",
+                "Planned energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "indicative_cost",
+                "Indicative cost",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
         ]
     return []
