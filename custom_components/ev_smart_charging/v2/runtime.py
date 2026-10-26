@@ -140,9 +140,7 @@ def _group_admissions(controller, chargers, observed, plan, when):
         return set()
     total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
     active = sum(observed[uid]["power_kw"] > 0.05 for uid in chargers)
-    wanted = [
-        uid for uid in chargers if _desired_now(plan, uid, when)
-    ]
+    wanted = [uid for uid in chargers if _desired_now(plan, uid, when)]
     wanted.sort(key=lambda uid: (observed[uid]["power_kw"] <= 0.05, uid))
     admitted = set()
     for uid in wanted:
@@ -284,9 +282,7 @@ class V2ControllerRuntime:
         # Single conservative reservation pass across the entire Controller.
         # Independent per-Charger checks can over-allocate a shared budget.
         when = dt.utcnow()
-        admitted = _group_admissions(
-            controller, chargers, observed, result, when
-        )
+        admitted = _group_admissions(controller, chargers, observed, result, when)
         native_results = {}
         for uid, charger in sorted(chargers.items()):
             if self._stopped or not safety.COORDINATED_ACTUATION_ENABLED:
