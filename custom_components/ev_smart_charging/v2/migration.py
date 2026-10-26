@@ -69,6 +69,9 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
         candidate = source.get(src)
         if isinstance(candidate, str) and "." in candidate and candidate.strip():
             result[dest] = candidate
+    semantics = source.get("evsc_control_semantics", "unspecified")
+    if semantics in ("charge_request", "availability_enable", "power_relay"):
+        result["control_semantics"] = semantics
     max_ac_kw = _valid_positive(source.get("evsc_expected_power_kw"))
     if max_ac_kw is not None:
         result["max_ac_kw"] = max_ac_kw
@@ -81,6 +84,7 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
             "connected_entity",
             "charging_entity",
             "control_entity",
+            "control_semantics",
             "power_entity",
             "energy_entity",
             "tariff_entity",
