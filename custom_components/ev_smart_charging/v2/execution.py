@@ -141,11 +141,13 @@ class NativeChargeWriter:
         if self._closed:
             return "WRITER_CLOSED"
         if self.charger.control_semantics not in (
-            "charge_request", "availability_enable"
+            "charge_request",
+            "availability_enable",
         ):
             return "UNVERIFIED_CONTROL_SEMANTICS"
         if self.charger.control_entity.split(".", 1)[0] not in (
-            "switch", "input_boolean"
+            "switch",
+            "input_boolean",
         ):
             return "UNSUPPORTED_NATIVE_CONTROL"
         if self.charger.max_ac_kw is None or not isfinite(self.charger.max_ac_kw):
@@ -163,7 +165,10 @@ class NativeChargeWriter:
                 return "PHYSICAL_CABLE_NOT_CONFIRMED"
             if snapshot.get("source_quality", {}).get(self.charger.uid) != "VALID":
                 return "PRICE_UNVERIFIED"
-            if snapshot.get("cost_budget_eur") is not None and not actual_budget_certified:
+            if (
+                snapshot.get("cost_budget_eur") is not None
+                and not actual_budget_certified
+            ):
                 return "BUDGET_UNCERTAIN"
             if not group_capacity_certified:
                 return "GROUP_HEADROOM_UNVERIFIED"
@@ -212,9 +217,7 @@ class NativeChargeWriter:
                     timeout=8.0,
                 )
             except Exception:
-                _LOGGER.exception(
-                    "V2 native command failed for %s", self.charger.uid
-                )
+                _LOGGER.exception("V2 native command failed for %s", self.charger.uid)
                 return "COMMAND_FAILED_OR_TIMED_OUT"
             # A service response only means accepted, never prove the EVSE
             # actually started/stopped; next readback verifies actual state.
