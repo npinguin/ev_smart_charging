@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 READY_MODES = ("once", "daily", "weekly")
-DEFAULT_READY_TIME = "07:00"
+DEFAULT_READY_TIME = "08:00"
 UTC = timezone.utc
 
 
