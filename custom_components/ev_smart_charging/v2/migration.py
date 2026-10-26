@@ -93,6 +93,7 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
             "max_ac_kw",
             "phase_count",
             "max_current_a",
+            "nominal_phase_voltage_v",
         }
         if set(overrides) - safe:
             raise ConfigurationError("unexpected_migration_override")
