@@ -104,11 +104,45 @@ def _unique_entries(hass, entry_type):
     return result
 
 
+def _check_source_feedback(hass, vehicles, chargers):
+    """A V2 output cannot be an input to another EVSC V2 source reader."""
+    from homeassistant.helpers.entity_registry import async_get
+
+    owned = {
+        entry.entry_id
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get(MARKER) in (ENTRY_VEHICLE, ENTRY_CHARGER, ENTRY_CONTROLLER)
+    }
+    if not owned:
+        return
+    registry = async_get(hass)
+    sources = [v.soc_entity for v in vehicles.values()]
+    sources.extend(
+        entity
+        for charger in chargers.values()
+        for entity in (
+            charger.connected_entity,
+            charger.charging_entity,
+            charger.power_entity,
+            charger.energy_entity,
+            charger.tariff_entity,
+            charger.control_entity,
+        )
+    )
+    for source in sources:
+        if not source:
+            continue
+        entry = registry.async_get(source)
+        if entry is not None and entry.config_entry_id in owned:
+            raise ValueError("v2_source_feedback_cycle")
+
+
 def catalog(hass):
     vehicles = _unique_entries(hass, ENTRY_VEHICLE)
     chargers = _unique_entries(hass, ENTRY_CHARGER)
     controllers = _unique_entries(hass, ENTRY_CONTROLLER)
     validate_catalog(vehicles, chargers, controllers)
+    _check_source_feedback(hass, vehicles, chargers)
     return vehicles, chargers, controllers
 
 
@@ -136,4 +170,5 @@ def check_proposed(hass, entry_type, data, editing_uid=None):
     else:
         controllers[item.uid] = item
     validate_catalog(vehicles, chargers, controllers)
+    _check_source_feedback(hass, vehicles, chargers)
     return item
