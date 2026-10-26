@@ -1,4 +1,4 @@
-"""Passive, independent per-Controller V2 planner. No physical EVSE writes."""
+"""Independent per-Controller V2 planner and guarded, native physical executor."""
 
 from __future__ import annotations
 
@@ -195,8 +195,15 @@ class V2ControllerRuntime:
                 # separate native ownership/readback/cost/electrical gate.
                 # P0 containment is immutable via UI or persisted options.
                 if safety.COORDINATED_ACTUATION_ENABLED and not self._stopped:
-                    await self._apply_native_plan(
+                    result["native_execution"] = await self._apply_native_plan(
                         controller, chargers, observed, result
+                    )
+                    result["advisory_only"] = False
+                    result["physical_actuation_authorized"] = any(
+                        state in (
+                            "ALREADY_AT_TARGET",
+                            "COMMAND_SENT_AWAITING_READBACK",
+                        ) for state in result["native_execution"].values()
                     )
             except asyncio.CancelledError:
                 raise
@@ -237,6 +244,7 @@ class V2ControllerRuntime:
             observed.get(uid, {}).get("power_kw") or 0
             for uid in chargers
         )
+        native_results = {}
         for uid, charger in chargers.items():
             if self._stopped or not safety.COORDINATED_ACTUATION_ENABLED:
                 break
@@ -260,8 +268,10 @@ class V2ControllerRuntime:
                 actual_budget_certified=controller.cost_budget_eur is None,
                 group_capacity_certified=capacity_valid,
             )
+            native_results[uid] = status
             if status not in ("ALREADY_AT_TARGET", "COMMAND_COOLDOWN"):
                 _LOGGER.debug("EVSC V2 %s physical admission: %s", uid, status)
+        return native_results
 
     async def async_stop(self):
         """HA unload must wait for any native-service critical section."""
