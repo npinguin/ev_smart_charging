@@ -211,11 +211,13 @@ async def test_weekly_calendar_requires_at_least_one_enabled_day(hass):
 
 def test_ha_options_clearing_one_weekday_does_not_leave_shadow_assignment():
     from custom_components.ev_smart_charging.v2.flow import _normalize_vehicle_form
+
     updated = _normalize_vehicle_form(
         {"ready_mode": "weekly", "ready_tue": "09:00"},
         "Europe/Brussels",
         original={
-            "ready_mode": "weekly", "ready_mon": "08:00",
+            "ready_mode": "weekly",
+            "ready_mon": "08:00",
             "ready_tue": "09:00",
         },
     )
