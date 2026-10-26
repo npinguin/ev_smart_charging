@@ -93,6 +93,11 @@ def test_no_implicit_timezone_fallback_on_invalid_zone():
 
 def test_legacy_absolute_ready_by_is_not_reinterpreted_as_daily():
     old = car(ready_by="2026-10-27T08:00:00+01:00")
-    assert next_ready_deadline(old, utc("2026-10-27T09:00:00+00:00"), "Europe/Brussels") is None
+    assert (
+        next_ready_deadline(old, utc("2026-10-27T09:00:00+00:00"), "Europe/Brussels")
+        is None
+    )
     daily = replace(old, ready_mode="daily")
-    assert next_ready_deadline(daily, utc("2026-10-27T09:00:00+00:00"), "Europe/Brussels") == utc("2026-10-28T07:00:00+00:00")
+    assert next_ready_deadline(
+        daily, utc("2026-10-27T09:00:00+00:00"), "Europe/Brussels"
+    ) == utc("2026-10-28T07:00:00+00:00")
