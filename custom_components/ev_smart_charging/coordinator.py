@@ -134,6 +134,13 @@ class EVSmartChargingCoordinator:
         self._last_coordinated_command = None
         self._last_coordinated_command_at = 0.0
         self._last_local_retry_at = None
+        # One bounded source-event worker per Local Charger. All source values
+        # are read from HA when the worker runs; events need not be queued.
+        self._source_refresh_task = None
+        self._source_refresh_dirty = False
+        self._source_target_changed = False
+        self._source_refresh_lock = asyncio.Lock()
+        self._stopped = False
         self.platforms = []
         self.listeners = []
         self.setup_timestamp = None
@@ -314,11 +321,16 @@ class EVSmartChargingCoordinator:
         await self.turn_on_charging(reason="retry")
 
     def unsubscribe_listeners(self):
-        """Unsubscribed to listeners"""
+        """Remove HA callbacks and cancel any pending source refresh."""
+        self._stopped = True
+        self._source_refresh_dirty = False
+        task = self._source_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
         for unsub in self.listeners:
             unsub()
+        self.listeners.clear()
 
-    @callback
     async def device_updated(self, event: Event):  # pylint: disable=unused-argument
         """Called when device is updated"""
         _LOGGER.debug("EVSmartChargingCoordinator.device_updated()")
@@ -342,7 +354,6 @@ class EVSmartChargingCoordinator:
                                     self.config_entry, title=device.name_by_user
                                 )
 
-    @callback
     async def update_quarterly(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
@@ -350,7 +361,6 @@ class EVSmartChargingCoordinator:
         _LOGGER.debug("EVSmartChargingCoordinator.update_quarterly()")
         await self.update_sensors()
 
-    @callback
     async def update_initial(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
@@ -365,7 +375,6 @@ class EVSmartChargingCoordinator:
         time_since_start = now_timestamp - self.setup_timestamp
         return time_since_start < 5
 
-    @callback
     async def update_state(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
@@ -977,25 +986,52 @@ class EVSmartChargingCoordinator:
         await self.update_sensors(configuration_updated=True)
 
     @callback
-    async def update_sensors_new(
+    def update_sensors_new(
         self,
         event: Event,  # Event[EventStateChangedData]
         configuration_updated: bool = False,
-    ):  # pylint: disable=unused-argument
-        """Price or EV sensors have been updated.
-        EventStateChangedData is supported from Home Assistant 2024.5.5"""
+    ):
+        """Coalesce HA source events without allocating one task per event."""
+        if self._stopped:
+            return
+        before = event.data.get("old_state")
+        after = event.data.get("new_state")
+        if (
+            before is not None
+            and after is not None
+            and before.state == after.state
+            and before.attributes == after.attributes
+        ):
+            return
+        self._source_refresh_dirty = True
+        if configuration_updated or (
+            event.data.get("entity_id") == self.ev_target_soc_entity_id
+            and self.ev_target_soc_entity_id
+        ):
+            self._source_target_changed = True
+        if self._source_refresh_task is None or self._source_refresh_task.done():
+            self._source_refresh_task = self.hass.async_create_task(
+                self._drain_source_updates()
+            )
 
-        # Allowed from HA 2024.4
-        entity_id = event.data["entity_id"]
-        old_state = event.data["old_state"]
-        new_state = event.data["new_state"]
-
-        await self.update_sensors(
-            entity_id=entity_id,
-            old_state=old_state,
-            new_state=new_state,
-            configuration_updated=configuration_updated,
-        )
+    async def _drain_source_updates(self):
+        """At most one running source worker, with a bounded feedback rate."""
+        try:
+            await asyncio.sleep(0.2)
+            while self._source_refresh_dirty and not self._stopped:
+                self._source_refresh_dirty = False
+                config_changed = self._source_target_changed
+                self._source_target_changed = False
+                await self.update_sensors(
+                    entity_id=self.ev_target_soc_entity_id if config_changed else None,
+                    configuration_updated=config_changed,
+                )
+                if self._source_refresh_dirty and not self._stopped:
+                    await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            self._source_refresh_task = None
 
     async def update_sensors(
         self,
@@ -1003,8 +1039,21 @@ class EVSmartChargingCoordinator:
         old_state: State = None,
         new_state: State = None,
         configuration_updated: bool = False,
-    ):  # pylint: disable=unused-argument
-        """Price or EV sensors have been updated."""
+    ):
+        """Serialize Local plan updates from source, UI and quarter triggers."""
+        if self._stopped:
+            return
+        async with self._source_refresh_lock:
+            if self._stopped:
+                return
+            await self._update_sensors_locked(
+                entity_id, old_state, new_state, configuration_updated
+            )
+
+    async def _update_sensors_locked(
+        self, entity_id, old_state, new_state, configuration_updated
+    ):
+        """Original Local schedule and state update logic, unchanged."""
 
         _LOGGER.debug("EVSmartChargingCoordinator.update_sensors()")
         _LOGGER.debug("entity_id = %s", entity_id)
