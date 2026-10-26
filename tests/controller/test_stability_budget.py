@@ -22,7 +22,8 @@ def manager(hass):
 
 def price_source(hass, slots):
     hass.states.async_set(
-        "sensor.effective_tariff", "0.20",
+        "sensor.effective_tariff",
+        "0.20",
         {
             "unit_of_measurement": "EUR/kWh",
             "currency": "EUR",
@@ -51,10 +52,12 @@ def interval(start, end):
 def test_invalid_multi_year_tariff_interval_never_expands_on_event_loop(hass):
     obj = price_source(
         hass,
-        [interval(
-            datetime(2026, 10, 26, tzinfo=timezone.utc),
-            datetime(9998, 10, 26, tzinfo=timezone.utc),
-        )],
+        [
+            interval(
+                datetime(2026, 10, 26, tzinfo=timezone.utc),
+                datetime(9998, 10, 26, tzinfo=timezone.utc),
+            )
+        ],
     )
     assert manager(hass)._prices([obj])["native_source"] == []
 
@@ -62,8 +65,9 @@ def test_invalid_multi_year_tariff_interval_never_expands_on_event_loop(hass):
 def test_too_many_tariff_entries_are_rejected_before_expansion(hass):
     start = datetime(2026, 10, 26, tzinfo=timezone.utc)
     entries = [
-        interval(start + timedelta(minutes=i * 15),
-                 start + timedelta(minutes=(i + 1) * 15))
+        interval(
+            start + timedelta(minutes=i * 15), start + timedelta(minutes=(i + 1) * 15)
+        )
         for i in range(MAX_EFFECTIVE_PRICE_QUARTERS + 1)
     ]
     obj = price_source(hass, entries)
@@ -73,7 +77,9 @@ def test_too_many_tariff_entries_are_rejected_before_expansion(hass):
 def test_fingerprint_avoids_copying_full_price_attributes(hass):
     m = manager(hass)
     hass.states.async_set(
-        "sensor.price", "0.2", {"price_slots": [{"value": index} for index in range(500)]}
+        "sensor.price",
+        "0.2",
+        {"price_slots": [{"value": index} for index in range(500)]},
     )
     first = m._sample_state("sensor.price", include_attributes=True)
     assert first[0] == "0.2"
