@@ -256,6 +256,7 @@ class ChargeSupervisor:
         self.peak_price_comparison = None
         self._actual_cost_ledgers = {}
         self._cost_store = None
+        self._cost_save_pending = False
 
     @property
     def participants(self):
@@ -1586,6 +1587,7 @@ class ChargeSupervisor:
                     # final-write shutdown event. Ownership journals still
                     # use immediate durable writes; only observations wait.
                     self._cost_store.async_delay_save(self._stored_costs, 30)
+                    self._cost_save_pending = True
                 except Exception:
                     _LOGGER.exception("Cannot queue EVSC actual-cost ledger save")
                     for ledger in self._actual_cost_ledgers.values():
@@ -1832,6 +1834,12 @@ class ChargeSupervisor:
         await self.async_refresh()
         self._plan_fingerprint = self._planning_inputs()
         self._observation_fingerprint = self._observation_inputs()
+
+    async def async_flush_costs(self):
+        """Commit pending meter evidence before an HA config-entry reload."""
+        if self._cost_store is not None and self._cost_save_pending:
+            await self._cost_store.async_save(self._stored_costs())
+            self._cost_save_pending = False
 
     def async_stop(self):
         self._stopped = True
