@@ -2,6 +2,15 @@
   "config": {
     "step": {
       "user": {
+        "title": "EV Smart Charging configuratie",
+        "menu_options": {
+          "v2_controller": "Laadcontroller toevoegen (één planner)",
+          "v2_vehicle": "Voertuig toevoegen",
+          "v2_charger": "Laadpunt toevoegen",
+          "legacy_local": "Klassieke Local Smart Charger toevoegen"
+        }
+      },
+      "legacy_local": {
         "description": "Configuratie van de naam en gekoppelde entities.",
         "data": {
           "device_name": "Naam",
@@ -11,6 +20,47 @@
           "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
           "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
           "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
+        }
+      },
+      "v2_vehicle": {
+        "title": "Voertuig toevoegen",
+        "data": {
+          "name": "Naam voertuig",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-laadvermogen voertuig (kW)",
+          "phase_count": "Aantal AC-fasen",
+          "ready_by": "Gereed tegen (met tijdzone)",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)"
+        }
+      },
+      "v2_charger": {
+        "title": "Laadpunt toevoegen",
+        "data": {
+          "name": "Naam laadpunt",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Native controleschakelaar (alleen observeren tijdens P0)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Sessiemeter energie",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "max_current_a": "Maximale laadstroom (A)"
+        }
+      },
+      "v2_controller": {
+        "title": "Laadcontroller toevoegen (één planner)",
+        "data": {
+          "name": "Naam laadcontroller",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)"
         }
       }
     },
@@ -24,7 +74,11 @@
       "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
       "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
       "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden.",
+      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
+    },
+    "abort": {
+      "create_controller_first": "Maak eerst een laadcontroller aan."
     }
   },
   "options": {
@@ -38,7 +92,29 @@
           "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
           "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
           "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen",
-          "evsc_control_semantics": "Betekenis van de Charger-controlschakelaar"
+          "evsc_control_semantics": "Betekenis van de Charger-controlschakelaar",
+          "name": "Naam laadpunt",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "ready_by": "Gereed tegen (met tijdzone)",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Native controleschakelaar (alleen observeren tijdens P0)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Sessiemeter energie",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_current_a": "Maximale laadstroom (A)"
         },
         "menu_options": {
           "link_chargers": "Laadpunten koppelen"
@@ -102,7 +178,8 @@
       "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden.",
       "invalid_charger_link": "Onbekend laadpunt",
       "unlink_coordinated_first": "Zet de Charger eerst terug in Local-modus",
-      "charger_not_linked": "Koppel de Charger eerst aan de Controller"
+      "charger_not_linked": "Koppel de Charger eerst aan de Controller",
+      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
     }
   },
   "entity": {
