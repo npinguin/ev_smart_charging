@@ -13,33 +13,19 @@ from datetime import datetime, timedelta, timezone
 from math import isfinite
 from time import monotonic
 
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.util import dt
-
 from ..const import DOMAIN
 from ..controller import safety
-from . import MARKER
 from .model import Charger
 from .catalog import catalog
 from .ownership import _lock as ownership_lock
+from .adapters.home_assistant import resolve_control_port
+from .adapters.legacy_local import original_local_writer_active
+from .ports import ChargeControlPort
 
 _LOGGER = logging.getLogger(__name__)
 _WRITERS_KEY = f"{DOMAIN}.v2_native_writers"
 _COMMAND_RETRY_SECONDS = 15
 _MAX_PLAN_AGE = timedelta(minutes=2)
-
-
-def _original_local_writer_active(hass, control_entity: str) -> bool:
-    """Match a native entity, never a guessed legacy record or device name."""
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.data.get(MARKER) is not None:
-            continue
-        source = {**entry.data, **entry.options}.get("charger_entity")
-        if source == control_entity and (
-            entry.state == ConfigEntryState.LOADED or entry.disabled_by is None
-        ):
-            return True
-    return False
 
 
 def _desired_now(snapshot: dict, uid: str, when: datetime) -> bool:
@@ -71,33 +57,17 @@ def _fresh(snapshot: dict, now: datetime) -> bool:
     return timedelta(0) <= age <= _MAX_PLAN_AGE
 
 
-def _current_readback(hass, control_entity: str):
-    """A stale native ON/OFF entity must not grant authority to send commands."""
-    state = hass.states.get(control_entity)
-    if state is None:
-        return None
-    observed_at = getattr(state, "last_reported", None) or getattr(
-        state, "last_updated", None
-    )
-    if observed_at is None or observed_at.tzinfo is None:
-        return None
-    age = dt.utcnow() - observed_at
-    if age < timedelta(0) or age > timedelta(minutes=2):
-        return None
-    if state.state == "on":
-        return True
-    if state.state == "off":
-        return False
-    return None
-
-
 class NativeChargeWriter:
     """One serialized native writer, one control entity, one owning Controller."""
 
-    def __init__(self, hass, charger: Charger, controller_uid: str):
+    def __init__(
+        self, hass, charger: Charger, controller_uid: str,
+        port: ChargeControlPort | None = None,
+    ):
         self.hass = hass
         self.charger = charger
         self.controller_uid = controller_uid
+        self._port = port if port is not None else resolve_control_port(charger.control_entity)
         self._lock = asyncio.Lock()
         self._last_command = None
         self._last_at = 0.0
@@ -156,14 +126,11 @@ class NativeChargeWriter:
             "availability_enable",
         ):
             return "UNVERIFIED_CONTROL_SEMANTICS"
-        if self.charger.control_entity.split(".", 1)[0] not in (
-            "switch",
-            "input_boolean",
-        ):
+        if self._port is None or not self._port.supports(self.charger.control_entity):
             return "UNSUPPORTED_NATIVE_CONTROL"
         if self.charger.max_ac_kw is None or not isfinite(self.charger.max_ac_kw):
             return "PHYSICAL_CAPABILITY_UNKNOWN"
-        if _original_local_writer_active(self.hass, self.charger.control_entity):
+        if original_local_writer_active(self.hass, self.charger.control_entity):
             return "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER"
         if snapshot.get("controller_uid") != self.controller_uid:
             return "CONTROLLER_OWNERSHIP_CHANGED"
@@ -213,7 +180,7 @@ class NativeChargeWriter:
                 ):
                     self.close()
                     return "OWNERSHIP_CHANGED_BEFORE_COMMAND"
-                state = _current_readback(self.hass, self.charger.control_entity)
+                state = self._port.readback(self.hass, self.charger.control_entity)
                 # An unknown actual native state can never be used as a Start
                 # permission. It also must not cause repeated speculative Off.
                 if state is None:
@@ -226,17 +193,12 @@ class NativeChargeWriter:
                     and now - self._last_at < _COMMAND_RETRY_SECONDS
                 ):
                     return "COMMAND_COOLDOWN"
-                domain = self.charger.control_entity.split(".", 1)[0]
-                command = "turn_on" if wants_on else "turn_off"
                 self._last_command = wants_on
                 self._last_at = now
                 try:
                     await asyncio.wait_for(
-                        self.hass.services.async_call(
-                            domain,
-                            command,
-                            target={"entity_id": self.charger.control_entity},
-                            blocking=True,
+                        self._port.async_set_enabled(
+                            self.hass, self.charger.control_entity, wants_on
                         ),
                         timeout=8.0,
                     )
