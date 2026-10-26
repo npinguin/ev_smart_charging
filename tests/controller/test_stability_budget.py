@@ -101,3 +101,20 @@ async def test_meter_updates_use_one_delayed_store_not_direct_json_write(hass):
     await m.async_flush_costs()
     m._cost_store.async_save.assert_awaited_once()
     assert m._cost_save_pending is False
+
+
+async def test_continuous_meter_updates_do_not_postpone_store_window(hass):
+    """One write is scheduled per window even under constant meter changes."""
+    m = manager(hass)
+    m._cost_store = MagicMock()
+    m._record_actual_costs = MagicMock(return_value=True)
+    for _ in range(20):
+        await m.async_refresh(replan=False)
+    m._cost_store.async_delay_save.assert_called_once()
+    data_func, delay = m._cost_store.async_delay_save.call_args.args
+    assert delay == 30
+    assert m._cost_save_pending is True
+    assert data_func() == m._stored_costs()
+    assert m._cost_save_pending is False
+    await m.async_refresh(replan=False)
+    assert m._cost_store.async_delay_save.call_count == 2
