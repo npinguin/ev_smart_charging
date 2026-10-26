@@ -164,9 +164,7 @@ class V2OptionsFlow(config_entries.OptionsFlow):
                     # The regular Options validator cannot transfer a Vehicle
                     # from another Charger. The shared durable transaction
                     # first detaches its old owner and persists the new one.
-                    await async_apply_charger_options(
-                        self.hass, old["uid"], user_input
-                    )
+                    await async_apply_charger_options(self.hass, old["uid"], user_input)
                     return self.async_create_entry(title="", data=entry.options)
                 check_proposed(self.hass, kind, proposed, editing_uid=old["uid"])
             except (ValueError, TypeError, KeyError):
