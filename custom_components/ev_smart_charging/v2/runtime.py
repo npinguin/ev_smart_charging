@@ -81,11 +81,15 @@ def read_inputs(hass, chargers, vehicles):
         vehicle = vehicles.get(charger.vehicle_uid)
         soc = _number(
             _fresh_state(
-                hass.states.get(vehicle.soc_entity)
-                if vehicle is not None and vehicle.soc_entity else None,
+                (
+                    hass.states.get(vehicle.soc_entity)
+                    if vehicle is not None and vehicle.soc_entity
+                    else None
+                ),
                 max_age=timedelta(hours=2),
             ),
-            0, 100,
+            0,
+            100,
         )
         tariff = (
             hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
@@ -100,8 +104,11 @@ def read_inputs(hass, chargers, vehicles):
             "soc": soc,
             "connected": _connected(
                 _fresh_state(
-                    hass.states.get(charger.connected_entity)
-                    if charger.connected_entity else None,
+                    (
+                        hass.states.get(charger.connected_entity)
+                        if charger.connected_entity
+                        else None
+                    ),
                     max_age=timedelta(minutes=2),
                 )
             ),
@@ -201,10 +208,12 @@ class V2ControllerRuntime:
                     )
                     result["advisory_only"] = False
                     result["physical_actuation_authorized"] = any(
-                        state in (
+                        state
+                        in (
                             "ALREADY_AT_TARGET",
                             "COMMAND_SENT_AWAITING_READBACK",
-                        ) for state in result["native_execution"].values()
+                        )
+                        for state in result["native_execution"].values()
                     )
             except asyncio.CancelledError:
                 raise
@@ -238,12 +247,10 @@ class V2ControllerRuntime:
         # Shared group headroom cannot be called certified unless every
         # participating load has a valid canonical native power measurement.
         watts_known = all(
-            observed.get(uid, {}).get("power_kw") is not None
-            for uid in chargers
+            observed.get(uid, {}).get("power_kw") is not None for uid in chargers
         )
         group_actual = sum(
-            observed.get(uid, {}).get("power_kw") or 0
-            for uid in chargers
+            observed.get(uid, {}).get("power_kw") or 0 for uid in chargers
         )
         native_results = {}
         for uid, charger in chargers.items():
