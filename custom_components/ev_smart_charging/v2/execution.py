@@ -19,6 +19,7 @@ from ..const import DOMAIN
 from ..controller import safety
 from . import MARKER
 from .model import Charger
+from .catalog import catalog
 
 _LOGGER = logging.getLogger(__name__)
 _WRITERS_KEY = f"{DOMAIN}.v2_native_writers"
@@ -158,14 +159,25 @@ class NativeChargeWriter:
                 return "PRICE_UNVERIFIED"
             if snapshot.get("cost_budget_eur") is not None and not actual_budget_certified:
                 return "BUDGET_UNCERTAIN"
-            if measured_power_kw is None and not group_capacity_certified:
-                return "MEASURED_CAPACITY_UNAVAILABLE"
+            if not group_capacity_certified:
+                return "GROUP_HEADROOM_UNVERIFIED"
 
         async with self._lock:
             if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
                 return "WRITER_CLOSED_OR_SAFETY_HOLD"
             if not self._acquire():
                 return "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
+            # Options changes can move a Charger while its previous Controller
+            # still holds a cached plan. Revalidate the authoritative catalog
+            # immediately before the only native service-call boundary.
+            current = catalog(self.hass)[1].get(self.charger.uid)
+            if (
+                current is None
+                or current.controller_uid != self.controller_uid
+                or current.control_entity != self.charger.control_entity
+            ):
+                self.close()
+                return "OWNERSHIP_CHANGED_BEFORE_COMMAND"
             state = _current_readback(self.hass, self.charger.control_entity)
             # An unknown actual native state can never be used as a Start
             # permission. It also must not cause repeated speculative Off.
