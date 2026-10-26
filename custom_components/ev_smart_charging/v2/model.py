@@ -63,6 +63,7 @@ class Charger:
     controller_uid: str
     vehicle_uid: str = ""
     control_entity: str = ""
+    control_semantics: str = "unspecified"
     connected_entity: str = ""
     charging_entity: str = ""
     power_entity: str = ""
@@ -78,6 +79,10 @@ class Charger:
             raise ConfigurationError("charger_requires_controller")
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("charger_phases_invalid")
+        if self.control_semantics not in (
+            "unspecified", "charge_request", "availability_enable", "power_relay"
+        ):
+            raise ConfigurationError("unsupported_control_semantics")
 
 
 @dataclass(frozen=True)
