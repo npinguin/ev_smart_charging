@@ -468,6 +468,7 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
     writer_b = NativeChargeWriter(hass, other, "main", port=FakePort(entered_b))
     plan_b = _snapshot()
     plan_b["loads"]["other"] = plan_b["loads"].pop("ch")
+    plan_b["source_quality"]["other"] = plan_b["source_quality"].pop("ch")
     a = asyncio.create_task(
         writer_a.async_reconcile(
             _snapshot(),
@@ -489,11 +490,7 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
                 group_capacity_certified=True,
             )
         )
-        try:
-            await asyncio.wait_for(entered_b.wait(), timeout=2)
-        except TimeoutError:
-            assert not b.done(), f"Independent writer denied before port: {b.result()}"
-            raise
+        await asyncio.wait_for(entered_b.wait(), timeout=2)
         assert await b == "COMMAND_SENT_AWAITING_READBACK"
         assert not a.done()
     finally:
