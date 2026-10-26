@@ -32,8 +32,24 @@ def _number(state, lower=0, upper=None):
     return value
 
 
+def _fresh_state(state, *, max_age):
+    """A cached HA value is not necessarily a current physical observation."""
+    if state is None:
+        return None
+    stamp = getattr(state, "last_reported", None) or getattr(
+        state, "last_updated", None
+    )
+    if stamp is None or stamp.tzinfo is None:
+        return None
+    age = dt.utcnow() - stamp
+    if age < timedelta(0) or age > max_age:
+        return None
+    return state
+
+
 def _meter(state, quantity):
     """Normalize HA power/energy readback to canonical kW/kWh, or Unknown."""
+    state = _fresh_state(state, max_age=timedelta(minutes=2))
     if state is None:
         return None
     unit = state.attributes.get("unit_of_measurement")
@@ -64,17 +80,17 @@ def read_inputs(hass, chargers, vehicles):
     for charger in chargers.values():
         vehicle = vehicles.get(charger.vehicle_uid)
         soc = _number(
-            (
+            _fresh_state(
                 hass.states.get(vehicle.soc_entity)
-                if vehicle is not None and vehicle.soc_entity
-                else None
+                if vehicle is not None and vehicle.soc_entity else None,
+                max_age=timedelta(hours=2),
             ),
-            0,
-            100,
+            0, 100,
         )
         tariff = (
             hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
         )
+        tariff = _fresh_state(tariff, max_age=timedelta(hours=36))
         prices, quality = parse_tariff_slots(
             tariff.attributes.get("price_slots") if tariff else None,
             tariff.attributes.get("currency") if tariff else None,
@@ -83,9 +99,11 @@ def read_inputs(hass, chargers, vehicles):
         result[charger.uid] = {
             "soc": soc,
             "connected": _connected(
-                hass.states.get(charger.connected_entity)
-                if charger.connected_entity
-                else None
+                _fresh_state(
+                    hass.states.get(charger.connected_entity)
+                    if charger.connected_entity else None,
+                    max_age=timedelta(minutes=2),
+                )
             ),
             "prices": prices,
             "tariff_quality": quality,
