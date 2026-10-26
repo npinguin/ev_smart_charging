@@ -131,7 +131,7 @@ def check_proposed(hass, entry_type, data, editing_uid=None):
             power_budget_kw=optional_positive(data.get("power_budget_kw"), "power_budget"),
             price_cap_eur_kwh=(
                 float(data["price_cap_eur_kwh"])
-                if data.get("price_cap_eur_per_kwh") is not None
+                if data.get("price_cap_eur_kwh") is not None
                 else None
             ),
             cost_budget_eur=optional_positive(data.get("cost_budget_eur"), "cost_budget"),
