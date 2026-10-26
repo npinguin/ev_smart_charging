@@ -1581,12 +1581,18 @@ class ChargeSupervisor:
                         )
             if self._stopped:
                 return
-            if cost_changed and self._cost_store is not None:
+            if (
+                cost_changed
+                and self._cost_store is not None
+                and not self._cost_save_pending
+            ):
                 try:
-                    # HA coalesces frequent meter writes and flushes at its
-                    # final-write shutdown event. Ownership journals still
-                    # use immediate durable writes; only observations wait.
-                    self._cost_store.async_delay_save(self._stored_costs, 30)
+                    # Schedule once per write window. Repeated delay_save calls
+                    # would keep moving HA's deadline during continuous meter
+                    # updates and could postpone persistence indefinitely.
+                    self._cost_store.async_delay_save(
+                        self._cost_snapshot_for_write, 30
+                    )
                     self._cost_save_pending = True
                 except Exception:
                     _LOGGER.exception("Cannot queue EVSC actual-cost ledger save")
@@ -1834,6 +1840,11 @@ class ChargeSupervisor:
         await self.async_refresh()
         self._plan_fingerprint = self._planning_inputs()
         self._observation_fingerprint = self._observation_inputs()
+
+    def _cost_snapshot_for_write(self):
+        """Return latest metered data and rearm the next 30-second write."""
+        self._cost_save_pending = False
+        return self._stored_costs()
 
     async def async_flush_costs(self):
         """Commit pending meter evidence before an HA config-entry reload."""
