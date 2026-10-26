@@ -91,7 +91,9 @@ def _register_charge_plan_service(hass: HomeAssistant) -> None:
 
 def _register_v2_plan_service(hass: HomeAssistant) -> None:
     """Read one specifically requested V2 Controller planner, never the first."""
-    if SupportsResponse is None or hass.services.has_service(DOMAIN, "get_v2_charge_plan"):
+    if SupportsResponse is None or hass.services.has_service(
+        DOMAIN, "get_v2_charge_plan"
+    ):
         return
 
     async def get_v2_charge_plan(call):
@@ -101,7 +103,8 @@ def _register_v2_plan_service(hass: HomeAssistant) -> None:
         if not isinstance(controller_uid, str) or not controller_uid:
             return {"status": "CONTROLLER_UID_REQUIRED", "advisory_only": True}
         matched = [
-            obj for obj in hass.data.get(DOMAIN, {}).values()
+            obj
+            for obj in hass.data.get(DOMAIN, {}).values()
             if isinstance(obj, V2ControllerRuntime)
             and obj.entry.data.get("uid") == controller_uid
         ]
@@ -114,7 +117,9 @@ def _register_v2_plan_service(hass: HomeAssistant) -> None:
         return matched[0].snapshot
 
     hass.services.async_register(
-        DOMAIN, "get_v2_charge_plan", get_v2_charge_plan,
+        DOMAIN,
+        "get_v2_charge_plan",
+        get_v2_charge_plan,
         supports_response=SupportsResponse.ONLY,
     )
 
@@ -159,9 +164,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data[DOMAIN][entry.entry_id] = obj
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
-                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+                await hass.config_entries.async_forward_entry_setups(
+                    entry, [Platform.SENSOR]
+                )
             else:
-                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+                await hass.config_entries.async_forward_entry_setup(
+                    entry, Platform.SENSOR
+                )
             entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             if isinstance(obj, V2ControllerRuntime):
                 await obj.async_start()
@@ -253,7 +262,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.data.get(CONTROLLER_ENTRY_MARKER) in V2_TYPES:
         from .v2.runtime import V2ControllerRuntime
 
-        unloaded = await hass.config_entries.async_forward_entry_unload(entry, Platform.SENSOR)
+        unloaded = await hass.config_entries.async_forward_entry_unload(
+            entry, Platform.SENSOR
+        )
         if unloaded:
             obj = hass.data[DOMAIN].pop(entry.entry_id, None)
             if isinstance(obj, V2ControllerRuntime):
