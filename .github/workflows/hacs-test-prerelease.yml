@@ -156,6 +156,13 @@ jobs:
           local = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
           registry = Path("custom_components/ev_smart_charging/v2/catalog.py").read_text()
           assert "async def _drain_source_updates" in local
+          drain = local.split("async def _drain_source_updates", 1)[1].split(
+            "async def update_sensors", 1
+          )[0]
+          assert "await asyncio.sleep(" not in drain, (
+            "A sleeping HA-tracked source task can hang async_block_till_done"
+          )
+          assert "_source_timer_fired" in local
           assert "_source_refresh_task" in local
           assert "MAX_EFFECTIVE_PRICE_QUARTERS" in runtime
           assert "async_delay_save(" in runtime
