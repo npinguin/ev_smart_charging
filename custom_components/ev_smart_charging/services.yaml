@@ -6,3 +6,17 @@ get_charge_plan:
     Return the current EV Smart Charging controller plan and per-charger
     price, energy, source-quality and peak-admission details. This action
     is read-only and never sends a charging command.
+
+get_v2_charge_plan:
+  name: Get V2 controller plan
+  description: >-
+    Return the read-only plan for a specific EVSC V2 Charge Controller.
+    No native charging commands are issued.
+  fields:
+    controller_uid:
+      name: Controller ID
+      description: The immutable V2 Charge Controller UID.
+      required: true
+      example: "controller_uid"
+      selector:
+        text:
