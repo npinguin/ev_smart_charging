@@ -156,6 +156,7 @@ def compile_advisory(
     )
     plan = build_plan(requests, rates, now, policy)
     assignments = list(plan.assignments)
+    planning_results = {result.charger_id: result for result in plan.results}
     budget_limited = False
     if controller.cost_budget_eur is not None:
         # Budget is an upper bound on PLANNED cost. It is not a claim that a
@@ -191,6 +192,8 @@ def compile_advisory(
         loads[req.id] = {
             "vehicle_uid": chargers[req.id].vehicle_uid,
             "required_battery_kwh": req.required_battery_kwh,
+            "demand_status": planning_results[req.id].status,
+            "remaining_battery_kwh": planning_results[req.id].remaining_battery_kwh,
             "planned_grid_kwh": round(kwh, 4),
             "indicative_eur": round(cost, 4),
             "slots": [
@@ -213,8 +216,12 @@ def compile_advisory(
     for summary in by_day.values():
         for name in summary:
             summary[name] = round(summary[name], 4)
-    covered = plan.coverage == "COMPLETE" and all(
-        source_quality.get(r.id) == "VALID" for r in requests
+    covered = (
+        not excluded
+        and not budget_limited
+        and plan.coverage == "COMPLETE"
+        and all(source_quality.get(r.id) == "VALID" for r in requests)
+        and all(planning_results[r.id].status == "PLANNED" for r in requests)
     )
     total_kwh = sum(v["planned_grid_kwh"] for v in loads.values())
     total_eur = sum(v["indicative_eur"] for v in loads.values())
@@ -222,7 +229,7 @@ def compile_advisory(
         "status": (
             "BUDGET_LIMITED"
             if budget_limited
-            else ("PLANNED" if covered else "PARTIAL_PRICE_COVERAGE")
+            else ("PLANNED" if covered else "INCOMPLETE_OR_UNVERIFIED")
         ),
         "controller_uid": controller.uid,
         "advisory_only": True,
