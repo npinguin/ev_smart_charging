@@ -171,6 +171,17 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected["controller_uid"],
             vehicle_uid=selected.get("vehicle_uid", ""),
         )
+        ready_preview = next(
+            row["vehicle_ready_by_suggestion"]
+            for row in discover_legacy(self.hass)
+            if row["legacy_entry_id"] == source_id
+        )
+        ready_label = (
+            f'{ready_preview["time"]} ({ready_preview["source"]})'
+            if ready_preview["mode"] == "daily"
+            else "No verified daily deadline"
+        )
+        placeholders = {"legacy_ready_by": ready_label}
         defaults = {
             "name": candidate["name"],
             "control_entity": candidate.get("control_entity", ""),
@@ -235,6 +246,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="v2_migrate_confirm",
             data_schema=vol.Schema(data_schema),
+            description_placeholders=placeholders,
         )
 
     async def async_step_legacy_local(self, user_input=None):
