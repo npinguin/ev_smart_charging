@@ -86,7 +86,10 @@ class Charger:
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("charger_phases_invalid")
         if self.control_semantics not in (
-            "unspecified", "charge_request", "availability_enable", "power_relay"
+            "unspecified",
+            "charge_request",
+            "availability_enable",
+            "power_relay",
         ):
             raise ConfigurationError("unsupported_control_semantics")
 
