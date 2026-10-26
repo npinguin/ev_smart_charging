@@ -3,6 +3,7 @@
 No charger service is ever called by these tests.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -290,3 +291,66 @@ def test_new_entities_not_owned_by_oem_device(hass):
             assert not sensor.device_info.get("connections")
             sensor.hass = hass
             _ = sensor.native_value
+
+
+async def test_tick_storm_creates_one_task_and_stop_cancels_pending(hass, monkeypatch):
+    """1,000 timer events must not queue 1,000 tasks before the lock acquires."""
+    controller = _entry(hass, ENTRY_CONTROLLER, "storm", "Stress")
+    runtime = V2ControllerRuntime(hass, controller)
+    running = asyncio.Event()
+    release = asyncio.Event()
+    calls = []
+
+    async def blocked_refresh():
+        calls.append(1)
+        running.set()
+        await release.wait()
+
+    monkeypatch.setattr(runtime, "async_refresh", blocked_refresh)
+    for _ in range(1000):
+        runtime._on_tick(None)
+    await asyncio.wait_for(running.wait(), timeout=2)
+    assert len(calls) == 1
+    pending = runtime._tick_task
+    for _ in range(1000):
+        runtime._on_tick(None)
+    assert pending is runtime._tick_task
+    assert len(calls) == 1
+    runtime.stop()
+    assert pending.cancelled() or pending.cancelling()
+    release.set()
+    await asyncio.gather(pending, return_exceptions=True)
+    assert runtime._tick_task is None
+    assert len(calls) == 1
+    runtime._on_tick(None)
+    assert len(calls) == 1
+
+
+async def test_late_executor_result_never_republishes_after_unload(hass, monkeypatch):
+    """An in-flight read-only planner cannot republish stale data on unload."""
+    controller = _entry(hass, ENTRY_CONTROLLER, "late", "Late")
+    runtime = V2ControllerRuntime(hass, controller)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    notifications = []
+
+    async def pending_result(*_args):
+        entered.set()
+        await release.wait()
+        return {
+            "status": "STALE",
+            "controller_uid": "late",
+            "advisory_only": True,
+            "physical_actuation_authorized": False,
+        }
+
+    monkeypatch.setattr(hass, "async_add_executor_job", pending_result)
+    runtime.subscribe(lambda: notifications.append(True))
+    task = asyncio.create_task(runtime.async_refresh())
+    await asyncio.wait_for(entered.wait(), timeout=2)
+    original = dict(runtime.snapshot)
+    runtime.stop()
+    release.set()
+    await task
+    assert runtime.snapshot == original
+    assert not notifications
