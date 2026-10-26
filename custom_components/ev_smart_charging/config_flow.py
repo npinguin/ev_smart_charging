@@ -43,7 +43,11 @@ from .v2 import (
     TYPES as V2_TYPES,
 )
 from .v2.flow import create as create_v2, V2OptionsFlow
-from .v2.catalog import details as v2_details, entries_of as v2_entries, check_proposed as v2_validate
+from .v2.catalog import (
+    details as v2_details,
+    entries_of as v2_entries,
+    check_proposed as v2_validate,
+)
 from .v2.migration import discover as discover_legacy, by_legacy_id, proposed_charger
 
 _LOGGER = logging.getLogger(__name__)
@@ -91,8 +95,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(
             step_id="user",
             menu_options=[
-                "v2_controller", "v2_vehicle", "v2_charger",
-                "v2_migrate", "legacy_local"
+                "v2_controller",
+                "v2_vehicle",
+                "v2_charger",
+                "v2_migrate",
+                "legacy_local",
             ],
         )
 
@@ -113,7 +120,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         candidates = {
             row["legacy_entry_id"]: row["name"]
-            for row in discover_legacy(self.hass) if not row["mapped"]
+            for row in discover_legacy(self.hass)
+            if not row["mapped"]
         }
         if not controllers:
             return self.async_abort(reason="create_controller_first")
@@ -137,11 +145,13 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_migrate_confirm()
         return self.async_show_form(
             step_id="v2_migrate",
-            data_schema=vol.Schema({
-                vol.Required("legacy_entry_id"): vol.In(candidates),
-                vol.Required("controller_uid"): vol.In(controllers),
-                vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("legacy_entry_id"): vol.In(candidates),
+                    vol.Required("controller_uid"): vol.In(controllers),
+                    vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+                }
+            ),
         )
 
     async def async_step_v2_migrate_confirm(self, user_input=None):
@@ -151,7 +161,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_v2_migration_source")
         source_id = selected["legacy_entry_id"]
         if source_id not in {
-            row["legacy_entry_id"] for row in discover_legacy(self.hass)
+            row["legacy_entry_id"]
+            for row in discover_legacy(self.hass)
             if not row["mapped"]
         }:
             return self.async_abort(reason="already_migrated")
@@ -174,7 +185,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         if user_input is not None and user_input.get("confirmed"):
             changes = {
-                key: value for key, value in user_input.items()
+                key: value
+                for key, value in user_input.items()
                 if key in defaults and value not in (None, "", 0)
             }
             candidate = proposed_charger(
@@ -188,9 +200,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except (ValueError, KeyError, TypeError):
                 return self.async_show_form(
                     step_id="v2_migrate_confirm",
-                    data_schema=vol.Schema({
-                        vol.Required("confirmed", default=False): cv.boolean,
-                    }),
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("confirmed", default=False): cv.boolean,
+                        }
+                    ),
                     errors={"base": "invalid_v2_configuration"},
                 )
             return self.async_create_entry(title=candidate["name"], data=candidate)
@@ -199,8 +213,12 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required("name", default=defaults["name"]): cv.string,
         }
         for field in (
-            "control_entity", "connected_entity", "charging_entity",
-            "power_entity", "energy_entity", "tariff_entity",
+            "control_entity",
+            "connected_entity",
+            "charging_entity",
+            "power_entity",
+            "energy_entity",
+            "tariff_entity",
         ):
             data_schema[vol.Optional(field, default=defaults[field])] = cv.string
         data_schema[vol.Optional("max_ac_kw", default=defaults["max_ac_kw"])] = vol.All(
@@ -211,7 +229,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Coerce(float), vol.Range(min=0, max=500)
         )
         return self.async_show_form(
-            step_id="v2_migrate_confirm", data_schema=vol.Schema(data_schema),
+            step_id="v2_migrate_confirm",
+            data_schema=vol.Schema(data_schema),
         )
 
     async def async_step_legacy_local(self, user_input=None):
