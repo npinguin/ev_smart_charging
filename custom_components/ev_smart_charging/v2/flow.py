@@ -12,7 +12,9 @@ from homeassistant.helpers import selector
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
 from .ownership import async_apply_charger_options
-from .ready_schedule import WEEKDAYS, READY_MODES, DEFAULT_READY_TIME
+from .ready_schedule import (
+    WEEKDAYS, READY_MODES, DEFAULT_READY_TIME, normalize_once_ready_by,
+)
 
 _STEPS = {
     ENTRY_VEHICLE: "v2_vehicle",
@@ -137,12 +139,38 @@ async def _schema(hass, kind, old):
     return vol.Schema(fields)
 
 
+def _normalize_vehicle_form(values, timezone_name, *, original=None):
+    """Persist mode explicitly and allow clearing individual weekly days."""
+    changed = dict(values)
+    original = original or {}
+    changed.setdefault(
+        "ready_mode",
+        original.get("ready_mode")
+        or ("once" if original.get("ready_by") else "daily"),
+    )
+    changed.setdefault("ready_time", original.get("ready_time", DEFAULT_READY_TIME))
+    if changed["ready_mode"] == "weekly":
+        # HA omits unchecked Optional day selectors. Their old persisted
+        # values must be shadowed with empty strings to deactivate those days.
+        for day in WEEKDAYS:
+            changed.setdefault(f"ready_{day}", "")
+    if changed["ready_mode"] == "once" and changed.get("ready_by"):
+        changed["ready_by"] = normalize_once_ready_by(
+            changed["ready_by"], timezone_name
+        )
+    return changed
+
+
 async def create(flow, kind, user_input=None):
     if kind == ENTRY_CHARGER and not entries_of(flow.hass, ENTRY_CONTROLLER):
         return flow.async_abort(reason="create_controller_first")
     if user_input is not None:
-        data = {MARKER: kind, "uid": uuid4().hex, **user_input}
         try:
+            if kind == ENTRY_VEHICLE:
+                user_input = _normalize_vehicle_form(
+                    user_input, flow.hass.config.time_zone
+                )
+            data = {MARKER: kind, "uid": uuid4().hex, **user_input}
             check_proposed(flow.hass, kind, data)
         except (ValueError, TypeError, KeyError):
             return flow.async_show_form(
@@ -170,6 +198,11 @@ class V2OptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             proposed = {**old, **user_input}
             try:
+                if kind == ENTRY_VEHICLE:
+                    user_input = _normalize_vehicle_form(
+                        user_input, self.hass.config.time_zone, original=old
+                    )
+                    proposed = {**old, **user_input}
                 if kind == ENTRY_CHARGER:
                     # The regular Options validator cannot transfer a Vehicle
                     # from another Charger. The shared durable transaction
