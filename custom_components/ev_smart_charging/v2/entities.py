@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_point_in_time
+from homeassistant.util import dt
 
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE
 from .catalog import details, model
 from .runtime import _connected, _number, _meter
+from .ready_schedule import next_ready_deadline, normalized_mode
 
 
 class V2Fact(SensorEntity):
@@ -22,6 +26,7 @@ class V2Fact(SensorEntity):
         self.entry = entry
         self.kind = kind
         self.key = key
+        self._ready_deadline_unsub = None
         self._attr_name = name
         self._attr_unique_id = f"{DOMAIN}_v2_{kind}_{entry.data['uid']}_{key}"
         if device_class is not None:
@@ -55,6 +60,9 @@ class V2Fact(SensorEntity):
                 self.async_on_remove(manager.subscribe(self._source_changed))
             return
         obj = model(self.entry)
+        if self.kind == ENTRY_VEHICLE and self.key == "next_ready_by":
+            self._schedule_ready_boundary()
+            self.async_on_remove(self._cancel_ready_boundary)
         refs = []
         if self.kind == ENTRY_VEHICLE and obj.soc_entity:
             refs.append(obj.soc_entity)
@@ -77,6 +85,29 @@ class V2Fact(SensorEntity):
                 )
             )
 
+    @callback
+    def _cancel_ready_boundary(self):
+        if self._ready_deadline_unsub is not None:
+            self._ready_deadline_unsub()
+            self._ready_deadline_unsub = None
+
+    @callback
+    def _ready_boundary(self, _now):
+        self._ready_deadline_unsub = None
+        self.async_write_ha_state()
+        self._schedule_ready_boundary()
+
+    @callback
+    def _schedule_ready_boundary(self):
+        self._cancel_ready_boundary()
+        ready = next_ready_deadline(
+            model(self.entry), dt.utcnow(), self.hass.config.time_zone
+        )
+        if ready is not None:
+            self._ready_deadline_unsub = async_track_point_in_time(
+                self.hass, self._ready_boundary, ready + timedelta(seconds=1)
+            )
+
     @property
     def native_value(self):
         obj = model(self.entry)
@@ -86,6 +117,12 @@ class V2Fact(SensorEntity):
                 0,
                 100,
             )
+            if self.key == "next_ready_by":
+                return next_ready_deadline(
+                    obj, dt.utcnow(), self.hass.config.time_zone
+                )
+            if self.key == "ready_mode":
+                return normalized_mode(obj)
             if self.key == "soc":
                 return soc
             if self.key == "target_soc":
@@ -158,6 +195,11 @@ def sensors_for_entry(entry):
                 "kWh",
             ),
             V2Fact(entry, kind, "source_quality", "Source quality"),
+            V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
+            V2Fact(
+                entry, kind, "next_ready_by", "Next Ready By",
+                SensorDeviceClass.TIMESTAMP,
+            ),
         ]
     if kind == ENTRY_CHARGER:
         return [
