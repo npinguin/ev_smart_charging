@@ -83,9 +83,9 @@ async def _schema(hass, kind, old):
             dict(
                 [
                     opt("vehicle_uid", vol.In(vehicles), ""),
-                    opt("control_entity", _entity("switch")),
-                    opt("connected_entity", _entity()),
-                    opt("charging_entity", _entity()),
+                    opt("control_entity", _entity(["switch", "input_boolean"])),
+                    opt("connected_entity", _entity(["sensor", "binary_sensor"])),
+                    opt("charging_entity", _entity(["sensor", "binary_sensor"])),
                     opt("power_entity", _entity("sensor")),
                     opt("energy_entity", _entity("sensor")),
                     opt("tariff_entity", _entity("sensor")),
