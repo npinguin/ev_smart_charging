@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
 from .ownership import async_apply_charger_options
+from .ready_schedule import WEEKDAYS, READY_MODES, DEFAULT_READY_TIME
 
 _STEPS = {
     ENTRY_VEHICLE: "v2_vehicle",
@@ -55,7 +56,13 @@ async def _schema(hass, kind, old):
                     opt("battery_kwh", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     opt("phase_count", vol.In([1, 2, 3])),
+                    opt("ready_mode", vol.In(READY_MODES),
+                        "once" if old.get("ready_by") and not old.get("ready_mode")
+                        else old.get("ready_mode", "daily")),
                     opt("ready_by", selector.DateTimeSelector()),
+                    opt("ready_time", selector.TimeSelector(), DEFAULT_READY_TIME),
+                    *[opt(f"ready_{weekday}", selector.TimeSelector())
+                      for weekday in WEEKDAYS],
                     opt("user_id", vol.In(await _users(hass)), ""),
                 ]
             )
