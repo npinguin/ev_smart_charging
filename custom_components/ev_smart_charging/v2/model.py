@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from math import isfinite
 from typing import Mapping
@@ -110,7 +110,13 @@ def validate_catalog(
     chargers: Mapping[str, Charger],
     controllers: Mapping[str, Controller],
 ) -> None:
-    """One controller and at most one vehicle per Charger; no duplicate writers."""
+    """Enforce exactly one Controller per Charger, max one Charger per Vehicle."""
+    if any(key != item.uid for key, item in vehicles.items()):
+        raise ConfigurationError("vehicle_key_mismatch")
+    if any(key != item.uid for key, item in chargers.items()):
+        raise ConfigurationError("charger_key_mismatch")
+    if any(key != item.uid for key, item in controllers.items()):
+        raise ConfigurationError("controller_key_mismatch")
     selected_vehicles: set[str] = set()
     control_sources: set[str] = set()
     for charger in chargers.values():
@@ -156,3 +162,55 @@ def ready_by_utc(value: str) -> datetime | None:
     if dt.utcoffset() is None:
         raise ConfigurationError("ready_by_timezone_required")
     return dt
+
+
+def move_vehicle(
+    vehicles: Mapping[str, Vehicle],
+    chargers: Mapping[str, Charger],
+    controllers: Mapping[str, Controller],
+    vehicle_uid: str,
+    destination_charger_uid: str | None,
+) -> dict[str, Charger]:
+    """Pure staged reassignment. Does not write HA entries or native EVSE commands.
+
+    The caller must persist the complete validated transition safely (or roll back).
+    Passing None detaches the Vehicle. No implicit Guest assignment.
+    """
+    if vehicle_uid not in vehicles:
+        raise ConfigurationError("missing_vehicle")
+    if destination_charger_uid is not None and destination_charger_uid not in chargers:
+        raise ConfigurationError("missing_charger")
+    proposed = {
+        uid: replace(charger, vehicle_uid="")
+        if charger.vehicle_uid == vehicle_uid else charger
+        for uid, charger in chargers.items()
+    }
+    if destination_charger_uid is not None:
+        proposed[destination_charger_uid] = replace(
+            proposed[destination_charger_uid], vehicle_uid=vehicle_uid
+        )
+        occupied = chargers[destination_charger_uid].vehicle_uid
+        if occupied and occupied != vehicle_uid:
+            raise ConfigurationError("destination_charger_occupied")
+    validate_catalog(vehicles, proposed, controllers)
+    return proposed
+
+
+def move_charger(
+    vehicles: Mapping[str, Vehicle],
+    chargers: Mapping[str, Charger],
+    controllers: Mapping[str, Controller],
+    charger_uid: str,
+    destination_controller_uid: str,
+) -> dict[str, Charger]:
+    """Pure staged controller reassignment; one controller UID in Charger master."""
+    if charger_uid not in chargers:
+        raise ConfigurationError("missing_charger")
+    if destination_controller_uid not in controllers:
+        raise ConfigurationError("missing_controller")
+    proposed = dict(chargers)
+    proposed[charger_uid] = replace(
+        chargers[charger_uid], controller_uid=destination_controller_uid
+    )
+    validate_catalog(vehicles, proposed, controllers)
+    return proposed
