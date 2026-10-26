@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 from custom_components.ev_smart_charging.v2.model import Charger, Controller
 from custom_components.ev_smart_charging.v2.runtime import _group_admissions
 
-
 NOW = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
 
 
 def setup(max_parallel=2, budget=10):
     ctrl = Controller(
-        uid="ctrl", name="Independent", max_parallel=max_parallel,
+        uid="ctrl",
+        name="Independent",
+        max_parallel=max_parallel,
         power_budget_kw=budget,
     )
     chargers = {
