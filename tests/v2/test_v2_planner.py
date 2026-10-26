@@ -223,3 +223,24 @@ def test_price_parser_rejects_invalid_end_alignment_and_excess_entries():
         }
     ] * (MAX_PRICE_QUARTERS + 1)
     assert parse_tariff_slots(too_many, "EUR", "EUR/kWh")[1] == "INVALID_TARIFF_CURVE"
+
+
+def test_incomplete_tomorrow_tariff_is_not_a_verified_complete_plan():
+    vehicles, controllers, chargers, observed = fixture_data()
+    # Ten 15-minute quarters do not cover a six-hour deadline.
+    observed["a"]["prices"] = observed["a"]["prices"][:1]
+    report = compile_advisory(controllers["c1"], chargers, vehicles, observed, NOW)
+    assert report["status"] != "PLANNED"
+    assert report["total_indicative_eur"] is None
+    assert report["loads"]["a"]["demand_status"] in (
+        "PROVISIONAL", "PENDING_PRICES", "INFEASIBLE",
+    )
+    assert report["physical_actuation_authorized"] is False
+
+
+def test_unassigned_load_does_not_fake_a_certified_group_total():
+    vehicles, controllers, chargers, observed = fixture_data()
+    result = compile_advisory(controllers["c1"], chargers, vehicles, observed, NOW)
+    assert result["excluded"]["empty"] == "NO_VEHICLE_ASSIGNED"
+    assert result["total_planned_kwh"] is None
+    assert result["known_planned_kwh"] >= 0
