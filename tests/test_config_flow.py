@@ -46,9 +46,15 @@ async def test_successful_config_flow(hass: HomeAssistant, bypass_validate_step_
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    # Check that the config flow shows the user form as the first step
-    assert result["type"] == FlowResultType.FORM  # From HA 2022.7
+    # The new-device menu still exposes the unchanged classic Local flow.
+    assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "user"
+    assert "legacy_local" in result["menu_options"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "legacy_local"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -73,9 +79,15 @@ async def test_unsuccessful_config_flow(hass: HomeAssistant):
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    # Check that the config flow shows the user form as the first step
-    assert result["type"] == FlowResultType.FORM
+    # Invalid original Local setup remains invalid after selecting Local.
+    assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "user"
+    assert "legacy_local" in result["menu_options"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "legacy_local"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -83,7 +95,7 @@ async def test_unsuccessful_config_flow(hass: HomeAssistant):
 
     # Check that the config flow is not complete and that there are errors
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "legacy_local"
     assert len(result["errors"]) > 0
 
 
@@ -96,6 +108,9 @@ async def test_successful_config_flow_option(
     # Initialize a config flow
     result: Dict[str, Any] = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -149,6 +164,9 @@ async def test_unsuccessful_config_flow_option(hass: HomeAssistant):
     # Initialize a config flow
     result: Dict[str, Any] = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
