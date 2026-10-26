@@ -270,13 +270,13 @@ def test_stale_native_switch_state_is_not_valid_physical_readback(hass, monkeypa
         state="off",
         last_reported=dt.utcnow() - timedelta(minutes=5),
     )
-    monkeypatch.setattr(hass.states, "get", lambda entity_id: stale)
+    monkeypatch.setattr(type(hass.states), "get", lambda _self, entity_id: stale)
     assert _current_readback(hass, "switch.native_charger") is None
     current = SimpleNamespace(
         state="off",
         last_reported=dt.utcnow(),
     )
-    monkeypatch.setattr(hass.states, "get", lambda entity_id: current)
+    monkeypatch.setattr(type(hass.states), "get", lambda _self, entity_id: current)
     assert _current_readback(hass, "switch.native_charger") is False
 
 
