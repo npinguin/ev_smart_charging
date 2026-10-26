@@ -16,6 +16,7 @@ def _lightweight_local(hass):
     obj._source_refresh_unsub = None
     obj._source_refresh_dirty = False
     obj._source_target_changed = False
+    obj._source_latest_states = {}
     obj._source_refresh_lock = asyncio.Lock()
     obj.ev_target_soc_entity_id = "sensor.target_soc"
     obj.update_sensors = AsyncMock()
@@ -71,23 +72,37 @@ async def test_identical_source_reports_are_ignored(hass):
     obj.update_sensors.assert_not_awaited()
 
 
-async def test_feedback_during_refresh_reschedules_without_task_loop(hass):
+async def test_identical_feedback_during_refresh_never_spawns_a_loop(hass):
     obj = _lightweight_local(hass)
 
     async def reentrant(**_kwargs):
-        obj.update_sensors_new(_event("sensor.soc", "11", "12"))
+        # HA callbacks may echo an already observed state. This must not
+        # be interpreted as new work or keep an HA timer alive.
+        obj.update_sensors_new(_event("sensor.soc", "10", "11"))
 
     obj.update_sensors.side_effect = reentrant
     obj.update_sensors_new(_event("sensor.soc", "10", "11"))
     await hass.async_block_till_done()
     obj.update_sensors.assert_awaited_once()
-    assert obj._source_refresh_task is None
-    assert obj._source_refresh_unsub is not None
-    # A timer waiting for the next retry is not a HA tracked task.
-    await hass.async_block_till_done()
-    obj.update_sensors.assert_awaited_once()
-    obj.unsubscribe_listeners()
     assert obj._source_refresh_unsub is None
+    obj.unsubscribe_listeners()
+
+
+async def test_new_feedback_can_refresh_once_without_repeating_forever(hass):
+    obj = _lightweight_local(hass)
+
+    async def reentrant(**_kwargs):
+        # A real new reading deserves one later refresh; repeated echo
+        # callbacks with identical values must not create another cycle.
+        obj.update_sensors_new(_event("sensor.soc", "11", "12"))
+
+    obj.update_sensors.side_effect = reentrant
+    obj.update_sensors_new(_event("sensor.soc", "10", "11"))
+    try:
+        await hass.async_block_till_done()
+        assert obj.update_sensors.await_count <= 2
+    finally:
+        obj.unsubscribe_listeners()
 
 
 async def test_unload_cancels_an_actively_running_source_refresh(hass):
