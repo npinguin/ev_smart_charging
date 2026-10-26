@@ -156,7 +156,7 @@ class NativeChargeWriter:
                 return "PHYSICAL_CABLE_NOT_CONFIRMED"
             if snapshot.get("source_quality", {}).get(self.charger.uid) != "VALID":
                 return "PRICE_UNVERIFIED"
-            if snapshot.get("budget_limited") and not actual_budget_certified:
+            if snapshot.get("cost_budget_eur") is not None and not actual_budget_certified:
                 return "BUDGET_UNCERTAIN"
             if measured_power_kw is None and not group_capacity_certified:
                 return "MEASURED_CAPACITY_UNAVAILABLE"
@@ -193,7 +193,7 @@ class NativeChargeWriter:
                     ),
                     timeout=8.0,
                 )
-            except (asyncio.TimeoutError, Exception):
+            except Exception:
                 _LOGGER.exception(
                     "V2 native command failed for %s", self.charger.uid
                 )
