@@ -18,6 +18,7 @@ from .model import ConfigurationError
 def legacy_chargers(hass):
     """Return real original Local Config Entries, not either Controller type."""
     return [
+        entry for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.data.get(MARKER) is None
     ]
 
