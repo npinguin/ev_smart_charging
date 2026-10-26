@@ -1,5 +1,6 @@
 """HA native executor: physically mocked, never a real EVSE service call."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -335,4 +336,75 @@ async def test_stale_plan_revokes_an_already_running_v2_evse(
         assert result == "SAFETY_STOP_STALE_PLAN"
         assert events == ["switch.native_charger"]
     finally:
+        await writer.async_close()
+
+
+async def test_charger_transfer_waits_for_in_flight_native_command(
+    hass, charger, monkeypatch
+):
+    """No ownership handoff may overlap a physical service call."""
+    from custom_components.ev_smart_charging.v2 import ownership
+
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def native_start(call):
+        entered.set()
+        await release.wait()
+        hass.states.async_set("switch.native_charger", "on")
+
+    hass.services.async_register("switch", "turn_on", native_start)
+    hass.states.async_set("switch.native_charger", "off")
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="controller_new",
+        data={MARKER: ENTRY_CONTROLLER, "uid": "new", "name": "Other"},
+        version=8,
+    )
+    other.add_to_hass(hass)
+
+    class Store:
+        pending = None
+
+        async def async_load(self):
+            return self.pending
+
+        async def async_save(self, value):
+            self.pending = value
+
+        async def async_remove(self):
+            self.pending = None
+
+    store = Store()
+    monkeypatch.setattr(ownership, "_store", lambda _hass: store)
+    writer = NativeChargeWriter(hass, charger, "main")
+    command = asyncio.create_task(
+        writer.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            group_capacity_certified=True,
+        )
+    )
+    moved = None
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        moved = asyncio.create_task(
+            ownership.async_move_charger(hass, "ch", "new")
+        )
+        await asyncio.sleep(0)
+        assert not moved.done()
+        # The native command completes under the same global lock as
+        # persistent ownership changes, so two owners cannot overlap.
+        release.set()
+        assert await command == "COMMAND_SENT_AWAITING_READBACK"
+        assert await moved is True
+        assert ownership.catalog(hass)[1]["ch"].controller_uid == "new"
+    finally:
+        release.set()
+        if moved and not moved.done():
+            moved.cancel()
+            await asyncio.gather(moved, return_exceptions=True)
+        if not command.done():
+            command.cancel()
+            await asyncio.gather(command, return_exceptions=True)
         await writer.async_close()
