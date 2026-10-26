@@ -391,9 +391,7 @@ async def test_charger_transfer_waits_for_in_flight_native_command(
     moved = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)
-        moved = asyncio.create_task(
-            ownership.async_move_charger(hass, "ch", "new")
-        )
+        moved = asyncio.create_task(ownership.async_move_charger(hass, "ch", "new"))
         await asyncio.sleep(0)
         assert not moved.done()
         # The native command completes under the same global lock as
