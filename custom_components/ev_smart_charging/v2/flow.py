@@ -125,6 +125,10 @@ async def _schema(hass, kind, old):
                     opt(
                         "max_current_a", vol.All(vol.Coerce(float), vol.Range(min=0.01))
                     ),
+                    opt(
+                        "nominal_phase_voltage_v",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.01)),
+                    ),
                 ]
             )
         )
