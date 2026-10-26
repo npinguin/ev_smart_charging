@@ -12,6 +12,8 @@ from homeassistant.helpers import selector
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
 
+_STEPS = {ENTRY_VEHICLE: "v2_vehicle", ENTRY_CHARGER: "v2_charger", ENTRY_CONTROLLER: "v2_controller"}
+
 
 def _entity(domain="sensor"):
     return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
@@ -129,13 +131,13 @@ async def create(flow, kind, user_input=None):
             check_proposed(flow.hass, kind, data)
         except (ValueError, TypeError, KeyError):
             return flow.async_show_form(
-                step_id=kind,
+                step_id=_STEPS[kind],
                 data_schema=await _schema(flow.hass, kind, user_input),
                 errors={"base": "invalid_v2_configuration"},
             )
         return flow.async_create_entry(title=data["name"], data=data)
     return flow.async_show_form(
-        step_id=kind,
+        step_id=_STEPS[kind],
         data_schema=await _schema(flow.hass, kind, {}),
     )
 
