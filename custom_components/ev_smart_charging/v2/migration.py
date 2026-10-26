@@ -18,7 +18,6 @@ from .model import ConfigurationError
 def legacy_chargers(hass):
     """Return real original Local Config Entries, not either Controller type."""
     return [
-        entry for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.data.get(MARKER) is None
     ]
 
@@ -77,9 +76,17 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
     # Vehicle association and electric tariff quality cannot be guessed.
     if overrides:
         safe = {
-            "name", "vehicle_uid", "connected_entity", "charging_entity",
-            "control_entity", "power_entity", "energy_entity", "tariff_entity",
-            "max_ac_kw", "phase_count", "max_current_a",
+            "name",
+            "vehicle_uid",
+            "connected_entity",
+            "charging_entity",
+            "control_entity",
+            "power_entity",
+            "energy_entity",
+            "tariff_entity",
+            "max_ac_kw",
+            "phase_count",
+            "max_current_a",
         }
         if set(overrides) - safe:
             raise ConfigurationError("unexpected_migration_override")
@@ -90,14 +97,14 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
 def discover(hass):
     """Idempotent candidates; already mapped Local entries aren't re-migrated."""
     mapped = {
-        details(e).get("legacy_entry_id")
-        for e in entries_of(hass, ENTRY_CHARGER)
+        details(e).get("legacy_entry_id") for e in entries_of(hass, ENTRY_CHARGER)
     }
     result = []
     for legacy in legacy_chargers(hass):
         candidate = proposed_charger(legacy, "")
         unresolved = [
-            field for field in ("control_entity", "connected_entity", "max_ac_kw")
+            field
+            for field in ("control_entity", "connected_entity", "max_ac_kw")
             if not candidate.get(field)
         ]
         if not candidate.get("tariff_entity"):
@@ -108,7 +115,8 @@ def discover(hass):
                 "name": candidate["name"],
                 "mapped": legacy.entry_id in mapped,
                 "suggested": {
-                    key: value for key, value in candidate.items()
+                    key: value
+                    for key, value in candidate.items()
                     if key not in (MARKER, "uid", "controller_uid", "vehicle_uid")
                 },
                 "requires_operator_mapping": unresolved,
