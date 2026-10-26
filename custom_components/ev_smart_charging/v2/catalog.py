@@ -44,7 +44,7 @@ def model(entry):
             user_id=data.get("user_id", ""),
             ready_by=data.get("ready_by", ""),
             ready_mode=data.get("ready_mode", ""),
-            ready_time=data.get("ready_time", "07:00"),
+            ready_time=data.get("ready_time", "08:00"),
             ready_weekly={
                 key: data[f"ready_{key}"]
                 for key in WEEKDAYS
