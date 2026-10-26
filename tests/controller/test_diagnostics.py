@@ -213,6 +213,9 @@ def test_local_execution_diagnostics_identifies_due_start_and_native_mismatch(ha
         switch_keep_on=False,
         auto_charging_state="off",
         charger_switch=SimpleNamespace(entity_id="switch.private_black"),
+        config_entry=SimpleNamespace(
+            options={"evsc_control_semantics": "charge_request"}
+        ),
         is_during_intialization=lambda: False,
     )
     hass.states.async_set("switch.private_black", "off")
@@ -433,3 +436,117 @@ async def test_unconfigured_integration_diagnostics_are_truthful_not_green(hass)
         )
     finally:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+
+
+def test_unplugged_enabled_wallbox_and_peblar_do_not_invent_charging(hass):
+    """Independent enable, connection, session and meter states."""
+    from datetime import timedelta
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.charger_observation import (
+        observe_charger,
+    )
+    from custom_components.ev_smart_charging.diagnostics import (
+        _local_execution_diagnostics,
+    )
+
+    now = dt.now()
+    for entity_id in ("switch.wallbox_white", "switch.peblar_outside"):
+        hass.states.async_set(entity_id, "on")
+        native = SimpleNamespace(
+            _charging_schedule=[
+                {
+                    "start": now + timedelta(hours=1),
+                    "end": now + timedelta(hours=2),
+                    "value": 0.5,
+                }
+            ],
+            sensor=SimpleNamespace(current_price=0.20),
+            ev_soc=63,
+            ev_target_soc=80,
+            number_min_soc=10,
+            max_price=0.25,
+            switch_active=True,
+            switch_ev_connected=False,
+            switch_apply_limit=True,
+            switch_low_price_charging=False,
+            switch_low_soc_charging=False,
+            switch_keep_on=False,
+            auto_charging_state="off",
+            charger_switch=SimpleNamespace(entity_id=entity_id),
+            config_entry=SimpleNamespace(
+                options={"evsc_control_semantics": "availability_enable"}
+            ),
+            is_during_intialization=lambda: False,
+        )
+        report = _local_execution_diagnostics(hass, native)
+        assert report["expected_on_by_legacy_rules"] is False
+        assert report["reconciliation_needed"] is None
+        assert (
+            report["reconciliation_status"]
+            == "not_applicable_availability_enable"
+        )
+        observed = observe_charger(
+            semantics="availability_enable",
+            control_state="on",
+            connected=False,
+            charge_feedback="off",
+            power_kw=0.0,
+        )
+        assert observed["connection_status"] == "disconnected"
+        assert observed["control_meaning"] == "charging_permitted"
+        assert observed["charging_status"] == "idle_measured"
+        assert observed["physical_charging_confirmed"] is False
+        assert observed["observations"] == []
+
+
+def test_mqtt_relay_and_unclassified_sources_report_facts_not_assumptions(hass):
+    from custom_components.ev_smart_charging.charger_observation import (
+        observe_charger,
+    )
+    from custom_components.ev_smart_charging.diagnostics import _source
+
+    hass.states.async_set("input_boolean.mqtt_plug", "on")
+    hass.states.async_set("sensor.charging", "idle")
+    control = _source(hass, "input_boolean.mqtt_plug", quantity="switch")
+    charging = _source(hass, "sensor.charging", quantity="charging")
+    assert charging["status"] == "valid"
+    assert charging["charging"] is False
+    observed = observe_charger(
+        semantics="power_relay",
+        control_state=control["state"],
+        connected=None,
+        charge_feedback="idle",
+        power_kw=0,
+    )
+    assert observed["connection_status"] == "unknown"
+    assert observed["control_meaning"] == "relay_power"
+    assert observed["charging_status"] == "idle_measured"
+    assert observed["physical_charging_confirmed"] is False
+    unknown = observe_charger(
+        semantics="unspecified",
+        control_state="on",
+        connected=False,
+        charge_feedback=None,
+        power_kw=None,
+    )
+    assert unknown["control_meaning"] == "unclassified_control"
+    assert unknown["charging_status"] == "unknown"
+    assert unknown["physical_charging_confirmed"] is None
+
+
+def test_real_power_disagreement_is_a_reportable_charging_issue():
+    from custom_components.ev_smart_charging.charger_observation import (
+        observe_charger,
+    )
+
+    observed = observe_charger(
+        semantics="availability_enable",
+        control_state="on",
+        connected=False,
+        charge_feedback="off",
+        power_kw=3.4,
+    )
+    assert observed["physical_charging_confirmed"] is True
+    assert observed["charging_status"] == "charging_measured"
+    assert "charging_sensor_power_disagree" in observed["observations"]
+    assert "reported_charging_without_connection" in observed["observations"]
