@@ -61,7 +61,7 @@ async def _recover_locked(hass):
     target_uid = pending["destination_uid"]
     vehicles, chargers, controllers = catalog(hass)
     # Recovery must never steal a destination occupied by another vehicle.
-    desired = move_vehicle(vehicles, chargers, controllers, vehicle_uid, target_uid)
+    move_vehicle(vehicles, chargers, controllers, vehicle_uid, target_uid)
     original_uid = pending.get("original_uid")
     changed = False
     if original_uid and original_uid in chargers and original_uid != target_uid:
@@ -71,9 +71,13 @@ async def _recover_locked(hass):
             changed = True
     if target_uid is not None:
         target = _entry_by_uid(hass, target_uid)
-        if details(target).get("vehicle_uid") != vehicle_uid:
-            _set_assignment(hass, target, vehicle_uid,
-                            extra_options=pending.get("destination_options"))
+        extra = pending.get("destination_options") or {}
+        if details(target).get("vehicle_uid") != vehicle_uid or any(
+            details(target).get(key) != value for key, value in extra.items()
+        ):
+            _set_assignment(
+                hass, target, vehicle_uid, extra_options=extra
+            )
             changed = True
     await store.async_remove()
     catalog(hass)
