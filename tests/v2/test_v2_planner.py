@@ -192,27 +192,34 @@ def test_effective_power_from_known_hardware_bounds_only():
 
 def test_corrupt_price_feed_cannot_hold_executor_with_unbounded_expansion():
     """A supplier sending a decade-long interval must fail before generating slots."""
-    overlong = [{
-        "start": NOW.isoformat(),
-        "end": (NOW + timedelta(days=3650)).isoformat(),
-        "effective_eur_per_kwh": 0.2,
-    }]
+    overlong = [
+        {
+            "start": NOW.isoformat(),
+            "end": (NOW + timedelta(days=3650)).isoformat(),
+            "effective_eur_per_kwh": 0.2,
+        }
+    ]
     slots, quality = parse_tariff_slots(overlong, "EUR", "EUR/kWh")
     assert slots == []
     assert quality == "INVALID_TARIFF_CURVE"
 
 
 def test_price_parser_rejects_invalid_end_alignment_and_excess_entries():
-    unaligned = [{
-        "start": NOW.isoformat(),
-        "end": (NOW + timedelta(minutes=20)).isoformat(),
-        "effective_eur_per_kwh": 0.2,
-    }]
+    unaligned = [
+        {
+            "start": NOW.isoformat(),
+            "end": (NOW + timedelta(minutes=20)).isoformat(),
+            "effective_eur_per_kwh": 0.2,
+        }
+    ]
     assert parse_tariff_slots(unaligned, "EUR", "EUR/kWh")[1] == "INVALID_TARIFF_CURVE"
     from custom_components.ev_smart_charging.v2.planning import MAX_PRICE_QUARTERS
-    too_many = [{
-        "start": NOW.isoformat(),
-        "end": (NOW + timedelta(minutes=15)).isoformat(),
-        "effective_eur_per_kwh": 0.2,
-    }] * (MAX_PRICE_QUARTERS + 1)
+
+    too_many = [
+        {
+            "start": NOW.isoformat(),
+            "end": (NOW + timedelta(minutes=15)).isoformat(),
+            "effective_eur_per_kwh": 0.2,
+        }
+    ] * (MAX_PRICE_QUARTERS + 1)
     assert parse_tariff_slots(too_many, "EUR", "EUR/kWh")[1] == "INVALID_TARIFF_CURVE"
