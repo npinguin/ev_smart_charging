@@ -10,6 +10,9 @@ jobs:
     name: Validate
     steps:
       - uses: "actions/checkout@v7"
+      - name: Compile every production and test Python module
+        run: |
+          python3 -m compileall -q custom_components/ev_smart_charging tests
 
       - name: HACS validation
         uses: "hacs/action@main"
