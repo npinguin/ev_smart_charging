@@ -1576,9 +1576,12 @@ class ChargeSupervisor:
                 return
             if cost_changed and self._cost_store is not None:
                 try:
-                    await self._cost_store.async_save(self._stored_costs())
+                    # HA coalesces frequent meter writes and flushes at its
+                    # final-write shutdown event. Ownership journals still
+                    # use immediate durable writes; only observations wait.
+                    self._cost_store.async_delay_save(self._stored_costs, 30)
                 except Exception:
-                    _LOGGER.exception("Cannot persist EVSC actual-cost ledger")
+                    _LOGGER.exception("Cannot queue EVSC actual-cost ledger save")
                     for ledger in self._actual_cost_ledgers.values():
                         ledger.complete = False
             if self._stopped:
