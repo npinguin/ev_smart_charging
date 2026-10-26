@@ -118,9 +118,7 @@ class V2Fact(SensorEntity):
                 100,
             )
             if self.key == "next_ready_by":
-                return next_ready_deadline(
-                    obj, dt.utcnow(), self.hass.config.time_zone
-                )
+                return next_ready_deadline(obj, dt.utcnow(), self.hass.config.time_zone)
             if self.key == "ready_mode":
                 return normalized_mode(obj)
             if self.key == "soc":
@@ -197,7 +195,10 @@ def sensors_for_entry(entry):
             V2Fact(entry, kind, "source_quality", "Source quality"),
             V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
             V2Fact(
-                entry, kind, "next_ready_by", "Next Ready By",
+                entry,
+                kind,
+                "next_ready_by",
+                "Next Ready By",
                 SensorDeviceClass.TIMESTAMP,
             ),
         ]
