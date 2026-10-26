@@ -18,7 +18,7 @@ from custom_components.ev_smart_charging.v2 import (
 from custom_components.ev_smart_charging.v2.catalog import catalog, details, model
 from custom_components.ev_smart_charging.v2.entities import sensors_for_entry
 from custom_components.ev_smart_charging.v2.runtime import (
-    V2ControllerRuntime, _number, _connected, read_inputs,
+    V2ControllerRuntime, _number, _connected, _meter, read_inputs,
 )
 
 
@@ -107,6 +107,16 @@ def test_invalid_numerics_are_unknown_not_zero(hass):
     hass.states.async_set("sensor.test_reading", "64")
     assert _number(hass.states.get("sensor.test_reading"), 0, 100) == 64.0
     assert _number(hass.states.get("sensor.test_reading"), 0, 50) is None
+
+
+def test_native_meter_units_are_explicit_and_normalized(hass):
+    hass.states.async_set("sensor.watts", "3200", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.wh", "650", {"unit_of_measurement": "Wh"})
+    assert _meter(hass.states.get("sensor.watts"), "power") == 3.2
+    assert _meter(hass.states.get("sensor.wh"), "energy") == 0.65
+    assert _meter(hass.states.get("sensor.watts"), "energy") is None
+    hass.states.async_set("sensor.watts", "unknown", {"unit_of_measurement": "W"})
+    assert _meter(hass.states.get("sensor.watts"), "power") is None
 
 
 def test_catalog_extracts_one_owner_and_vehicle_source(hass):
