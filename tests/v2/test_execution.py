@@ -381,14 +381,16 @@ async def test_charger_transfer_waits_for_in_flight_native_command(
     writer = NativeChargeWriter(hass, charger, "main")
     command = asyncio.create_task(
         writer.async_reconcile(
-            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=0,
             group_capacity_certified=True,
         )
     )
     moved = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)
-        moved = asyncio.create_task(
             ownership.async_move_charger(hass, "ch", "new")
         )
         await asyncio.sleep(0)
