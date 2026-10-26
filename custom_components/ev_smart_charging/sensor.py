@@ -335,16 +335,12 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
             "battery_capacity": ("capacity",),
             "battery_energy_current": ("current", "capacity", "soc"),
             "battery_energy_target": ("target", "capacity", "target_soc"),
-            "charging_required": (
-                "current", "target", "capacity", "soc", "target_soc"
-            ),
+            "charging_required": ("current", "target", "capacity", "soc", "target_soc"),
             "indicative_charging_cost": ("price", "soc", "target_soc"),
             "actual_charging_cost": ("price", "energy"),
         }
         ids = {
-            sources[name]
-            for name in dependencies[self._entity_key]
-            if sources[name]
+            sources[name] for name in dependencies[self._entity_key] if sources[name]
         }
         if ids:
             self.async_on_remove(
