@@ -106,6 +106,12 @@ class NativeChargeWriter:
         registered[source] = self._owner()
         return True
 
+    async def async_close(self):
+        """Wait for the in-flight native service call before releasing ownership."""
+        self._closed = True
+        async with self._lock:
+            self.close()
+
     def close(self):
         self._closed = True
         registered = self.hass.data.get(_WRITERS_KEY, {})
