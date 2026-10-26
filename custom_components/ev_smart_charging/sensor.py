@@ -23,6 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     """Setup sensor platform."""
     _LOGGER.debug("EVSmartCharging.sensor.py")
+    from .v2 import TYPES as V2_TYPES
+    if entry.data.get("__evsc_entry_type") in V2_TYPES:
+        from .v2.entities import sensors_for_entry
+        async_add_devices(sensors_for_entry(entry))
+        return
     if entry.data.get("__evsc_entry_type") == "charge_controller":
         from .controller.sensors import controller_sensors
         from .vehicle_sensors import vehicle_sensors
