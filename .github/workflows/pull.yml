@@ -4,6 +4,12 @@ on:
   pull_request:
   workflow_call:
 
+# A newer PR commit supersedes stale Python matrices; never cancel a
+# protected release workflow_call running on its exact publication commit.
+concurrency:
+  group: evsc-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   validate:
     runs-on: "ubuntu-latest"
