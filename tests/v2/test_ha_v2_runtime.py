@@ -356,7 +356,7 @@ async def test_late_executor_result_never_republishes_after_unload(hass, monkeyp
     assert not notifications
 
 
-def test_vehicle_next_ready_sensor_is_derived_from_calendar(hass):
+def test_vehicle_next_ready_sensor_is_derived_from_calendar(hass, monkeypatch):
     """Vehicle exposes the deadline; neither Controller nor Charger stores it."""
     from homeassistant.components.sensor import SensorDeviceClass
     from homeassistant.util import dt
@@ -366,7 +366,7 @@ def test_vehicle_next_ready_sensor_is_derived_from_calendar(hass):
     )
     from custom_components.ev_smart_charging.v2.catalog import model
 
-    hass.config.set_time_zone("Europe/Brussels")
+    monkeypatch.setattr(hass.config, "time_zone", "Europe/Brussels")
     entry = _entry(
         hass, ENTRY_VEHICLE, "calendar", "Work commuter",
         ready_mode="weekly", ready_mon="06:45",
