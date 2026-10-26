@@ -7,7 +7,8 @@
           "v2_controller": "Laadcontroller toevoegen (één planner)",
           "v2_vehicle": "Voertuig toevoegen",
           "v2_charger": "Laadpunt toevoegen",
-          "legacy_local": "Klassieke Local Smart Charger toevoegen"
+          "legacy_local": "Klassieke Local Smart Charger toevoegen",
+          "v2_migrate": "Bestaande Local-lader migreren"
         }
       },
       "legacy_local": {
@@ -62,6 +63,33 @@
           "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
           "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)"
         }
+      },
+      "v2_migrate": {
+        "title": "Selecteer de oorspronkelijke Local-lader en laadcontroller",
+        "data": {
+          "legacy_entry_id": "Bestaande Local-lader",
+          "controller_uid": "Nieuwe laadcontroller",
+          "vehicle_uid": "Voertuig toewijzen (optioneel)"
+        }
+      },
+      "v2_migrate_confirm": {
+        "title": "Controleer en bevestig V2-mapping zonder de Local-lader te wijzigen",
+        "data": {
+          "legacy_entry_id": "Bestaande Local-lader",
+          "controller_uid": "Nieuwe laadcontroller",
+          "vehicle_uid": "Voertuig toewijzen (optioneel)",
+          "confirmed": "Nieuwe V2-lader aanmaken (Local blijft actief)",
+          "name": "Nieuwe V2-ladernaam",
+          "control_entity": "Bestaande fysieke bediening",
+          "connected_entity": "Bron kabelverbinding",
+          "charging_entity": "Bron werkelijk laden",
+          "tariff_entity": "Gevalideerd effectief EUR/kWh tarief",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Sessiemeter energie",
+          "max_ac_kw": "Bekend maximaal AC-vermogen (kW)",
+          "phase_count": "Bekend aantal laadfasen",
+          "max_current_a": "Bekende maximale laadstroom (A)"
+        }
       }
     },
     "error": {
@@ -78,7 +106,10 @@
       "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
     },
     "abort": {
-      "create_controller_first": "Maak eerst een laadcontroller aan."
+      "create_controller_first": "Maak eerst een laadcontroller aan.",
+      "no_legacy_chargers_to_migrate": "Geen ongemigreerde Local-laders gevonden.",
+      "invalid_v2_migration_source": "Oorspronkelijke lader of laadcontroller ontbreekt.",
+      "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld."
     }
   },
   "options": {
