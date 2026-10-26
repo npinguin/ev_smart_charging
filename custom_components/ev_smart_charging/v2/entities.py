@@ -66,25 +66,23 @@ class V2Fact(SensorEntity):
         if self.kind == ENTRY_VEHICLE and self.key == "next_ready_by":
             self._schedule_ready_boundary()
             self.async_on_remove(self._cancel_ready_boundary)
-        refs = []
-        if self.kind == ENTRY_VEHICLE and obj.soc_entity:
-            refs.append(obj.soc_entity)
+        # Only subscribe to the native value actually displayed by this
+        # scalar. Static metadata never needs a source-event listener.
+        source = None
+        if self.kind == ENTRY_VEHICLE and self.key in (
+            "soc", "required_battery_kwh", "source_quality"
+        ):
+            source = obj.soc_entity
         elif self.kind == ENTRY_CHARGER:
-            refs.extend(
-                entity
-                for entity in (
-                    obj.connected_entity,
-                    obj.charging_entity,
-                    obj.power_entity,
-                    obj.energy_entity,
-                    obj.tariff_entity,
-                )
-                if entity
-            )
-        if refs:
+            source = {
+                "connected": obj.connected_entity,
+                "power_kw": obj.power_entity,
+                "energy_kwh": obj.energy_entity,
+            }.get(self.key)
+        if source:
             self.async_on_remove(
                 async_track_state_change_event(
-                    self.hass, sorted(set(refs)), self._source_changed
+                    self.hass, [source], self._source_changed
                 )
             )
 
