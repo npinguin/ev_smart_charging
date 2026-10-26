@@ -155,7 +155,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if entry.data.get(CONTROLLER_ENTRY_MARKER) in V2_TYPES:
         from .v2.catalog import model
         from .v2.runtime import V2ControllerRuntime
+        from .v2.ownership import async_recover_ownership
 
+        # Resume an interrupted detach-before-attach transfer before
+        # loading ANY independent V2 device or computing its plan.
+        await async_recover_ownership(hass)
         _register_v2_plan_service(hass)
         if entry.data[CONTROLLER_ENTRY_MARKER] == V2_CONTROLLER:
             obj = V2ControllerRuntime(hass, entry)
