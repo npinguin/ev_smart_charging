@@ -1,5 +1,7 @@
 # ADR — Mobility Light three-device ownership and phased controller migration
 
+> **SUPERSEDED FOR EVSC V2 TARGET ARCHITECTURE (2026-10-26):** See [ADR_EVSC_V2_OPERATIONAL_MVP.md](ADR_EVSC_V2_OPERATIONAL_MVP.md). The singleton Controller, Controller-held assignment ownership and staged feature restrictions below describe the earlier transitional design only. Existing rc.12 legacy compatibility and its P0 safety gate remain in force until actual replacement acceptance.
+
 **Decision date:** 25 October 2026
 **Status:** Accepted architecture; Phase 1 canonical ownership implemented, Phase 2 multi-day software planning implemented on Draft PR #6. Physical Coordinated cutover remains blocked by P0 #5.
 **Deployed baseline:** `v2.6.0-rc.8` is the last published guarded HA drop-in prerelease. The architecture changes above rc.8 are **not released**.
