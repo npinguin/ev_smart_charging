@@ -32,8 +32,29 @@
           "battery_kwh": "Usable battery capacity (kWh)",
           "max_ac_kw": "Maximum vehicle AC power (kW)",
           "phase_count": "Number of AC phases",
-          "ready_by": "Ready by (timezone aware)",
-          "user_id": "Associated Home Assistant user (optional)"
+          "ready_by": "Ready by — specific date and time (one-time)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)"
+        },
+        "data_description": {
+          "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline."
+        },
+        "data_select": {
+          "ready_mode": {
+            "options": {
+              "once": "One-time deadline",
+              "daily": "Every day at the same time",
+              "weekly": "Weekly calendar — choose days and individual times"
+            }
+          }
         }
       },
       "v2_charger": {
@@ -137,7 +158,7 @@
           "battery_kwh": "Usable battery capacity (kWh)",
           "max_ac_kw": "Maximum charger AC power (kW)",
           "phase_count": "Number of charging phases",
-          "ready_by": "Ready by (timezone aware)",
+          "ready_by": "Ready by — specific date and time (one-time)",
           "user_id": "Associated Home Assistant user (optional)",
           "controller_uid": "Charge Controller (required)",
           "vehicle_uid": "Assigned Vehicle (optional)",
@@ -147,7 +168,16 @@
           "power_entity": "Measured charging power sensor",
           "energy_entity": "Session energy sensor",
           "tariff_entity": "Validated effective EUR/kWh tariff sensor",
-          "max_current_a": "Maximum charging current (A)"
+          "max_current_a": "Maximum charging current (A)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)"
         },
         "menu_options": {
           "policy": "Charge Controller policy",
