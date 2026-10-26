@@ -1590,9 +1590,7 @@ class ChargeSupervisor:
                     # Schedule once per write window. Repeated delay_save calls
                     # would keep moving HA's deadline during continuous meter
                     # updates and could postpone persistence indefinitely.
-                    self._cost_store.async_delay_save(
-                        self._cost_snapshot_for_write, 30
-                    )
+                    self._cost_store.async_delay_save(self._cost_snapshot_for_write, 30)
                     self._cost_save_pending = True
                 except Exception:
                     _LOGGER.exception("Cannot queue EVSC actual-cost ledger save")
