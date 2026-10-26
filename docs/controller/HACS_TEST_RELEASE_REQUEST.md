@@ -1,23 +1,20 @@
-# Explicit guarded HACS test release request — v2.6.0-rc.13
+# HACS guarded software stability prerelease — v2.6.0-rc.14
 
-Requested by the EV Smart Charging product owner (2026-10-26): produce the next HACS build including Vehicle Ready By calendar and the V2 operational refactor.
+Product owner requested continuing from rc.13 to a new HACS build with the deep-dive eventloop, source-event, polling and storage fixes. This is an **explicit test prerelease request**, not automatic stable promotion.
 
-## Exact-source publication gate — required
+## Release contract (must pass on this exact commit)
 
-Run the full CI workflow on this **exact release-request commit**. Publish v2.6.0-rc.13 as GitHub/HACS **prerelease only** if and only if every gate passes:
+Run the repository's full test workflow through `.github/workflows/hacs-test-prerelease.yml`. Create exactly one GitHub prerelease tag `v2.6.0-rc.14` **only if every job passes**:
 
-- Python 3.11, 3.12, 3.13, 3.14 full pytest and >=90% coverage
-- HACS/Hassfest, complete Python compilation, Black style
-- Original v8 Local Charger operation and Config Entries unchanged
-- Controller lifecycle, HA event-loop/thread safety, 1,000-event storm and physical-command ownership tests
-- V2 once/daily/weekly Ready By (default 08:00, HA time zone and DST), multiple independent Controllers and exclusive assignments
-- Isolated native adapters and group kW/current admission regression
-- No retag, overwrite, main merge, or stable-release promotion
+- HACS, Hassfest, complete Python compile, Black.
+- Controller behavior, legacy Local and upstream baseline regressions.
+- Full pytest Python 3.11, 3.12, 3.13 and 3.14 with >=90% coverage.
+- Storm/stability regressions: 2,000 Local source events, bounded huge tariff feed, 30s non-starving cost persistence, reload/unload, native HA source isolation and prevention of V2 self-feedback.
+- V2 Vehicle Ready By once/daily/weekly and all rc.13 functionality.
+- No change to the four legacy Local Config Entries, entity IDs, charger ownership or native charging semantics.
 
-## Acceptance contract
+## Field contract
 
-Install only on a backed-up HA instance following docs/engineering/V2_RC13_TEST_ACCEPTANCE.md. The current V2 physical coordinated hardware admission has not passed the Peblar P0 #5 real-device check, so the test release **must keep** its hard physical safety hold. A current synthetic green test never qualifies physical operation. This package is for software acceptance and future field qualification and is not described as a finished operational or tech-debt-free production release.
+Read `docs/engineering/V2_RC14_STABILITY_ACCEPTANCE.md`. Preserve all existing Local behavior. Physical V2 Coordinated start/stop remains P0 locked without live Peblar/Wallbox sign-off; CI alone cannot certify real HA eventloop latency or physical charging. Use a full backup, install only for staging and retain rc.13 rollback. No merge/main promotion or overwrite of an existing release is permitted.
 
-The strict session-euro-budget physical control and final Local→V2 physical cutover require separate acceptance and are not falsely marked complete.
-
-**Publish only after all named exact-commit software gates pass.**
+**If any exact-head job fails or is still queued, do not create a release.**
