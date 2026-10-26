@@ -37,6 +37,7 @@ from .const import (
     PLATFORMS,
 )
 from .controller.runtime import ChargeSupervisor
+from .v2 import ENTRY_CONTROLLER as V2_CONTROLLER, TYPES as V2_TYPES
 
 CONTROLLER_ENTRY_TYPE = "charge_controller"
 CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
@@ -88,6 +89,36 @@ def _register_charge_plan_service(hass: HomeAssistant) -> None:
     )
 
 
+def _register_v2_plan_service(hass: HomeAssistant) -> None:
+    """Read one specifically requested V2 Controller planner, never the first."""
+    if SupportsResponse is None or hass.services.has_service(DOMAIN, "get_v2_charge_plan"):
+        return
+
+    async def get_v2_charge_plan(call):
+        from .v2.runtime import V2ControllerRuntime
+
+        controller_uid = call.data.get("controller_uid")
+        if not isinstance(controller_uid, str) or not controller_uid:
+            return {"status": "CONTROLLER_UID_REQUIRED", "advisory_only": True}
+        matched = [
+            obj for obj in hass.data.get(DOMAIN, {}).values()
+            if isinstance(obj, V2ControllerRuntime)
+            and obj.entry.data.get("uid") == controller_uid
+        ]
+        if len(matched) != 1:
+            return {
+                "status": "CONTROLLER_NOT_FOUND",
+                "controller_uid": controller_uid,
+                "advisory_only": True,
+            }
+        return matched[0].snapshot
+
+    hass.services.async_register(
+        DOMAIN, "get_v2_charge_plan", get_v2_charge_plan,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+
 def _queue_controller_bootstrap(hass: HomeAssistant) -> None:
     """Schedule import outside platform forwarding, at most once per HA run."""
     bootstrap_marker = f"{DOMAIN}_controller_bootstrap_queued"
@@ -115,6 +146,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         _LOGGER.debug(STARTUP_MESSAGE)
 
     _register_charge_plan_service(hass)
+
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) in V2_TYPES:
+        from .v2.catalog import model
+        from .v2.runtime import V2ControllerRuntime
+
+        _register_v2_plan_service(hass)
+        if entry.data[CONTROLLER_ENTRY_MARKER] == V2_CONTROLLER:
+            obj = V2ControllerRuntime(hass, entry)
+        else:
+            obj = model(entry)
+        hass.data[DOMAIN][entry.entry_id] = obj
+        try:
+            if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
+                await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+            else:
+                await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+            if isinstance(obj, V2ControllerRuntime):
+                await obj.async_start()
+        except Exception:
+            if isinstance(obj, V2ControllerRuntime):
+                obj.stop()
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            raise
+        return True
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
         from .vehicle_sensors import cleanup_orphan_vehicle_registry
@@ -194,6 +250,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     _LOGGER.debug("async_unload_entry")
+    if entry.data.get(CONTROLLER_ENTRY_MARKER) in V2_TYPES:
+        from .v2.runtime import V2ControllerRuntime
+
+        unloaded = await hass.config_entries.async_forward_entry_unload(entry, Platform.SENSOR)
+        if unloaded:
+            obj = hass.data[DOMAIN].pop(entry.entry_id, None)
+            if isinstance(obj, V2ControllerRuntime):
+                obj.stop()
+        return unloaded
+
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
