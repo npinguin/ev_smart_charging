@@ -47,6 +47,8 @@ PEAK_RESTART_MARGIN_KW = 0.5
 EVENT_REFRESH_DEBOUNCE_SECONDS = 0.2
 EVENT_REFRESH_COOLDOWN_SECONDS = 1.0
 CONTROLLER_POLL_SECONDS = 5
+# Reject implausible supplier curves before expanding intervals on the HA loop.
+MAX_EFFECTIVE_PRICE_QUARTERS = 14 * 96 + 8
 
 
 def controller_entry(hass):
@@ -534,18 +536,15 @@ class ChargeSupervisor:
                         or source.attributes.get("currency", "EUR") != "EUR"
                     ):
                         raise ValueError("Effective tariff currency unsupported")
-                    stream = [
-                        {
-                            "start": slot["start"],
-                            "end": slot["end"],
-                            "value": slot["effective_eur_per_kwh"],
-                        }
-                        for slot in source.attributes.get("price_slots", ())
-                    ]
+                    stream = source.attributes.get("price_slots", ())
+                    rate_key = "effective_eur_per_kwh"
                 else:
                     stream = raw.get_raw() if raw is not None else []
+                    rate_key = "value"
+                if not isinstance(stream, (list, tuple)) or len(stream) > MAX_EFFECTIVE_PRICE_QUARTERS:
+                    raise ValueError("Too many effective tariff intervals")
                 for item in stream:
-                    value = _number(item["value"])
+                    value = _number(item[rate_key])
                     if value is None:
                         raise ValueError("Invalid effective energy rate")
                     start = item["start"]
@@ -561,8 +560,9 @@ class ChargeSupervisor:
                         or start.second
                         or start.microsecond
                         or (end - start) % QUARTER
+                        or (end - start) // QUARTER > MAX_EFFECTIVE_PRICE_QUARTERS - len(slots)
                     ):
-                        raise ValueError("Unaligned effective tariff interval")
+                        raise ValueError("Unaligned or oversized effective tariff interval")
                     while start < end:
                         following = start + QUARTER
                         slots.append(PriceSlot(start, following, value))
