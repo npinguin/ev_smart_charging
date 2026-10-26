@@ -46,15 +46,6 @@
         },
         "data_description": {
           "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline."
-        },
-        "data_select": {
-          "ready_mode": {
-            "options": {
-              "once": "One-time deadline",
-              "daily": "Every day at the same time",
-              "weekly": "Weekly calendar — choose days and individual times"
-            }
-          }
         }
       },
       "v2_charger": {
