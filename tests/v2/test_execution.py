@@ -258,3 +258,23 @@ async def test_reassignment_prevents_old_controller_native_service(
         )
     finally:
         writer.close()
+
+
+def test_stale_native_switch_state_is_not_valid_physical_readback(hass, monkeypatch):
+    """Replayed HA switch state cannot establish current physical authority."""
+    from types import SimpleNamespace
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.v2.execution import _current_readback
+
+    stale = SimpleNamespace(
+        state="off",
+        last_reported=dt.utcnow() - timedelta(minutes=5),
+    )
+    monkeypatch.setattr(hass.states, "get", lambda entity_id: stale)
+    assert _current_readback(hass, "switch.native_charger") is None
+    current = SimpleNamespace(
+        state="off",
+        last_reported=dt.utcnow(),
+    )
+    monkeypatch.setattr(hass.states, "get", lambda entity_id: current)
+    assert _current_readback(hass, "switch.native_charger") is False
