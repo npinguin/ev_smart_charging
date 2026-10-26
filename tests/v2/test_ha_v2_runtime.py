@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.device_registry import async_get as device_registry
 from homeassistant.helpers.entity_registry import async_get as entity_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -188,7 +189,8 @@ async def test_v2_ha_managed_setup_exposes_devices_and_keeps_legacy_separate(has
     c1, c2, vehicle, charger = _setup_entries(hass)
     try:
         for entry in (c1, c2, vehicle, charger):
-            assert await hass.config_entries.async_setup(entry.entry_id)
+            if entry.state != ConfigEntryState.LOADED:
+                assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
         native_devices = device_registry(hass)
