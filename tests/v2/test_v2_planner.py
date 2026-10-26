@@ -20,20 +20,27 @@ from custom_components.ev_smart_charging.v2.planning import (
     parse_tariff_slots,
 )
 
-
 NOW = datetime(2026, 10, 26, 10, 0, tzinfo=timezone.utc)
 
 
 def fixture_data():
     vehicles = {
         "v1": Vehicle(
-            uid="v1", name="First", soc_entity="sensor.first",
-            target_soc=80, battery_kwh=40, max_ac_kw=7.4,
+            uid="v1",
+            name="First",
+            soc_entity="sensor.first",
+            target_soc=80,
+            battery_kwh=40,
+            max_ac_kw=7.4,
             ready_by="2026-10-26T16:00:00+00:00",
         ),
         "v2": Vehicle(
-            uid="v2", name="Second", soc_entity="sensor.second",
-            target_soc=80, battery_kwh=60, max_ac_kw=11,
+            uid="v2",
+            name="Second",
+            soc_entity="sensor.second",
+            target_soc=80,
+            battery_kwh=60,
+            max_ac_kw=11,
             ready_by="2026-10-26T18:00:00+00:00",
         ),
     }
@@ -43,24 +50,40 @@ def fixture_data():
     }
     chargers = {
         "a": Charger(
-            uid="a", name="Garage A", controller_uid="c1",
-            vehicle_uid="v1", max_ac_kw=7.4, phase_count=1, max_current_a=32,
+            uid="a",
+            name="Garage A",
+            controller_uid="c1",
+            vehicle_uid="v1",
+            max_ac_kw=7.4,
+            phase_count=1,
+            max_current_a=32,
         ),
         "b": Charger(
-            uid="b", name="Garage B", controller_uid="c2",
-            vehicle_uid="v2", max_ac_kw=11, phase_count=3, max_current_a=16,
+            uid="b",
+            name="Garage B",
+            controller_uid="c2",
+            vehicle_uid="v2",
+            max_ac_kw=11,
+            phase_count=3,
+            max_current_a=16,
         ),
         "empty": Charger(uid="empty", name="Empty", controller_uid="c1"),
     }
     slots = [
-        PriceSlot(NOW + i * timedelta(minutes=15),
-                  NOW + (i+1) * timedelta(minutes=15), 0.15)
+        PriceSlot(
+            NOW + i * timedelta(minutes=15), NOW + (i + 1) * timedelta(minutes=15), 0.15
+        )
         for i in range(40)
     ]
     observed = {
         "a": {"soc": 75, "connected": True, "prices": slots, "tariff_quality": "VALID"},
         "b": {"soc": 77, "connected": True, "prices": slots, "tariff_quality": "VALID"},
-        "empty": {"soc": None, "connected": False, "prices": [], "tariff_quality": "UNKNOWN"},
+        "empty": {
+            "soc": None,
+            "connected": False,
+            "prices": [],
+            "tariff_quality": "UNKNOWN",
+        },
     }
     return vehicles, controllers, chargers, observed
 
@@ -96,7 +119,9 @@ def test_assigned_but_unplugged_vehicle_has_no_charge_permission():
 
 def test_missing_power_is_not_replaced_with_zero():
     vehicles, controllers, chargers, observations = fixture_data()
-    chargers["a"] = replace(chargers["a"], max_ac_kw=None, phase_count=None, max_current_a=None)
+    chargers["a"] = replace(
+        chargers["a"], max_ac_kw=None, phase_count=None, max_current_a=None
+    )
     vehicles["v1"] = replace(vehicles["v1"], max_ac_kw=None)
     result = compile_advisory(controllers["c1"], chargers, vehicles, observations, NOW)
     assert result["excluded"]["a"] == "CHARGE_POWER_UNKNOWN"
@@ -133,17 +158,22 @@ def test_unknown_tariff_quality_does_not_claim_complete_money():
 
 
 def test_tariff_parser_validates_currency_timezone_and_overlaps():
-    valid = [{
-        "start": NOW.isoformat(),
-        "end": (NOW + timedelta(hours=1)).isoformat(),
-        "effective_eur_per_kwh": 0.2,
-    }]
+    valid = [
+        {
+            "start": NOW.isoformat(),
+            "end": (NOW + timedelta(hours=1)).isoformat(),
+            "effective_eur_per_kwh": 0.2,
+        }
+    ]
     slots, status = parse_tariff_slots(valid, "EUR", "EUR/kWh")
     assert status == "VALID"
     assert len(slots) == 4
     assert parse_tariff_slots(valid, "USD", "EUR/kWh")[1] == "INVALID_TARIFF_UNIT"
     assert parse_tariff_slots([], "EUR", "EUR/kWh")[1] == "PRICE_SLOTS_UNAVAILABLE"
-    assert parse_tariff_slots([valid[0], valid[0]], "EUR", "EUR/kWh")[1] == "INVALID_TARIFF_CURVE"
+    assert (
+        parse_tariff_slots([valid[0], valid[0]], "EUR", "EUR/kWh")[1]
+        == "INVALID_TARIFF_CURVE"
+    )
     naive = [{**valid[0], "start": "2026-10-26T10:00:00"}]
     assert parse_tariff_slots(naive, "EUR", "EUR/kWh")[1] == "INVALID_TARIFF_CURVE"
     invalid = [{**valid[0], "effective_eur_per_kwh": "nan"}]
