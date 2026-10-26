@@ -12,7 +12,7 @@ def test_charge_port_is_agnostic_to_vendor_and_device_name():
     for entity in ("switch.garage", "switch.some_other_installation", "input_boolean.mock_ev"):
         port = resolve_control_port(entity)
         assert port is not None
-            assert port.supports(entity)
+        assert port.supports(entity)
     for invalid in ("", "switch", "sensor.soc", "number.current", "switch."):
         assert resolve_control_port(invalid) is None
 
