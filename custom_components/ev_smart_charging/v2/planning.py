@@ -15,7 +15,8 @@ from ..controller.planner import (
     PriceSlot,
     build_plan,
 )
-from .model import Charger, Controller, Vehicle, effective_charge_kw, ready_by_utc
+from .model import Charger, Controller, Vehicle, effective_charge_kw
+from .ready_schedule import next_ready_deadline
 
 QUARTER = timedelta(minutes=15)
 # Bound supplier-provided slot data before expanding intervals. This also
@@ -76,8 +77,9 @@ def compile_advisory(
     vehicles: dict[str, Vehicle],
     observed: dict[str, dict],
     now: datetime,
+    timezone_name: str = "UTC",
 ):
-    """Build an evidence-qualified, NON-ACTUATING plan for one controller."""
+    """Build an evidence-qualified plan, resolving Vehicle weekly deadlines."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("aware time required")
     now = now.astimezone(timezone.utc)
@@ -110,8 +112,13 @@ def compile_advisory(
         if inputs.get("connected") is not True:
             excluded[charger.uid] = "PHYSICAL_CONNECTION_NOT_CONFIRMED"
             continue
-        ready_by = ready_by_utc(vehicle.ready_by) or horizon_end
-        ready_by = min(ready_by.astimezone(timezone.utc), horizon_end)
+        ready_by = next_ready_deadline(vehicle, now, timezone_name)
+        if ready_by is None:
+            excluded[charger.uid] = "READY_BY_EXPIRED"
+            continue
+        # Keep the real future deadline, even if today's known prices
+        # only cover part of it. Never manufacture an earlier deadline
+        # by clamping it to the Controller's price horizon.
         req = ChargingLoadRequest(
             id=charger.uid,
             mode="coordinated",
@@ -193,6 +200,7 @@ def compile_advisory(
         )
         loads[req.id] = {
             "vehicle_uid": chargers[req.id].vehicle_uid,
+            "next_ready_by": req.ready_by.isoformat(),
             "required_battery_kwh": req.required_battery_kwh,
             "demand_status": planning_results[req.id].status,
             "remaining_battery_kwh": planning_results[req.id].remaining_battery_kwh,
