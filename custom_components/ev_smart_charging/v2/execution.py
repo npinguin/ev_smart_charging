@@ -17,7 +17,7 @@ from ..const import DOMAIN
 from ..controller import safety
 from .model import Charger
 from .catalog import catalog
-from .ownership import _lock as ownership_lock
+from .ownership import control_lock
 from .adapters.home_assistant import resolve_control_port
 from .adapters.legacy_local import original_local_writer_active
 from .ports import ChargeControlPort
@@ -162,9 +162,9 @@ class NativeChargeWriter:
             wants_on = False
 
         async with self._lock:
-            # Serialize native physical ownership with cross-entry reassignment.
-            # An Options transfer cannot interleave an in-flight native command.
-            async with ownership_lock(self.hass):
+            # Only this Charger's configuration handoff waits for its
+            # in-flight native command; unrelated Chargers remain responsive.
+            async with control_lock(self.hass, self.charger.uid):
                 if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
                     return "WRITER_CLOSED_OR_SAFETY_HOLD"
                 if not self._acquire():
