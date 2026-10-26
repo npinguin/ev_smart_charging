@@ -328,7 +328,7 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
             "current": options.get("evsc_current_energy_entity"),
             "target": options.get("evsc_target_energy_entity"),
             "price": options.get("evsc_effective_price_entity")
-            or self.coordinator.price_entity_id,
+            or getattr(self.coordinator, "price_entity_id", None),
         }
         dependencies = {
             "current_charging_power": ("power",),
