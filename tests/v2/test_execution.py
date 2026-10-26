@@ -489,7 +489,11 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
                 group_capacity_certified=True,
             )
         )
-        await asyncio.wait_for(entered_b.wait(), timeout=2)
+        try:
+            await asyncio.wait_for(entered_b.wait(), timeout=2)
+        except TimeoutError:
+            assert not b.done(), f"Independent writer denied before port: {b.result()}"
+            raise
         assert await b == "COMMAND_SENT_AWAITING_READBACK"
         assert not a.done()
     finally:
