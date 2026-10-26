@@ -32,8 +32,29 @@
           "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
           "max_ac_kw": "Maximaal AC-laadvermogen voertuig (kW)",
           "phase_count": "Aantal AC-fasen",
-          "ready_by": "Gereed tegen (met tijdzone)",
-          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)"
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)"
+        },
+        "data_description": {
+          "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline."
+        },
+        "data_select": {
+          "ready_mode": {
+            "options": {
+              "once": "Eenmalig tegen datum en tijd",
+              "daily": "Elke dag hetzelfde tijdstip",
+              "weekly": "Weekkalender met specifieke dagen en tijdstippen"
+            }
+          }
         }
       },
       "v2_charger": {
@@ -135,7 +156,7 @@
           "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
           "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
           "phase_count": "Aantal laadfasen",
-          "ready_by": "Gereed tegen (met tijdzone)",
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
           "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
           "controller_uid": "Laadcontroller (verplicht)",
           "vehicle_uid": "Toegewezen voertuig (optioneel)",
@@ -145,7 +166,16 @@
           "power_entity": "Gemeten laadvermogen",
           "energy_entity": "Sessiemeter energie",
           "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
-          "max_current_a": "Maximale laadstroom (A)"
+          "max_current_a": "Maximale laadstroom (A)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)"
         },
         "menu_options": {
           "link_chargers": "Laadpunten koppelen"
