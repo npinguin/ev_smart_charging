@@ -49,11 +49,12 @@ async def test_individual_source_listener_runs_in_home_assistant_event_loop(hass
 
         hass.states.async_set("sensor.ev_soc", "28", {"unit_of_measurement": "%"})
         await hass.async_block_till_done()
-        assert fact.async_write_ha_state.call_count == 2
+        # A charging-power scalar must not republish on unrelated SoC events.
+        assert fact.async_write_ha_state.call_count == 1
     finally:
         await fact.async_remove()
 
     # A removed/reloaded entity cannot leave behind an event listener.
     hass.states.async_set("sensor.native_power", "3.5")
     await hass.async_block_till_done()
-    assert fact.async_write_ha_state.call_count == 2
+    assert fact.async_write_ha_state.call_count == 1
