@@ -40,7 +40,8 @@ def _store(hass):
 
 def _entry_by_uid(hass, uid):
     matched = [
-        entry for entry in entries_of(hass, ENTRY_CHARGER)
+        entry
+        for entry in entries_of(hass, ENTRY_CHARGER)
         if entry.data.get("uid") == uid
     ]
     if len(matched) != 1:
@@ -52,9 +53,7 @@ def _write_charger(hass, entry, options):
     # Immutable source identity and type can never be changed via Options.
     if "uid" in options or "__evsc_entry_type" in options:
         raise ConfigurationError("immutable_identity_update")
-    hass.config_entries.async_update_entry(
-        entry, options={**entry.options, **options}
-    )
+    hass.config_entries.async_update_entry(entry, options={**entry.options, **options})
 
 
 def _preview_target(hass, target_uid, options):
@@ -77,16 +76,15 @@ def _preview_target(hass, target_uid, options):
         raise ConfigurationError("missing_vehicle")
     source_uid = next(
         (
-            uid for uid, charger in chargers.items()
+            uid
+            for uid, charger in chargers.items()
             if uid != target_uid and charger.vehicle_uid == new_vehicle
         ),
         None,
     )
     proposed = dict(chargers)
     if source_uid is not None:
-        proposed[source_uid] = replace(
-            proposed[source_uid], vehicle_uid=""
-        )
+        proposed[source_uid] = replace(proposed[source_uid], vehicle_uid="")
     proposed[target_uid] = candidate
     validate_catalog(vehicles, proposed, controllers)
     return source_uid, old_vehicle, new_vehicle
@@ -156,9 +154,7 @@ async def async_apply_charger_options(hass, charger_uid, changes):
     async with _lock(hass):
         await _recover_locked(hass)
         destination = _entry_by_uid(hass, charger_uid)
-        source_uid, old_vehicle, requested = _preview_target(
-            hass, charger_uid, changes
-        )
+        source_uid, old_vehicle, requested = _preview_target(hass, charger_uid, changes)
         options = {**destination.options, **changes}
         # Persist only options (not Config Entry immutable source fields).
         options.pop("uid", None)
