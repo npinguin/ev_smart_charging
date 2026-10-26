@@ -202,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             entry.async_on_unload(entry.add_update_listener(async_reload_entry))
             await hass.data[DOMAIN][entry.entry_id].async_start()
         except Exception:
+            hass.data[DOMAIN][entry.entry_id].async_stop()
             hass.data[DOMAIN].pop(entry.entry_id, None)
             raise
         return True
@@ -281,7 +282,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, Platform.SENSOR
         )
         if unloaded:
-            hass.data[DOMAIN][entry.entry_id].async_stop()
+            manager = hass.data[DOMAIN][entry.entry_id]
+            manager.async_stop()
+            await manager.async_flush_costs()
             hass.data[DOMAIN].pop(entry.entry_id, None)
         return unloaded
 
