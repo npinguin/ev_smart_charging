@@ -60,14 +60,21 @@ class V2Fact(SensorEntity):
             refs.append(obj.soc_entity)
         elif self.kind == ENTRY_CHARGER:
             refs.extend(
-                entity for entity in (
-                    obj.connected_entity, obj.charging_entity,
-                    obj.power_entity, obj.energy_entity, obj.tariff_entity
-                ) if entity
+                entity
+                for entity in (
+                    obj.connected_entity,
+                    obj.charging_entity,
+                    obj.power_entity,
+                    obj.energy_entity,
+                    obj.tariff_entity,
+                )
+                if entity
             )
         if refs:
             self.async_on_remove(
-                async_track_state_change_event(self.hass, sorted(set(refs)), self._source_changed)
+                async_track_state_change_event(
+                    self.hass, sorted(set(refs)), self._source_changed
+                )
             )
 
     @property
@@ -76,7 +83,8 @@ class V2Fact(SensorEntity):
         if self.kind == ENTRY_VEHICLE:
             soc = _number(
                 self.hass.states.get(obj.soc_entity) if obj.soc_entity else None,
-                0, 100,
+                0,
+                100,
             )
             if self.key == "soc":
                 return soc

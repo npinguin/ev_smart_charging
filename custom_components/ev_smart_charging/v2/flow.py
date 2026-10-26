@@ -12,7 +12,11 @@ from homeassistant.helpers import selector
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
 
-_STEPS = {ENTRY_VEHICLE: "v2_vehicle", ENTRY_CHARGER: "v2_charger", ENTRY_CONTROLLER: "v2_controller"}
+_STEPS = {
+    ENTRY_VEHICLE: "v2_vehicle",
+    ENTRY_CHARGER: "v2_charger",
+    ENTRY_CONTROLLER: "v2_controller",
+}
 
 
 def _entity(domain="sensor"):

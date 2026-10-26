@@ -30,18 +30,24 @@ def setup_catalog():
     }
     chargers = {
         "white": Charger(
-            uid="white", name="Garage White",
-            controller_uid="home", vehicle_uid="audi",
+            uid="white",
+            name="Garage White",
+            controller_uid="home",
+            vehicle_uid="audi",
             control_entity="switch.wallbox_white",
         ),
         "black": Charger(
-            uid="black", name="Garage Black",
-            controller_uid="home", vehicle_uid="mercedes",
+            uid="black",
+            name="Garage Black",
+            controller_uid="home",
+            vehicle_uid="mercedes",
             control_entity="switch.wallbox_black",
         ),
         "peblar": Charger(
-            uid="peblar", name="Peblar",
-            controller_uid="garage", control_entity="switch.peblar",
+            uid="peblar",
+            name="Peblar",
+            controller_uid="garage",
+            control_entity="switch.peblar",
         ),
     }
     return vehicles, chargers, controllers

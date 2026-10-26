@@ -109,8 +109,12 @@ async def test_no_vehicle_can_be_claimed_by_two_chargers(hass):
     entry(hass, ENTRY_CONTROLLER, "c1", "Controller A")
     entry(hass, ENTRY_VEHICLE, "v1", "Car")
     entry(
-        hass, ENTRY_CHARGER, "a", "Charger A",
-        controller_uid="c1", vehicle_uid="v1",
+        hass,
+        ENTRY_CHARGER,
+        "a",
+        "Charger A",
+        controller_uid="c1",
+        vehicle_uid="v1",
     )
     new = {
         MARKER: ENTRY_CHARGER,
