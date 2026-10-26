@@ -1,11 +1,11 @@
-name: HACS guarded V2 2026.10 calendar test prerelease
+name: HACS guarded V2 stability test prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - feature/v2-operational-mvp-gates
+      - fix/rc14-ha-eventloop-stability
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,12 +24,12 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/feature/v2-operational-mvp-gates' }}
+    if: ${{ github.ref == 'refs/heads/fix/rc14-ha-eventloop-stability' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.13
+      VERSION: 2.6.0-rc.14
     steps:
       - uses: actions/checkout@v7
 
@@ -146,6 +146,22 @@ jobs:
             "Do not deliver unqualified field physical actuation"
           )
 
+          # RC14 event storm, storage and source feedback regression gates.
+          for required in (
+            "tests/controller/test_stability_budget.py",
+            "tests/controller/test_local_event_coalescing.py",
+            "tests/v2/test_source_feedback.py",
+          ):
+            assert Path(required).is_file(), f"Stability test missing: {required}"
+          local = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
+          registry = Path("custom_components/ev_smart_charging/v2/catalog.py").read_text()
+          assert "async def _drain_source_updates" in local
+          assert "_source_refresh_task" in local
+          assert "MAX_EFFECTIVE_PRICE_QUARTERS" in runtime
+          assert "async_delay_save(" in runtime
+          assert "async_flush_costs" in runtime
+          assert "_check_source_feedback" in registry
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety
           assert "async_add_executor_job(" in runtime
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
@@ -164,7 +180,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc13-control-semantics-manual-zip
+          name: evsc-guarded-rc14-control-semantics-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -189,4 +205,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "EV Smart Charging V2 rc.13 — HACS TEST PRERELEASE ONLY. Source commit $GITHUB_SHA. Adds Vehicle Ready By one-time, daily (08:00 default), and weekly per-day deadlines; Brussels DST semantics; independent Vehicle, Charger and Charge Controller devices; one Controller per Charger and max one Charger per Vehicle; persistent assignment journal and rollback awareness; bounded Controller planning, group power reservations, source quality, dynamic price caps, and isolated native control adapters. Native physical Coordinated actuation is NOT field qualified and remains disabled (P0 #5): the previous Peblar mode change froze HA. Local entries and their original native operation remain intact. Economic cost cap is indicative and its live metered budget admission is not yet certified. This does not qualify as a completed operational release. Do not migrate physical ownership on a live EVSE before separately verified staging. Make a full HA backup before installation. Roll back to v2.6.0-rc.12 and restore backup if needed. Release requires exact-source CI, Python 3.11–3.14, HA/HACS/Hassfest, original Local and new V2 regression tests; never merge to main automatically."
+            --notes "EV Smart Charging V2 rc.14 — GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. Includes all rc.13 Ready By once/daily/weekly calendar, multi-Controller and exclusive ownership features plus stability hardening: bounded legacy tariff expansion, light five-second state fingerprints, coalesced Local event worker, relevant-only source sensor subscriptions, V2 cyclic source validation, periodic buffered cost writes with unload flush, CI bounded workers and 2000-event storm regressions. Legacy Local Config Entries and existing native commands are preserved. Physical V2 Coordinated actuation remains locked due to unresolved field P0 #5; live hardware qualification and metered session cost enforcement are NOT complete. Test only on a backed-up HA instance. Roll back to v2.6.0-rc.13 if needed. Do not promote to stable or merge automatically."
