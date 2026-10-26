@@ -297,8 +297,12 @@ async def test_denied_budget_actively_stops_an_already_running_v2_owned_evse(
     capped = {**_snapshot(), "cost_budget_eur": 0.01}
     try:
         result = await writer.async_reconcile(
-            capped, NOW, connected=True, measured_power_kw=7.4,
-            group_capacity_certified=True, actual_budget_certified=False,
+            capped,
+            NOW,
+            connected=True,
+            measured_power_kw=7.4,
+            group_capacity_certified=True,
+            actual_budget_certified=False,
         )
         assert result == "SAFETY_STOP_BUDGET_UNCERTAIN"
         assert events == [("off", "switch.native_charger")]
@@ -322,7 +326,10 @@ async def test_stale_plan_revokes_an_already_running_v2_evse(
     try:
         stale = _snapshot(NOW - timedelta(minutes=3))
         result = await writer.async_reconcile(
-            stale, NOW, connected=True, measured_power_kw=7.4,
+            stale,
+            NOW,
+            connected=True,
+            measured_power_kw=7.4,
             group_capacity_certified=True,
         )
         assert result == "SAFETY_STOP_STALE_PLAN"
