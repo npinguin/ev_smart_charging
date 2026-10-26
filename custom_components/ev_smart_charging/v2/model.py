@@ -117,7 +117,12 @@ def validate_catalog(
         raise ConfigurationError("controller_key_mismatch")
     selected_vehicles: set[str] = set()
     control_sources: set[str] = set()
+    legacy_sources: set[str] = set()
     for charger in chargers.values():
+        if charger.legacy_entry_id:
+            if charger.legacy_entry_id in legacy_sources:
+                raise ConfigurationError("legacy_charger_mapped_twice")
+            legacy_sources.add(charger.legacy_entry_id)
         if charger.controller_uid not in controllers:
             raise ConfigurationError("missing_controller")
         if charger.vehicle_uid:
