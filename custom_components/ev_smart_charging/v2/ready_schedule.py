@@ -81,6 +81,29 @@ def _wall_clock_to_utc(day: date, clock: time, zone: ZoneInfo) -> datetime:
     raise ReadyScheduleError("ready_time_nonexistent")
 
 
+def normalize_once_ready_by(raw: str, timezone_name: str) -> str:
+    """Turn an HA datetime selector's LOCAL value into an aware UTC instant.
+
+    HA date/time selectors can submit an offset-naive local datetime.
+    Never let Python interpret it using the server host timezone.
+    """
+    if not isinstance(raw, str):
+        raise ReadyScheduleError("ready_by_invalid")
+    try:
+        selected = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ReadyScheduleError("ready_by_invalid") from exc
+    if selected.tzinfo is not None and selected.utcoffset() is not None:
+        return selected.astimezone(UTC).isoformat()
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (KeyError, ZoneInfoNotFoundError, TypeError) as exc:
+        raise ReadyScheduleError("installation_timezone_invalid") from exc
+    return _wall_clock_to_utc(
+        selected.date(), selected.time(), zone
+    ).isoformat()
+
+
 def next_ready_deadline(vehicle, now: datetime, timezone_name: str) -> datetime | None:
     """Next strictly-future UTC deadline; None for an expired once-only intent."""
     if now.tzinfo is None or now.utcoffset() is None:
