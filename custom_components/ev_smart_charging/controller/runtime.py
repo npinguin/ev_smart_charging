@@ -540,7 +540,10 @@ class ChargeSupervisor:
                 else:
                     stream = raw.get_raw() if raw is not None else []
                     rate_key = "value"
-                if not isinstance(stream, (list, tuple)) or len(stream) > MAX_EFFECTIVE_PRICE_QUARTERS:
+                if (
+                    not isinstance(stream, (list, tuple))
+                    or len(stream) > MAX_EFFECTIVE_PRICE_QUARTERS
+                ):
                     raise ValueError("Too many effective tariff intervals")
                 for item in stream:
                     value = _number(item[rate_key])
@@ -559,9 +562,12 @@ class ChargeSupervisor:
                         or start.second
                         or start.microsecond
                         or (end - start) % QUARTER
-                        or (end - start) // QUARTER > MAX_EFFECTIVE_PRICE_QUARTERS - len(slots)
+                        or (end - start) // QUARTER
+                        > MAX_EFFECTIVE_PRICE_QUARTERS - len(slots)
                     ):
-                        raise ValueError("Unaligned or oversized effective tariff interval")
+                        raise ValueError(
+                            "Unaligned or oversized effective tariff interval"
+                        )
                     while start < end:
                         following = start + QUARTER
                         slots.append(PriceSlot(start, following, value))
