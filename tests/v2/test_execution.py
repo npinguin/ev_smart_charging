@@ -1,0 +1,209 @@
+"""HA native executor: physically mocked, never a real EVSE service call."""
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.ev_smart_charging.const import DOMAIN
+from custom_components.ev_smart_charging.controller import safety
+from custom_components.ev_smart_charging.v2 import (
+    ENTRY_CONTROLLER, ENTRY_CHARGER, MARKER,
+)
+from custom_components.ev_smart_charging.v2.execution import NativeChargeWriter
+from custom_components.ev_smart_charging.v2.model import Charger
+
+
+NOW = datetime(2026, 10, 26, 14, 0, tzinfo=timezone.utc)
+
+
+def _entries(hass):
+    controller = MockConfigEntry(
+        domain=DOMAIN, entry_id="ctrl_main",
+        data={MARKER: ENTRY_CONTROLLER, "uid": "main", "name": "Main"},
+        version=8,
+    )
+    charger = MockConfigEntry(
+        domain=DOMAIN, entry_id="charger_main",
+        data={
+            MARKER: ENTRY_CHARGER, "uid": "ch", "name": "Charger",
+            "controller_uid": "main",
+            "control_entity": "switch.native_charger",
+            "control_semantics": "charge_request",
+            "max_ac_kw": 7.4,
+        },
+        version=8,
+    )
+    controller.add_to_hass(hass)
+    charger.add_to_hass(hass)
+    return charger
+
+
+def _snapshot(now=NOW):
+    return {
+        "controller_uid": "main",
+        "generated_at": now.isoformat(),
+        "cost_budget_eur": None,
+        "source_quality": {"ch": "VALID"},
+        "loads": {
+            "ch": {
+                "demand_status": "PLANNED",
+                "slots": [{
+                    "start": now.isoformat(),
+                    "end": (now + timedelta(minutes=15)).isoformat(),
+                    "grid_kwh": 1.5,
+                    "rate_eur_kwh": 0.2,
+                }],
+            },
+        },
+    }
+
+
+@pytest.fixture
+def charger(hass):
+    _entries(hass)
+    return Charger(
+        uid="ch", name="Charger", controller_uid="main",
+        control_entity="switch.native_charger",
+        control_semantics="charge_request", max_ac_kw=7.4,
+    )
+
+
+async def test_global_safety_containment_cannot_be_overridden(hass, charger):
+    hass.states.async_set("switch.native_charger", "off")
+    writer = NativeChargeWriter(hass, charger, "main")
+    result = await writer.async_reconcile(
+        _snapshot(), NOW, connected=True, measured_power_kw=0,
+        group_capacity_certified=True,
+    )
+    assert result == "PHYSICAL_P0_LOCKOUT"
+    assert not hass.data.get(f"{DOMAIN}.v2_native_writers")
+    writer.close()
+
+
+async def test_p0_synthetic_execution_is_idempotent_and_conflict_rejected(
+    hass, charger, monkeypatch
+):
+    # Strictly synthetic test; production P0 remains false.
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    calls = []
+
+    async def on(call):
+        calls.append(("on", call.data.get("entity_id")))
+        hass.states.async_set("switch.native_charger", "on")
+
+    async def off(call):
+        calls.append(("off", call.data.get("entity_id")))
+        hass.states.async_set("switch.native_charger", "off")
+
+    hass.services.async_register("switch", "turn_on", on)
+    hass.services.async_register("switch", "turn_off", off)
+    hass.states.async_set("switch.native_charger", "off")
+    writer = NativeChargeWriter(hass, charger, "main")
+    try:
+        response = await writer.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            group_capacity_certified=True,
+        )
+        assert response == "COMMAND_SENT_AWAITING_READBACK"
+        assert calls == [("on", "switch.native_charger")]
+        result = await writer.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        assert result == "ALREADY_AT_TARGET"
+        assert len(calls) == 1
+
+        second = NativeChargeWriter(hass, charger, "other")
+        result = await second.async_reconcile(
+            {**_snapshot(), "controller_uid": "other"}, NOW,
+            connected=True, measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        assert result == "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
+        second.close()
+    finally:
+        writer.close()
+
+
+async def test_native_control_requires_known_physical_evidence(
+    hass, charger, monkeypatch
+):
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    hass.states.async_set("switch.native_charger", "off")
+    writer = NativeChargeWriter(hass, charger, "main")
+    try:
+        async def request(**changes):
+            return await writer.async_reconcile(
+                _snapshot(), NOW, connected=changes.pop("connected", True),
+                measured_power_kw=0, **changes,
+            )
+
+        assert await request(connected=None, group_capacity_certified=True) == (
+            "PHYSICAL_CABLE_NOT_CONFIRMED"
+        )
+        assert await request(group_capacity_certified=False) == (
+            "GROUP_HEADROOM_UNVERIFIED"
+        )
+        expensive = _snapshot()
+        expensive["cost_budget_eur"] = 5
+        assert await writer.async_reconcile(
+            expensive, NOW, connected=True,
+            measured_power_kw=0, group_capacity_certified=True,
+        ) == "BUDGET_UNCERTAIN"
+        assert await writer.async_reconcile(
+            _snapshot(NOW - timedelta(minutes=3)), NOW,
+            connected=True, measured_power_kw=0,
+            group_capacity_certified=True,
+        ) == "STALE_PLAN"
+    finally:
+        writer.close()
+
+
+async def test_native_command_rejects_original_live_local_writer(
+    hass, charger, monkeypatch
+):
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    original = MockConfigEntry(
+        domain=DOMAIN, entry_id="real_local",
+        data={"charger_entity": "switch.native_charger", "device_name": "Classic"},
+        version=8,
+    )
+    original.add_to_hass(hass)
+    hass.states.async_set("switch.native_charger", "off")
+    writer = NativeChargeWriter(hass, charger, "main")
+    try:
+        assert await writer.async_reconcile(
+            _snapshot(), NOW, connected=True,
+            measured_power_kw=0, group_capacity_certified=True,
+        ) == "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER"
+    finally:
+        writer.close()
+
+
+async def test_reassignment_prevents_old_controller_native_service(
+    hass, charger, monkeypatch
+):
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    charger_entry = next(
+        entry for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "ch"
+    )
+    other = MockConfigEntry(
+        domain=DOMAIN, entry_id="ctrl_other",
+        data={MARKER: ENTRY_CONTROLLER, "uid": "other", "name": "Other"},
+        version=8,
+    )
+    other.add_to_hass(hass)
+    hass.states.async_set("switch.native_charger", "off")
+    writer = NativeChargeWriter(hass, charger, "main")
+    hass.config_entries.async_update_entry(
+        charger_entry, options={"controller_uid": "other"}
+    )
+    try:
+        assert await writer.async_reconcile(
+            _snapshot(), NOW, connected=True,
+            measured_power_kw=0, group_capacity_certified=True,
+        ) == "OWNERSHIP_CHANGED_BEFORE_COMMAND"
+    finally:
+        writer.close()
