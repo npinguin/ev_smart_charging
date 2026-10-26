@@ -224,3 +224,34 @@ async def test_unbound_soc_never_auto_starts_from_low_price_or_keep_on(hass):
         assert native.auto_charging_state == STATE_OFF
         assert native.low_price_charging_state == STATE_OFF
         assert native.low_soc_charging_state == STATE_OFF
+
+
+async def test_local_retry_does_not_repeat_when_evse_enabled_but_idle(hass):
+    """An available but not charging Wallbox/Peblar needs no retry storm."""
+    native = object.__new__(EVSmartChargingCoordinator)
+    native.hass = hass
+    native.config_entry = SimpleNamespace(entry_id="independent_local")
+    native.auto_charging_state = STATE_ON
+    native.charging_state_entity_id = "binary_sensor.wallbox_is_charging"
+    native.charger_switch = SimpleNamespace(entity_id="switch.wallbox_enabled")
+    native.turn_on_charging = AsyncMock()
+    native.switch_active = True
+    native.switch_ev_connected = False
+    native.ev_soc = 61
+    native.ev_target_soc = 80
+    hass.states.async_set("switch.wallbox_enabled", STATE_ON)
+    hass.states.async_set("binary_sensor.wallbox_is_charging", STATE_OFF)
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+    native.switch_ev_connected = True
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+    hass.states.async_set("switch.wallbox_enabled", STATE_OFF)
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_awaited_once_with(reason="retry")
+    native.turn_on_charging.reset_mock()
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()
+    native.ev_soc = 90
+    await native.periodic_check_charging_state()
+    native.turn_on_charging.assert_not_awaited()

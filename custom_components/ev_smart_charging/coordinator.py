@@ -127,6 +127,7 @@ class EVSmartChargingCoordinator:
         self._coordinated_command_lock = asyncio.Lock()
         self._last_coordinated_command = None
         self._last_coordinated_command_at = 0.0
+        self._last_local_retry_at = 0.0
         self.platforms = []
         self.listeners = []
         self.setup_timestamp = None
@@ -266,18 +267,34 @@ class EVSmartChargingCoordinator:
             return
         if self.auto_charging_state != STATE_ON:
             return
-        source = self.charging_state_entity_id or self.charger_switch.entity_id
+        # No retry when the Vehicle is disconnected, source unknown, EVSC
+        # disabled, or the battery target has been reached.
+        if getattr(self, "switch_active", True) is not True:
+            return
+        if getattr(self, "switch_ev_connected", True) is not True:
+            return
+        soc = getattr(self, "ev_soc", None)
+        target = getattr(self, "ev_target_soc", None)
+        if soc is not None and target is not None and soc >= target:
+            return
+        # This control switch is a command/enable readback, not a charging
+        # sensor. A physically idle EVSE with an enabled control is healthy.
+        source = self.charger_switch.entity_id
         if not source:
             return
         state_obj = self.hass.states.get(source)
-        if state_obj is None or state_obj.state not in (STATE_ON, STATE_OFF):
+        if state_obj is None or state_obj.state != STATE_OFF:
             return
-        if state_obj.state == STATE_OFF:
-            _LOGGER.warning(
-                "EV Smart Charging: expected ON but %s reports OFF; retrying Local start.",
-                source,
-            )
-            await self.turn_on_charging(reason="retry")
+        # Bound retry cadence even when repeated readback updates arrive.
+        now = monotonic()
+        if now - getattr(self, "_last_local_retry_at", 0.0) < 900:
+            return
+        self._last_local_retry_at = now
+        _LOGGER.warning(
+            "EV Smart Charging: Local control OFF despite expected Start; "
+            "one bounded retry."
+        )
+        await self.turn_on_charging(reason="retry")
 
     def unsubscribe_listeners(self):
         """Unsubscribed to listeners"""
