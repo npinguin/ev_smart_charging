@@ -36,6 +36,8 @@ from .vehicle_config import (
 from .helpers.config_flow import DeviceNameCreator, FindEntity, FlowValidator
 from .helpers.general import get_parameter
 from .domain import suggested_entity_object_id
+from .v2 import ENTRY_VEHICLE as V2_VEHICLE, ENTRY_CHARGER as V2_CHARGER, ENTRY_CONTROLLER as V2_CONTROLLER, TYPES as V2_TYPES
+from .v2.flow import create as create_v2, V2OptionsFlow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,12 +69,35 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
+        if config_entry.data.get("__evsc_entry_type") in V2_TYPES:
+            return V2OptionsFlow(config_entry)
         if config_entry.data.get("__evsc_entry_type") == "charge_controller":
             return ControllerOptionsFlow(config_entry)
         return OptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
-        _LOGGER.debug("EVChargingControlConfigFlow.async_step_user")
+        """Choose a new V2 device or continue configuring original Local."""
+        if user_input is not None:
+            # Preserve programmatic legacy Local data submissions.
+            return await self.async_step_legacy_local(user_input)
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=[
+                "v2_controller", "v2_vehicle", "v2_charger", "legacy_local"
+            ],
+        )
+
+    async def async_step_v2_controller(self, user_input=None):
+        return await create_v2(self, V2_CONTROLLER, user_input)
+
+    async def async_step_v2_vehicle(self, user_input=None):
+        return await create_v2(self, V2_VEHICLE, user_input)
+
+    async def async_step_v2_charger(self, user_input=None):
+        return await create_v2(self, V2_CHARGER, user_input)
+
+    async def async_step_legacy_local(self, user_input=None):
+        _LOGGER.debug("EVChargingControlConfigFlow.async_step_legacy_local")
         self._errors = {}
 
         # Uncomment the next 2 lines if only a single instance of the integration is allowed:
@@ -136,7 +161,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
         return self.async_show_form(
-            step_id="user",
+            step_id="legacy_local",
             data_schema=vol.Schema(user_schema),
             errors=self._errors,
             last_step=True,
