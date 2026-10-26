@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.ev_smart_charging.controller.runtime import (
     ChargeSupervisor,
@@ -97,3 +97,7 @@ async def test_meter_updates_use_one_delayed_store_not_direct_json_write(hass):
     m._cost_store.async_delay_save.assert_called_once()
     assert m._cost_store.async_delay_save.call_args.args[1] == 30
     m._cost_store.async_save.assert_not_called()
+    m._cost_store.async_save = AsyncMock()
+    await m.async_flush_costs()
+    m._cost_store.async_save.assert_awaited_once()
+    assert m._cost_save_pending is False
