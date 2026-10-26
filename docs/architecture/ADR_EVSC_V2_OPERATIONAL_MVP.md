@@ -4,6 +4,20 @@
 **Status:** Accepted target architecture; implementation and physical acceptance remain OPEN.  
 **Supersedes:** the singleton Controller assumption and Controller-held Vehicle/Charger lists in ADR_MOBILITY_LIGHT_CHARGING.md.
 
+## Strict vendor / device / site independence
+
+V2 is one reusable product, not a tailored Home Assistant Wessels implementation.
+The pure Vehicle/Charger/Controller models and planning math MUST NOT contain
+specific OEM, model, site, HA native service, or country voltage assumptions.
+
+- **Core** receives authoritative capability values and measurements, never OEM entity IDs as business logic.
+- **Physical control port** expresses a generic enabled-state request/readback contract; adapter resolution is the only place allowed to translate to Home Assistant `switch` or `input_boolean` service calls.
+- **Legacy Local compatibility** lives in a separate adapter and may know old EVSC configuration field names. It is not part of the generic Controller planner or ownership model.
+- **Electrical power** uses stated maximum AC power and, if current limits apply, actual supported phase count and explicit nominal phase voltage. No fixed 230 V, 120 V, or assumed country topology.
+- **Capability absence** is UNKNOWN and must deny unsafe physical admission. Do not fabricate a supplier-supported current setpoint, meter, price curve or OEM start/stop semantic.
+- **Adding new chargers** means identifying supported capabilities and providing an adapter where necessary; never adding brand/model branches inside planner/controller logic.
+- **Regression gate**: tests/v2/test_generic_boundaries.py prevents HA service commands, vendor names and grid-voltage constants returning to pure core.
+
 ## Final product architecture
 
 EV Smart Charging consists of **Vehicle**, **Charger**, **Charge Controller**, each represented by an independently configurable Home Assistant logical device. A Charge Controller **is a planner with its constraints and strategy**. Multiple independent planners require multiple Charge Controllers. There is no PlannerManager device or second planning engine.
