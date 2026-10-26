@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from copy import deepcopy
 from dataclasses import replace
 from itertools import combinations
 from datetime import datetime, timedelta
@@ -1618,9 +1617,12 @@ class ChargeSupervisor:
         state = self.hass.states.get(entity_id) if entity_id else None
         if state is None:
             return None
+        # State objects are immutable snapshots in HA. The timestamp changes
+        # when the state/attributes change: do not deep-copy potentially huge
+        # tariff attributes every five seconds on the event loop.
         return (
             state.state,
-            deepcopy(dict(state.attributes)) if include_attributes else None,
+            getattr(state, "last_updated", None) if include_attributes else None,
         )
 
     def _peak_plan_fingerprint(self):
