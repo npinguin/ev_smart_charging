@@ -140,6 +140,9 @@ class EVSmartChargingCoordinator:
         self._source_refresh_unsub = None
         self._source_refresh_dirty = False
         self._source_target_changed = False
+        # Keep only a reference to the latest HA State for each subscribed
+        # input; repeated identical reports must not trigger new replans.
+        self._source_latest_states = {}
         self._source_refresh_lock = asyncio.Lock()
         self._stopped = False
         self.platforms = []
@@ -1000,6 +1003,7 @@ class EVSmartChargingCoordinator:
             return
         before = event.data.get("old_state")
         after = event.data.get("new_state")
+        entity_id = event.data.get("entity_id")
         if (
             before is not None
             and after is not None
@@ -1007,6 +1011,15 @@ class EVSmartChargingCoordinator:
             and before.attributes == after.attributes
         ):
             return
+        previous = self._source_latest_states.get(entity_id)
+        if (
+            after is not None
+            and previous is not None
+            and previous.state == after.state
+            and previous.attributes == after.attributes
+        ):
+            return
+        self._source_latest_states[entity_id] = after
         self._source_refresh_dirty = True
         if configuration_updated or (
             event.data.get("entity_id") == self.ev_target_soc_entity_id
@@ -1037,6 +1050,9 @@ class EVSmartChargingCoordinator:
     async def _drain_source_updates(self):
         """Process one batch, then defer any feedback to a future HA timer."""
         try:
+            # Yield once: HA may start tasks eagerly in the callback itself.
+            # Events from the same tick must be coalesced before refreshing.
+            await asyncio.sleep(0)
             if not self._source_refresh_dirty or self._stopped:
                 return
             self._source_refresh_dirty = False
