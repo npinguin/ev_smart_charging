@@ -1013,14 +1013,15 @@ class EVSmartChargingCoordinator:
             and self.ev_target_soc_entity_id
         ):
             self._source_target_changed = True
-        # A HA timer is not a pending HA task. async_block_till_done
-        # and HA unload can complete while the debounce window is open.
+        # The first source change must remain visible on the next HA task
+        # drain (legacy Local contract). A synchronous burst of events shares
+        # this single task. Feedback arriving while it runs is timer-throttled.
         if (
             self._source_refresh_unsub is None
             and (self._source_refresh_task is None or self._source_refresh_task.done())
         ):
-            self._source_refresh_unsub = async_call_later(
-                self.hass, 0.2, self._source_timer_fired
+            self._source_refresh_task = self.hass.async_create_task(
+                self._drain_source_updates()
             )
 
     @callback
