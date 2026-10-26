@@ -241,10 +241,14 @@ class NativeChargeWriter:
                         timeout=8.0,
                     )
                 except Exception:
-                    _LOGGER.exception("V2 native command failed for %s", self.charger.uid)
+                    _LOGGER.exception(
+                        "V2 native command failed for %s", self.charger.uid
+                    )
                     return "COMMAND_FAILED_OR_TIMED_OUT"
                 # A service response only means accepted, never prove the EVSE
                 # actually started/stopped; next readback verifies actual state.
                 return (
-                    f"SAFETY_STOP_{denial}" if denial else "COMMAND_SENT_AWAITING_READBACK"
+                    f"SAFETY_STOP_{denial}"
+                    if denial
+                    else "COMMAND_SENT_AWAITING_READBACK"
                 )
