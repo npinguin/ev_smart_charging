@@ -481,10 +481,7 @@ def test_unplugged_enabled_wallbox_and_peblar_do_not_invent_charging(hass):
         report = _local_execution_diagnostics(hass, native)
         assert report["expected_on_by_legacy_rules"] is False
         assert report["reconciliation_needed"] is None
-        assert (
-            report["reconciliation_status"]
-            == "not_applicable_availability_enable"
-        )
+        assert report["reconciliation_status"] == "not_applicable_availability_enable"
         observed = observe_charger(
             semantics="availability_enable",
             control_state="on",
