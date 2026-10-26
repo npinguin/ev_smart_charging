@@ -166,22 +166,31 @@ class NativeChargeWriter:
             return "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER"
         if snapshot.get("controller_uid") != self.controller_uid:
             return "CONTROLLER_OWNERSHIP_CHANGED"
+        # A denied plan must not leave an already running, V2-owned EVSE ON.
+        # Keep the exact denial reason while choosing OFF as the safe target.
+        # A switch with unknown readback still cannot be commanded blindly.
+        denial = None
         if not _fresh(snapshot, when):
-            return "STALE_PLAN"
-
-        wants_on = _desired_now(snapshot, self.charger.uid, when)
-        if wants_on:
-            if connected is not True:
-                return "PHYSICAL_CABLE_NOT_CONFIRMED"
-            if snapshot.get("source_quality", {}).get(self.charger.uid) != "VALID":
-                return "PRICE_UNVERIFIED"
-            if (
-                snapshot.get("cost_budget_eur") is not None
+            denial = "STALE_PLAN"
+            wants_on = False
+        else:
+            wants_on = _desired_now(snapshot, self.charger.uid, when)
+            if wants_on and connected is not True:
+                denial = "PHYSICAL_CABLE_NOT_CONFIRMED"
+            elif wants_on and snapshot.get("source_quality", {}).get(
+                self.charger.uid
+            ) != "VALID":
+                denial = "PRICE_UNVERIFIED"
+            elif (
+                wants_on
+                and snapshot.get("cost_budget_eur") is not None
                 and not actual_budget_certified
             ):
-                return "BUDGET_UNCERTAIN"
-            if not group_capacity_certified:
-                return "GROUP_HEADROOM_UNVERIFIED"
+                denial = "BUDGET_UNCERTAIN"
+            elif wants_on and not group_capacity_certified:
+                denial = "GROUP_HEADROOM_UNVERIFIED"
+        if denial:
+            wants_on = False
 
         async with self._lock:
             if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
@@ -205,7 +214,7 @@ class NativeChargeWriter:
             if state is None:
                 return "NATIVE_READBACK_UNAVAILABLE"
             if state is wants_on:
-                return "ALREADY_AT_TARGET"
+                return denial or "ALREADY_AT_TARGET"
             now = monotonic()
             if (
                 wants_on == self._last_command
@@ -231,4 +240,7 @@ class NativeChargeWriter:
                 return "COMMAND_FAILED_OR_TIMED_OUT"
             # A service response only means accepted, never prove the EVSE
             # actually started/stopped; next readback verifies actual state.
-            return "COMMAND_SENT_AWAITING_READBACK"
+            return (
+                f"SAFETY_STOP_{denial}" if denial
+                else "COMMAND_SENT_AWAITING_READBACK"
+            )
