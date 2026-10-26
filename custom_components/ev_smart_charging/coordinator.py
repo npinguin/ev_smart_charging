@@ -1323,7 +1323,14 @@ class EVSmartChargingCoordinator:
         """Check that all control entities are ready."""
 
         if self.charger_switch.entity_id:
-            if self.charger_switch.domain is None:
+            # Keep the original HA ConfigEntryNotReady startup contract when
+            # the control entity is not registered yet. Its service domain is
+            # nevertheless derived from the configured ID so a later reload
+            # cannot permanently lose the writer on recovery.
+            if (
+                self.charger_switch.domain is None
+                or self.hass.states.get(self.charger_switch.entity_id) is None
+            ):
                 return "Control entities not ready."
 
         return None
