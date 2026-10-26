@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers import selector
 
+from .charger_observation import CONTROL_SEMANTICS
 from .const import (
     CONF_DEVICE_NAME,
     CONF_EV_CONTROLLED,
@@ -194,6 +195,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_CHARGING_STATE_ENTITY,
                 default=get_parameter(self.config_entry, CONF_CHARGING_STATE_ENTITY),
             ): cv.string,
+            # Only source semantics, not a new command writer. Preserve all
+            # existing physical Local Start/Stop paths when upgrading.
+            vol.Optional(
+                "evsc_control_semantics",
+                default=get_parameter(
+                    self.config_entry, "evsc_control_semantics", "unspecified"
+                ),
+            ): vol.In(CONTROL_SEMANTICS),
             vol.Optional(
                 CONF_EV_CONTROLLED,
                 default=get_parameter(self.config_entry, CONF_EV_CONTROLLED),

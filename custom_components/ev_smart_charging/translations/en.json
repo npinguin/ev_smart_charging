@@ -39,7 +39,8 @@
           "charging_state_entity": "Charging state entity (single space to remove)",
           "ev_controlled": "An EV integration will control start/stop of charging",
           "evsc_load_energy_kwh": "Requested energy (kWh; optional, for source-less load preview only)",
-          "evsc_load_duration_quarters": "Requested duration (15-minute quarters; optional, preview only)"
+          "evsc_load_duration_quarters": "Requested duration (15-minute quarters; optional, preview only)",
+          "evsc_control_semantics": "Charger control switch semantics"
         },
         "menu_options": {
           "policy": "Charge Controller policy",

@@ -15,13 +15,18 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
+from .charger_observation import (
+    CONTROL_SEMANTICS,
+    charging_readback,
+    observe_charger,
+)
 from .const import DOMAIN, VERSION
 from .controller import safety
 from .controller.local_projection import local_plan_facts
 from .controller.runtime import ChargeSupervisor, _number
 from homeassistant.util import dt
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 REDACT = {
     "password",
     "passwd",
@@ -151,6 +156,13 @@ def _source(hass, entity_id, *, quantity=None):
             result["status"] = "invalid_switch_readback"
         else:
             result["state"] = state.state
+    elif quantity == "charging":
+        charging = charging_readback(state.state)
+        if charging is None:
+            result["status"] = "unrecognized_charging_readback"
+        else:
+            result["status"] = "valid"
+            result["charging"] = charging
     # Price sensors can contain complex timelines. Presence does not prove
     # validated EUR intervals; expose no provider/price attribute payload.
     last = getattr(state, "last_updated", None)
@@ -247,6 +259,16 @@ def _local_execution_diagnostics(hass, charger):
     switch = getattr(getattr(charger, "charger_switch", None), "entity_id", None)
     readback = _source(hass, switch, quantity="switch")
     actual = readback.get("state")
+    opts = getattr(getattr(charger, "config_entry", None), "options", {})
+    semantics = opts.get("evsc_control_semantics", "unspecified")
+    if semantics not in CONTROL_SEMANTICS:
+        semantics = "unspecified"
+    # Only an explicitly described charge-command or power-relay control
+    # may be compared with the legacy charging decision. With an EVSE
+    # availability-enable switch, ON while disconnected is normal.
+    compare_commands = semantics in ("charge_request", "power_relay")
+    if getattr(charger, "ev_soc_entity_id", "configured") == "":
+        desired = False
     missing = []
     if not active:
         missing.append("smart_charging_not_active")
@@ -278,10 +300,25 @@ def _local_execution_diagnostics(hass, charger):
         "local_internal_commanded_on": internal_on,
         "native_switch_readback": readback,
         "native_switch_matches_decision": (
-            actual == ("on" if desired else "off") if actual is not None else None
+            actual == ("on" if desired else "off")
+            if compare_commands and actual is not None
+            else None
         ),
         "reconciliation_needed": (
-            actual != ("on" if desired else "off") if actual is not None else None
+            actual != ("on" if desired else "off")
+            if compare_commands and actual is not None
+            else None
+        ),
+        "reconciliation_status": (
+            "not_applicable_availability_enable"
+            if semantics == "availability_enable"
+            else "semantics_not_configured"
+            if semantics == "unspecified"
+            else "readback_unknown"
+            if actual is None
+            else "matches_command"
+            if actual == ("on" if desired else "off")
+            else "command_readback_disagreement"
         ),
         "next_internal_action": (
             "start"
@@ -323,7 +360,7 @@ def _charger_diagnostics(hass, charger, manager=None):
         "vehicle_soc": "soc",
         "target_soc": "soc",
         "charger_switch": "switch",
-        "charging_readback": "switch",
+        "charging_readback": "charging",
         "actual_power": "power",
         "session_energy": "energy",
         "capacity": "energy",
@@ -334,6 +371,25 @@ def _charger_diagnostics(hass, charger, manager=None):
         role: _source(hass, entity, quantity=kinds.get(role))
         for role, entity in source_config.items()
     }
+    semantics = opts.get("evsc_control_semantics", "unspecified")
+    observation = observe_charger(
+        semantics=semantics,
+        control_state=sources["charger_switch"].get("state"),
+        connected=getattr(charger, "switch_ev_connected", None),
+        charge_feedback=(
+            "on"
+            if sources["charging_readback"].get("charging") is True
+            else "off"
+            if sources["charging_readback"].get("charging") is False
+            else None
+        ),
+        power_kw=(
+            sources["actual_power"]["value"]
+            / (1000 if sources["actual_power"].get("unit") == "W" else 1)
+            if sources["actual_power"]["status"] == "valid"
+            else None
+        ),
+    )
     key = charger.config_entry.entry_id
     supervised = bool(manager is not None and key in manager.participants)
     power = _number(opts.get("evsc_expected_power_kw") or legacy.get("power_kw"))
@@ -405,6 +461,7 @@ def _charger_diagnostics(hass, charger, manager=None):
         "local_execution": (
             _local_execution_diagnostics(hass, charger) if not supervised else None
         ),
+        "physical_observation": observation,
         "enabled": getattr(charger, "switch_active", None),
         "ev_connected": getattr(charger, "switch_ev_connected", None),
         "keep_on": getattr(charger, "switch_keep_on", None),
@@ -433,6 +490,10 @@ def _charger_diagnostics(hass, charger, manager=None):
             "session_energy": sources["session_energy"]["status"] == "valid",
             "effective_price_configured": sources["effective_price"]["status"]
             != "not_configured",
+            "effective_price_validated": (
+                sources["effective_price"]["status"] == "present"
+                and opts.get("evsc_price_validated") is True
+            ),
         },
         "config": {
             "version": getattr(charger.config_entry, "version", None),
@@ -612,12 +673,24 @@ def _controller_diagnostics(hass, manager):
     ):
         blockers.append("charger_session_meter_coverage_incomplete")
     if any(
-        item["source_health"]["effective_price"]["status"] != "present"
+        not item["coverage"]["effective_price_validated"]
         for item in entries.values()
     ):
         blockers.append("effective_price_coverage_incomplete")
     if not vehicles["configured"]:
         blockers.append("no_vehicle_profiles_configured")
+    if any(
+        item["physical_observation"]["physical_charging_confirmed"] is True
+        and item["physical_observation"]["connection_status"] == "disconnected"
+        for item in entries.values()
+    ):
+        blockers.append("measured_charging_without_connection")
+    if any(
+        "charging_sensor_power_disagree"
+        in item["physical_observation"]["observations"]
+        for item in entries.values()
+    ):
+        blockers.append("charging_state_and_power_disagree")
     if multi_day["status"] not in ("PLANNED", "PROVISIONAL"):
         blockers.append("multi_day_plan_not_ready")
     if not safety.COORDINATED_ACTUATION_ENABLED:
