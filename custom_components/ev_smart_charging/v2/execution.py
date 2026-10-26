@@ -177,9 +177,10 @@ class NativeChargeWriter:
             wants_on = _desired_now(snapshot, self.charger.uid, when)
             if wants_on and connected is not True:
                 denial = "PHYSICAL_CABLE_NOT_CONFIRMED"
-            elif wants_on and snapshot.get("source_quality", {}).get(
-                self.charger.uid
-            ) != "VALID":
+            elif (
+                wants_on
+                and snapshot.get("source_quality", {}).get(self.charger.uid) != "VALID"
+            ):
                 denial = "PRICE_UNVERIFIED"
             elif (
                 wants_on
@@ -241,6 +242,5 @@ class NativeChargeWriter:
             # A service response only means accepted, never prove the EVSE
             # actually started/stopped; next readback verifies actual state.
             return (
-                f"SAFETY_STOP_{denial}" if denial
-                else "COMMAND_SENT_AWAITING_READBACK"
+                f"SAFETY_STOP_{denial}" if denial else "COMMAND_SENT_AWAITING_READBACK"
             )
