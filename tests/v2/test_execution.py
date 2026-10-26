@@ -265,20 +265,20 @@ def test_stale_native_switch_state_is_not_valid_physical_readback(hass, monkeypa
     """Replayed HA switch state cannot establish current physical authority."""
     from types import SimpleNamespace
     from homeassistant.util import dt
-    from custom_components.ev_smart_charging.v2.execution import _current_readback
+    from custom_components.ev_smart_charging.v2.adapters.home_assistant import HAOnOffPort
 
     stale = SimpleNamespace(
         state="off",
         last_reported=dt.utcnow() - timedelta(minutes=5),
     )
     monkeypatch.setattr(type(hass.states), "get", lambda _self, entity_id: stale)
-    assert _current_readback(hass, "switch.native_charger") is None
+    assert HAOnOffPort().readback(hass, "switch.native_charger") is None
     current = SimpleNamespace(
         state="off",
         last_reported=dt.utcnow(),
     )
     monkeypatch.setattr(type(hass.states), "get", lambda _self, entity_id: current)
-    assert _current_readback(hass, "switch.native_charger") is False
+    assert HAOnOffPort().readback(hass, "switch.native_charger") is False
 
 
 async def test_denied_budget_actively_stops_an_already_running_v2_owned_evse(
