@@ -470,7 +470,10 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
     plan_b["loads"]["other"] = plan_b["loads"].pop("ch")
     a = asyncio.create_task(
         writer_a.async_reconcile(
-            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=0,
             group_capacity_certified=True,
         )
     )
@@ -479,7 +482,10 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
         await asyncio.wait_for(entered_a.wait(), timeout=2)
         b = asyncio.create_task(
             writer_b.async_reconcile(
-                plan_b, NOW, connected=True, measured_power_kw=0,
+                plan_b,
+                NOW,
+                connected=True,
+                measured_power_kw=0,
                 group_capacity_certified=True,
             )
         )
