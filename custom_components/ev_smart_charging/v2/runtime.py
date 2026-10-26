@@ -47,11 +47,17 @@ def read_inputs(hass, chargers, vehicles):
     for charger in chargers.values():
         vehicle = vehicles.get(charger.vehicle_uid)
         soc = _number(
-            hass.states.get(vehicle.soc_entity)
-            if vehicle is not None and vehicle.soc_entity else None,
-            0, 100,
+            (
+                hass.states.get(vehicle.soc_entity)
+                if vehicle is not None and vehicle.soc_entity
+                else None
+            ),
+            0,
+            100,
         )
-        tariff = hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
+        tariff = (
+            hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
+        )
         prices, quality = parse_tariff_slots(
             tariff.attributes.get("price_slots") if tariff else None,
             tariff.attributes.get("currency") if tariff else None,
@@ -61,17 +67,20 @@ def read_inputs(hass, chargers, vehicles):
             "soc": soc,
             "connected": _connected(
                 hass.states.get(charger.connected_entity)
-                if charger.connected_entity else None
+                if charger.connected_entity
+                else None
             ),
             "prices": prices,
             "tariff_quality": quality,
             "power_kw": _number(
-                hass.states.get(charger.power_entity)
-                if charger.power_entity else None,
+                hass.states.get(charger.power_entity) if charger.power_entity else None,
             ),
             "energy_kwh": _number(
-                hass.states.get(charger.energy_entity)
-                if charger.energy_entity else None,
+                (
+                    hass.states.get(charger.energy_entity)
+                    if charger.energy_entity
+                    else None
+                ),
             ),
         }
     return result
@@ -105,9 +114,7 @@ class V2ControllerRuntime:
             fn()
 
     async def async_start(self):
-        self._unsub = async_track_time_interval(
-            self.hass, self._on_tick, _INTERVAL
-        )
+        self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
 
     @callback
@@ -129,7 +136,12 @@ class V2ControllerRuntime:
                 }
                 observed = read_inputs(self.hass, chargers, vehicles)
                 result = await self.hass.async_add_executor_job(
-                    compile_advisory, controller, chargers, vehicles, observed, dt.utcnow()
+                    compile_advisory,
+                    controller,
+                    chargers,
+                    vehicles,
+                    observed,
+                    dt.utcnow(),
                 )
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
                 _LOGGER.warning("EVSC V2 planner configuration invalid: %s", exc)
