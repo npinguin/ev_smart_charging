@@ -354,3 +354,33 @@ async def test_late_executor_result_never_republishes_after_unload(hass, monkeyp
     await task
     assert runtime.snapshot == original
     assert not notifications
+
+
+def test_vehicle_next_ready_sensor_is_derived_from_calendar(hass):
+    """Vehicle exposes the deadline; neither Controller nor Charger stores it."""
+    from homeassistant.components.sensor import SensorDeviceClass
+    from homeassistant.util import dt
+    from custom_components.ev_smart_charging.v2.entities import V2Fact
+    from custom_components.ev_smart_charging.v2.ready_schedule import (
+        next_ready_deadline,
+    )
+    from custom_components.ev_smart_charging.v2.catalog import model
+
+    hass.config.set_time_zone("Europe/Brussels")
+    entry = _entry(
+        hass, ENTRY_VEHICLE, "calendar", "Work commuter",
+        ready_mode="weekly", ready_mon="06:45",
+        ready_wed="08:30", ready_fri="17:15",
+    )
+    sensor = V2Fact(
+        entry, ENTRY_VEHICLE, "next_ready_by", "Next Ready By",
+        SensorDeviceClass.TIMESTAMP,
+    )
+    sensor.hass = hass
+    expected = next_ready_deadline(
+        model(entry), dt.utcnow(), "Europe/Brussels"
+    )
+    assert sensor.native_value == expected
+    assert sensor.device_info["identifiers"] == {
+        (DOMAIN, "v2:vehicle_v2:calendar")
+    }
