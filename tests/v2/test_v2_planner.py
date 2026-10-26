@@ -244,3 +244,45 @@ def test_unassigned_load_does_not_fake_a_certified_group_total():
     assert result["excluded"]["empty"] == "NO_VEHICLE_ASSIGNED"
     assert result["total_planned_kwh"] is None
     assert result["known_planned_kwh"] >= 0
+
+
+def test_weekly_ready_by_is_resolved_for_the_right_calendar_day():
+    vehicles, controllers, chargers, observed = fixture_data()
+    vehicles["v1"] = replace(
+        vehicles["v1"],
+        ready_by="",
+        ready_mode="weekly",
+        ready_weekly={"mon": "08:00", "wed": "11:45"},
+    )
+    report = compile_advisory(
+        controllers["c1"], chargers, vehicles, observed, NOW, "Europe/Brussels"
+    )
+    assert report["loads"]["a"]["next_ready_by"] == "2026-10-28T10:45:00+00:00"
+    assert report["loads"]["a"]["demand_status"] in (
+        "PROVISIONAL", "PENDING_PRICES", "INFEASIBLE", "PLANNED",
+    )
+
+
+def test_one_time_expired_deadline_does_not_fall_back_to_horizon_end():
+    vehicles, controllers, chargers, observed = fixture_data()
+    vehicles["v1"] = replace(
+        vehicles["v1"], ready_by="2026-10-25T12:00:00+00:00",
+        ready_mode="once",
+    )
+    report = compile_advisory(
+        controllers["c1"], chargers, vehicles, observed, NOW, "Europe/Brussels"
+    )
+    assert report["excluded"]["a"] == "READY_BY_EXPIRED"
+    assert report["physical_actuation_authorized"] is False
+
+
+def test_daily_ready_by_at_0800_over_midnight_has_correct_utc_deadline():
+    vehicles, controllers, chargers, observed = fixture_data()
+    vehicles["v1"] = replace(
+        vehicles["v1"], ready_mode="daily", ready_by="",
+        ready_time="08:00",
+    )
+    report = compile_advisory(
+        controllers["c1"], chargers, vehicles, observed, NOW, "Europe/Brussels"
+    )
+    assert report["loads"]["a"]["next_ready_by"] == "2026-10-27T07:00:00+00:00"
