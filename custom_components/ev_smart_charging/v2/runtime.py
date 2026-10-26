@@ -116,6 +116,7 @@ class V2ControllerRuntime:
             "physical_actuation_authorized": False,
         }
         self._unsub = None
+        self._tick_task: asyncio.Task | None = None
         self._listeners = set()
         self._lock = asyncio.Lock()
         self._stopped = False
@@ -131,13 +132,22 @@ class V2ControllerRuntime:
             fn()
 
     async def async_start(self):
-        self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
+        if self._stopped:
+            return
+        if self._unsub is None:
+            self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
 
     @callback
     def _on_tick(self, _now):
-        if not self._stopped and not self._lock.locked():
-            self.hass.async_create_task(self.async_refresh())
+        # Exactly one scheduled or running refresh per Controller. Checking
+        # the coroutine lock alone leaves a queue window before it acquires.
+        # HA executes this callback on its own event loop.
+        if self._stopped or self._lock.locked():
+            return
+        if self._tick_task is not None and not self._tick_task.done():
+            return
+        self._tick_task = self.hass.async_create_task(self.async_refresh())
 
     async def async_refresh(self):
         if self._stopped or self._lock.locked():
@@ -160,8 +170,12 @@ class V2ControllerRuntime:
                     observed,
                     dt.utcnow(),
                 )
-            except (ValueError, TypeError, KeyError, OverflowError) as exc:
-                _LOGGER.warning("EVSC V2 planner configuration invalid: %s", exc)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Never leave a stale grant/status after a planner exception.
+                # Log traceback for defect correction; no native write occurs.
+                _LOGGER.exception("EVSC V2 planner failed: %s", exc)
                 result = {
                     "status": "INVALID_CONFIGURATION",
                     "reason": type(exc).__name__,
@@ -176,6 +190,9 @@ class V2ControllerRuntime:
     @callback
     def stop(self):
         self._stopped = True
+        if self._tick_task is not None and not self._tick_task.done():
+            self._tick_task.cancel()
+        self._tick_task = None
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
