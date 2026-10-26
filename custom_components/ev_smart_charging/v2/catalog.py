@@ -64,13 +64,17 @@ def model(entry):
             name=data["name"],
             max_parallel=int(data.get("max_parallel", 1)),
             horizon_days=int(data.get("horizon_days", 2)),
-            power_budget_kw=optional_positive(data.get("power_budget_kw"), "power_budget"),
+            power_budget_kw=optional_positive(
+                data.get("power_budget_kw"), "power_budget"
+            ),
             price_cap_eur_kwh=(
                 float(data["price_cap_eur_kwh"])
                 if data.get("price_cap_eur_kwh") is not None
                 else None
             ),
-            cost_budget_eur=optional_positive(data.get("cost_budget_eur"), "cost_budget"),
+            cost_budget_eur=optional_positive(
+                data.get("cost_budget_eur"), "cost_budget"
+            ),
         )
     raise ValueError("unsupported_v2_entry")
 
@@ -133,13 +137,17 @@ def check_proposed(hass, entry_type, data, editing_uid=None):
             name=data["name"],
             max_parallel=int(data.get("max_parallel", 1)),
             horizon_days=int(data.get("horizon_days", 2)),
-            power_budget_kw=optional_positive(data.get("power_budget_kw"), "power_budget"),
+            power_budget_kw=optional_positive(
+                data.get("power_budget_kw"), "power_budget"
+            ),
             price_cap_eur_kwh=(
                 float(data["price_cap_eur_kwh"])
                 if data.get("price_cap_eur_kwh") is not None
                 else None
             ),
-            cost_budget_eur=optional_positive(data.get("cost_budget_eur"), "cost_budget"),
+            cost_budget_eur=optional_positive(
+                data.get("cost_budget_eur"), "cost_budget"
+            ),
         )
         controllers[item.uid] = item
     validate_catalog(vehicles, chargers, controllers)
