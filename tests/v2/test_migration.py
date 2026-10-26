@@ -9,17 +9,24 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
 from custom_components.ev_smart_charging.v2 import (
-    ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER,
+    ENTRY_CHARGER,
+    ENTRY_CONTROLLER,
+    ENTRY_VEHICLE,
+    MARKER,
 )
 from custom_components.ev_smart_charging.v2.catalog import catalog
 from custom_components.ev_smart_charging.v2.migration import (
-    by_legacy_id, discover, proposed_charger,
+    by_legacy_id,
+    discover,
+    proposed_charger,
 )
 
 
 def _local(hass):
     item = MockConfigEntry(
-        domain=DOMAIN, entry_id="legacy_peblar", title="Peblar Outside",
+        domain=DOMAIN,
+        entry_id="legacy_peblar",
+        title="Peblar Outside",
         data={
             "device_name": "Peblar Outside",
             "charger_entity": "switch.peblar",
@@ -41,7 +48,8 @@ def _local(hass):
 
 def _v2(hass, kind, uid, **data):
     entry = MockConfigEntry(
-        domain=DOMAIN, entry_id=f"v2_{uid}",
+        domain=DOMAIN,
+        entry_id=f"v2_{uid}",
         data={MARKER: kind, "uid": uid, "name": uid, **data},
         version=8,
     )
@@ -51,7 +59,9 @@ def _v2(hass, kind, uid, **data):
 
 @pytest.fixture(autouse=True)
 def mock_setup_for_preview():
-    with patch("custom_components.ev_smart_charging.async_setup_entry", return_value=True):
+    with patch(
+        "custom_components.ev_smart_charging.async_setup_entry", return_value=True
+    ):
         yield
 
 
@@ -86,8 +96,12 @@ def test_proposal_idempotent_and_never_infers_vehicle(hass):
     assert "user_id" not in a
     assert by_legacy_id(hass, "legacy_peblar") is original
     _v2(
-        hass, ENTRY_CHARGER, a["uid"], legacy_entry_id=original.entry_id,
-        controller_uid="main", max_ac_kw=11,
+        hass,
+        ENTRY_CHARGER,
+        a["uid"],
+        legacy_entry_id=original.entry_id,
+        controller_uid="main",
+        max_ac_kw=11,
     )
     assert discover(hass)[0]["mapped"] is True
 
