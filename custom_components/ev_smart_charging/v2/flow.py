@@ -44,7 +44,7 @@ async def _schema(hass, kind, old):
             return (vol.Optional(key, default=default), validator)
         return (vol.Optional(key), validator)
 
-    minute_selector = selector.TimeSelector(selector.TimeSelectorConfig(no_second=True))
+    minute_selector = selector.TimeSelector()
     fields = {vol.Required("name", default=old.get("name", "")): str}
     if kind == ENTRY_VEHICLE:
         fields.update(
