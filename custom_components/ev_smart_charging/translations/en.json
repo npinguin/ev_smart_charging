@@ -62,7 +62,8 @@
           "tariff_entity": "Validated effective EUR/kWh tariff sensor",
           "max_ac_kw": "Maximum charger AC power (kW)",
           "phase_count": "Number of charging phases",
-          "max_current_a": "Maximum charging current (A)"
+          "max_current_a": "Maximum charging current (A)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         }
       },
       "v2_controller": {
@@ -100,7 +101,8 @@
           "energy_entity": "Session energy source",
           "max_ac_kw": "Known maximum AC power (kW)",
           "phase_count": "Known charging phase count",
-          "max_current_a": "Known maximum charging current (A)"
+          "max_current_a": "Known maximum charging current (A)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         },
         "description": "Original Local daily Ready By: {legacy_ready_by}. This is a suggestion for the Vehicle profile only. Verify its schedule before switching charging ownership; the existing Local configuration is not modified."
       }
@@ -169,7 +171,8 @@
           "ready_thu": "Thursday ready time (blank = no deadline)",
           "ready_fri": "Friday ready time (blank = no deadline)",
           "ready_sat": "Saturday ready time (blank = no deadline)",
-          "ready_sun": "Sunday ready time (blank = no deadline)"
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         },
         "menu_options": {
           "policy": "Charge Controller policy",
