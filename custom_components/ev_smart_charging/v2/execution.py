@@ -14,6 +14,7 @@ from math import isfinite
 from time import monotonic
 
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.util import dt
 
 from ..const import DOMAIN
 from ..controller import safety
@@ -70,8 +71,17 @@ def _fresh(snapshot: dict, now: datetime) -> bool:
 
 
 def _current_readback(hass, control_entity: str):
+    """A stale native ON/OFF entity must not grant authority to send commands."""
     state = hass.states.get(control_entity)
     if state is None:
+        return None
+    observed_at = getattr(state, "last_reported", None) or getattr(
+        state, "last_updated", None
+    )
+    if observed_at is None or observed_at.tzinfo is None:
+        return None
+    age = dt.utcnow() - observed_at
+    if age < timedelta(0) or age > timedelta(minutes=2):
         return None
     if state.state == "on":
         return True
