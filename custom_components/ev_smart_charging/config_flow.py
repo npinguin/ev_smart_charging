@@ -194,6 +194,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "max_ac_kw": candidate.get("max_ac_kw") or 0,
             "phase_count": 0,
             "max_current_a": 0,
+            "nominal_phase_voltage_v": 0,
         }
         if user_input is not None and user_input.get("confirmed"):
             changes = {
@@ -244,6 +245,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema[vol.Optional("phase_count", default=0)] = vol.In([0, 1, 2, 3])
         data_schema[vol.Optional("max_current_a", default=0)] = vol.All(
             vol.Coerce(float), vol.Range(min=0, max=500)
+        )
+        data_schema[vol.Optional("nominal_phase_voltage_v", default=0)] = vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=1000)
         )
         return self.async_show_form(
             step_id="v2_migrate_confirm",
