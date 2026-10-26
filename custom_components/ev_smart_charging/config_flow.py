@@ -36,7 +36,12 @@ from .vehicle_config import (
 from .helpers.config_flow import DeviceNameCreator, FindEntity, FlowValidator
 from .helpers.general import get_parameter
 from .domain import suggested_entity_object_id
-from .v2 import ENTRY_VEHICLE as V2_VEHICLE, ENTRY_CHARGER as V2_CHARGER, ENTRY_CONTROLLER as V2_CONTROLLER, TYPES as V2_TYPES
+from .v2 import (
+    ENTRY_VEHICLE as V2_VEHICLE,
+    ENTRY_CHARGER as V2_CHARGER,
+    ENTRY_CONTROLLER as V2_CONTROLLER,
+    TYPES as V2_TYPES,
+)
 from .v2.flow import create as create_v2, V2OptionsFlow
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,9 +87,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_legacy_local(user_input)
         return self.async_show_menu(
             step_id="user",
-            menu_options=[
-                "v2_controller", "v2_vehicle", "v2_charger", "legacy_local"
-            ],
+            menu_options=["v2_controller", "v2_vehicle", "v2_charger", "legacy_local"],
         )
 
     async def async_step_v2_controller(self, user_input=None):
