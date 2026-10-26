@@ -11,6 +11,7 @@ from homeassistant.helpers import selector
 
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
+from .ownership import async_apply_charger_options
 
 _STEPS = {
     ENTRY_VEHICLE: "v2_vehicle",
@@ -159,6 +160,14 @@ class V2OptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             proposed = {**old, **user_input}
             try:
+                if kind == ENTRY_CHARGER:
+                    # The regular Options validator cannot transfer a Vehicle
+                    # from another Charger. The shared durable transaction
+                    # first detaches its old owner and persists the new one.
+                    await async_apply_charger_options(
+                        self.hass, old["uid"], user_input
+                    )
+                    return self.async_create_entry(title="", data=entry.options)
                 check_proposed(self.hass, kind, proposed, editing_uid=old["uid"])
             except (ValueError, TypeError, KeyError):
                 return self.async_show_form(
