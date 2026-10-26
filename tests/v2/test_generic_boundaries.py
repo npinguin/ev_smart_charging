@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "ev_smart_charging" / "v2"
+ROOT = (
+    Path(__file__).resolve().parents[2]
+    / "custom_components"
+    / "ev_smart_charging"
+    / "v2"
+)
 
 
 def test_domain_and_planner_never_import_native_ha_or_vendor_adapters():
