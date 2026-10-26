@@ -5,7 +5,7 @@ name: HACS guarded V2 stability test prerelease
 on:
   push:
     branches:
-      - fix/rc14-ha-eventloop-stability
+      - fix/rc13-ha-eventloop-stability
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,7 +24,7 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/fix/rc14-ha-eventloop-stability' }}
+    if: ${{ github.ref == 'refs/heads/fix/rc13-ha-eventloop-stability' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
