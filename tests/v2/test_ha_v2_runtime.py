@@ -14,12 +14,19 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
 from custom_components.ev_smart_charging.v2 import (
-    ENTRY_VEHICLE, ENTRY_CHARGER, ENTRY_CONTROLLER, MARKER,
+    ENTRY_VEHICLE,
+    ENTRY_CHARGER,
+    ENTRY_CONTROLLER,
+    MARKER,
 )
 from custom_components.ev_smart_charging.v2.catalog import catalog, details, model
 from custom_components.ev_smart_charging.v2.entities import sensors_for_entry
 from custom_components.ev_smart_charging.v2.runtime import (
-    V2ControllerRuntime, _number, _connected, _meter, read_inputs,
+    V2ControllerRuntime,
+    _number,
+    _connected,
+    _meter,
+    read_inputs,
 )
 
 
@@ -45,8 +52,8 @@ def _priced_sources(hass, count=16):
     first = _quarter()
     raw = [
         {
-            "start": (first + timedelta(minutes=i*15)).isoformat(),
-            "end": (first + timedelta(minutes=(i+1)*15)).isoformat(),
+            "start": (first + timedelta(minutes=i * 15)).isoformat(),
+            "end": (first + timedelta(minutes=(i + 1) * 15)).isoformat(),
             "effective_eur_per_kwh": 0.2,
         }
         for i in range(count)
@@ -66,19 +73,35 @@ def _priced_sources(hass, count=16):
 def _setup_entries(hass):
     first = _priced_sources(hass)
     c1 = _entry(
-        hass, ENTRY_CONTROLLER, "one", "North", max_parallel=2, horizon_days=2,
+        hass,
+        ENTRY_CONTROLLER,
+        "one",
+        "North",
+        max_parallel=2,
+        horizon_days=2,
         power_budget_kw=11.0,
     )
     c2 = _entry(hass, ENTRY_CONTROLLER, "two", "South")
     v = _entry(
-        hass, ENTRY_VEHICLE, "car", "Car",
-        soc_entity="sensor.vehicle_soc", battery_kwh=25, target_soc=80,
-        max_ac_kw=7.4, ready_by=(first + timedelta(hours=3)).isoformat(),
+        hass,
+        ENTRY_VEHICLE,
+        "car",
+        "Car",
+        soc_entity="sensor.vehicle_soc",
+        battery_kwh=25,
+        target_soc=80,
+        max_ac_kw=7.4,
+        ready_by=(first + timedelta(hours=3)).isoformat(),
     )
     ch = _entry(
-        hass, ENTRY_CHARGER, "garage", "Garage",
-        controller_uid="one", vehicle_uid="car",
-        connected_entity="binary_sensor.cable", power_entity="sensor.charger_power",
+        hass,
+        ENTRY_CHARGER,
+        "garage",
+        "Garage",
+        controller_uid="one",
+        vehicle_uid="car",
+        connected_entity="binary_sensor.cable",
+        power_entity="sensor.charger_power",
         energy_entity="sensor.charger_energy",
         tariff_entity="sensor.effective_electricity",
         max_ac_kw=7.4,
@@ -86,17 +109,27 @@ def _setup_entries(hass):
     hass.states.async_set("sensor.vehicle_soc", "50", {"unit_of_measurement": "%"})
     hass.states.async_set("binary_sensor.cable", "on")
     hass.states.async_set("sensor.charger_power", "3.2", {"unit_of_measurement": "kW"})
-    hass.states.async_set("sensor.charger_energy", "2.1", {"unit_of_measurement": "kWh"})
+    hass.states.async_set(
+        "sensor.charger_energy", "2.1", {"unit_of_measurement": "kWh"}
+    )
     return c1, c2, v, ch
 
 
-@pytest.mark.parametrize("value,expected", [
-    ("on", True), ("connected", True), ("charging", True),
-    ("off", False), ("disconnected", False), ("unavailable", None),
-    ("idle", None),
-])
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("on", True),
+        ("connected", True),
+        ("charging", True),
+        ("off", False),
+        ("disconnected", False),
+        ("unavailable", None),
+        ("idle", None),
+    ],
+)
 def test_connection_readback_does_not_confuse_idle_with_unplugged(value, expected):
     from types import SimpleNamespace
+
     assert _connected(SimpleNamespace(state=value)) is expected
 
 
@@ -200,28 +233,40 @@ async def test_v2_ha_managed_setup_exposes_devices_and_keeps_legacy_separate(has
             (ENTRY_VEHICLE, vehicle),
             (ENTRY_CHARGER, charger),
         ):
-            assert native_devices.async_get_device(
-                identifiers={(DOMAIN, f"v2:{kind}:{entry.data['uid']}")}
-            ) is not None
+            assert (
+                native_devices.async_get_device(
+                    identifiers={(DOMAIN, f"v2:{kind}:{entry.data['uid']}")}
+                )
+                is not None
+            )
 
         assert hass.services.has_service(DOMAIN, "get_v2_charge_plan")
         response = await hass.services.async_call(
-            DOMAIN, "get_v2_charge_plan",
-            {"controller_uid": "one"}, blocking=True, return_response=True,
+            DOMAIN,
+            "get_v2_charge_plan",
+            {"controller_uid": "one"},
+            blocking=True,
+            return_response=True,
         )
         assert response["controller_uid"] == "one"
         assert response["physical_actuation_authorized"] is False
 
         missing = await hass.services.async_call(
-            DOMAIN, "get_v2_charge_plan",
-            {"controller_uid": "missing"}, blocking=True, return_response=True,
+            DOMAIN,
+            "get_v2_charge_plan",
+            {"controller_uid": "missing"},
+            blocking=True,
+            return_response=True,
         )
         assert missing["status"] == "CONTROLLER_NOT_FOUND"
 
         registry = entity_registry(hass)
-        assert registry.async_get_entity_id(
-            "sensor", DOMAIN, f"{DOMAIN}_v2_{ENTRY_VEHICLE}_car_soc"
-        ) is not None
+        assert (
+            registry.async_get_entity_id(
+                "sensor", DOMAIN, f"{DOMAIN}_v2_{ENTRY_VEHICLE}_car_soc"
+            )
+            is not None
+        )
 
         assert await hass.config_entries.async_reload(c1.entry_id)
         await hass.async_block_till_done()

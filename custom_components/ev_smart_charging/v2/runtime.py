@@ -36,9 +36,7 @@ def _meter(state, quantity):
         return None
     unit = state.attributes.get("unit_of_measurement")
     factors = (
-        {"kW": 1.0, "W": 0.001}
-        if quantity == "power"
-        else {"kWh": 1.0, "Wh": 0.001}
+        {"kW": 1.0, "W": 0.001} if quantity == "power" else {"kWh": 1.0, "Wh": 0.001}
     )
     factor = factors.get(unit)
     if factor is None:
@@ -94,7 +92,11 @@ def read_inputs(hass, chargers, vehicles):
                 "power",
             ),
             "energy_kwh": _meter(
-                hass.states.get(charger.energy_entity) if charger.energy_entity else None,
+                (
+                    hass.states.get(charger.energy_entity)
+                    if charger.energy_entity
+                    else None
+                ),
                 "energy",
             ),
         }

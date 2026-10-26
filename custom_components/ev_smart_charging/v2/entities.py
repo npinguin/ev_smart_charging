@@ -114,13 +114,20 @@ class V2Fact(SensorEntity):
                 )
             if self.key == "power_kw":
                 return _meter(
-                    self.hass.states.get(obj.power_entity) if obj.power_entity else None,
+                    (
+                        self.hass.states.get(obj.power_entity)
+                        if obj.power_entity
+                        else None
+                    ),
                     "power",
                 )
             if self.key == "energy_kwh":
                 return _meter(
-                    self.hass.states.get(obj.energy_entity)
-                    if obj.energy_entity else None,
+                    (
+                        self.hass.states.get(obj.energy_entity)
+                        if obj.energy_entity
+                        else None
+                    ),
                     "energy",
                 )
         elif self.kind == ENTRY_CONTROLLER:
