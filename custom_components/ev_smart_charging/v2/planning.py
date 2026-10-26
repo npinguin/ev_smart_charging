@@ -18,6 +18,9 @@ from ..controller.planner import (
 from .model import Charger, Controller, Vehicle, effective_charge_kw, ready_by_utc
 
 QUARTER = timedelta(minutes=15)
+# Bound supplier-provided slot data before expanding intervals. This also
+# covers the 14-day planning horizon across Brussels DST transitions.
+MAX_PRICE_QUARTERS = 14 * 96 + 8
 
 
 def parse_tariff_slots(raw, currency, unit):
@@ -26,6 +29,8 @@ def parse_tariff_slots(raw, currency, unit):
         return [], "INVALID_TARIFF_UNIT"
     if not isinstance(raw, (tuple, list)) or not raw:
         return [], "PRICE_SLOTS_UNAVAILABLE"
+    if len(raw) > MAX_PRICE_QUARTERS:
+        return [], "INVALID_TARIFF_CURVE"
     slots = []
     try:
         for item in raw:
@@ -44,6 +49,14 @@ def parse_tariff_slots(raw, currency, unit):
                 or not isfinite(value)
                 or start.minute % 15
                 or start.second
+                or start.microsecond
+                or end.minute % 15
+                or end.second
+                or end.microsecond
+                or end <= start
+                or (end - start) % QUARTER
+                or (end - start) > MAX_PRICE_QUARTERS * QUARTER
+                or len(slots) + (end - start) // QUARTER > MAX_PRICE_QUARTERS
             ):
                 raise ValueError("invalid tariff interval")
             while start < end:
