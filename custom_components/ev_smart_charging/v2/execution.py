@@ -21,6 +21,7 @@ from ..controller import safety
 from . import MARKER
 from .model import Charger
 from .catalog import catalog
+from .ownership import _lock as ownership_lock
 
 _LOGGER = logging.getLogger(__name__)
 _WRITERS_KEY = f"{DOMAIN}.v2_native_writers"
@@ -194,53 +195,56 @@ class NativeChargeWriter:
             wants_on = False
 
         async with self._lock:
-            if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
-                return "WRITER_CLOSED_OR_SAFETY_HOLD"
-            if not self._acquire():
-                return "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
-            # Options changes can move a Charger while its previous Controller
-            # still holds a cached plan. Revalidate the authoritative catalog
-            # immediately before the only native service-call boundary.
-            current = catalog(self.hass)[1].get(self.charger.uid)
-            if (
-                current is None
-                or current.controller_uid != self.controller_uid
-                or current.control_entity != self.charger.control_entity
-            ):
-                self.close()
-                return "OWNERSHIP_CHANGED_BEFORE_COMMAND"
-            state = _current_readback(self.hass, self.charger.control_entity)
-            # An unknown actual native state can never be used as a Start
-            # permission. It also must not cause repeated speculative Off.
-            if state is None:
-                return "NATIVE_READBACK_UNAVAILABLE"
-            if state is wants_on:
-                return denial or "ALREADY_AT_TARGET"
-            now = monotonic()
-            if (
-                wants_on == self._last_command
-                and now - self._last_at < _COMMAND_RETRY_SECONDS
-            ):
-                return "COMMAND_COOLDOWN"
-            domain = self.charger.control_entity.split(".", 1)[0]
-            command = "turn_on" if wants_on else "turn_off"
-            self._last_command = wants_on
-            self._last_at = now
-            try:
-                await asyncio.wait_for(
-                    self.hass.services.async_call(
-                        domain,
-                        command,
-                        target={"entity_id": self.charger.control_entity},
-                        blocking=True,
-                    ),
-                    timeout=8.0,
+            # Serialize native physical ownership with cross-entry reassignment.
+            # An Options transfer cannot interleave an in-flight native command.
+            async with ownership_lock(self.hass):
+                if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
+                    return "WRITER_CLOSED_OR_SAFETY_HOLD"
+                if not self._acquire():
+                    return "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
+                # Options changes can move a Charger while its previous Controller
+                # still holds a cached plan. Revalidate the authoritative catalog
+                # immediately before the only native service-call boundary.
+                current = catalog(self.hass)[1].get(self.charger.uid)
+                if (
+                    current is None
+                    or current.controller_uid != self.controller_uid
+                    or current.control_entity != self.charger.control_entity
+                ):
+                    self.close()
+                    return "OWNERSHIP_CHANGED_BEFORE_COMMAND"
+                state = _current_readback(self.hass, self.charger.control_entity)
+                # An unknown actual native state can never be used as a Start
+                # permission. It also must not cause repeated speculative Off.
+                if state is None:
+                    return "NATIVE_READBACK_UNAVAILABLE"
+                if state is wants_on:
+                    return denial or "ALREADY_AT_TARGET"
+                now = monotonic()
+                if (
+                    wants_on == self._last_command
+                    and now - self._last_at < _COMMAND_RETRY_SECONDS
+                ):
+                    return "COMMAND_COOLDOWN"
+                domain = self.charger.control_entity.split(".", 1)[0]
+                command = "turn_on" if wants_on else "turn_off"
+                self._last_command = wants_on
+                self._last_at = now
+                try:
+                    await asyncio.wait_for(
+                        self.hass.services.async_call(
+                            domain,
+                            command,
+                            target={"entity_id": self.charger.control_entity},
+                            blocking=True,
+                        ),
+                        timeout=8.0,
+                    )
+                except Exception:
+                    _LOGGER.exception("V2 native command failed for %s", self.charger.uid)
+                    return "COMMAND_FAILED_OR_TIMED_OUT"
+                # A service response only means accepted, never prove the EVSE
+                # actually started/stopped; next readback verifies actual state.
+                return (
+                    f"SAFETY_STOP_{denial}" if denial else "COMMAND_SENT_AWAITING_READBACK"
                 )
-            except Exception:
-                _LOGGER.exception("V2 native command failed for %s", self.charger.uid)
-                return "COMMAND_FAILED_OR_TIMED_OUT"
-            # A service response only means accepted, never prove the EVSE
-            # actually started/stopped; next readback verifies actual state.
-            return (
-                f"SAFETY_STOP_{denial}" if denial else "COMMAND_SENT_AWAITING_READBACK"
-            )
