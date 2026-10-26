@@ -62,7 +62,8 @@
           "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
           "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
           "phase_count": "Aantal laadfasen",
-          "max_current_a": "Maximale laadstroom (A)"
+          "max_current_a": "Maximale laadstroom (A)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         }
       },
       "v2_controller": {
@@ -100,7 +101,8 @@
           "energy_entity": "Sessiemeter energie",
           "max_ac_kw": "Bekend maximaal AC-vermogen (kW)",
           "phase_count": "Bekend aantal laadfasen",
-          "max_current_a": "Bekende maximale laadstroom (A)"
+          "max_current_a": "Bekende maximale laadstroom (A)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         },
         "description": "Oorspronkelijke Local gereed-tijd (dagelijks): {legacy_ready_by}. Dit is enkel een voorstel voor het Vehicle-profiel. Controleer het laadpatroon vóór de overdracht; de bestaande Local-configuratie wordt niet gewijzigd."
       }
@@ -167,7 +169,8 @@
           "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
           "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
           "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
-          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)"
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         },
         "menu_options": {
           "link_chargers": "Laadpunten koppelen"
