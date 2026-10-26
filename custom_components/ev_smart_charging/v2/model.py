@@ -99,9 +99,7 @@ class Controller:
             raise ConfigurationError("horizon_out_of_range")
         optional_positive(self.power_budget_kw, "power_budget")
         optional_positive(self.cost_budget_eur, "cost_budget")
-        if self.price_cap_eur_kwh is not None and not isfinite(
-            self.price_cap_eur_kwh
-        ):
+        if self.price_cap_eur_kwh is not None and not isfinite(self.price_cap_eur_kwh):
             raise ConfigurationError("price_cap_invalid")
 
 
@@ -181,8 +179,11 @@ def move_vehicle(
     if destination_charger_uid is not None and destination_charger_uid not in chargers:
         raise ConfigurationError("missing_charger")
     proposed = {
-        uid: replace(charger, vehicle_uid="")
-        if charger.vehicle_uid == vehicle_uid else charger
+        uid: (
+            replace(charger, vehicle_uid="")
+            if charger.vehicle_uid == vehicle_uid
+            else charger
+        )
         for uid, charger in chargers.items()
     }
     if destination_charger_uid is not None:
