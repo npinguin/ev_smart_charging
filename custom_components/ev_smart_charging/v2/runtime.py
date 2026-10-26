@@ -12,6 +12,8 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt
 
 from .catalog import catalog
+from ..controller import safety
+from .execution import NativeChargeWriter
 from .planning import compile_advisory, parse_tariff_slots
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,6 +122,7 @@ class V2ControllerRuntime:
         self._listeners = set()
         self._lock = asyncio.Lock()
         self._stopped = False
+        self._writers = {}
 
     @callback
     def subscribe(self, fn):
@@ -170,6 +173,13 @@ class V2ControllerRuntime:
                     observed,
                     dt.utcnow(),
                 )
+                # A plan only becomes a physical command after a completely
+                # separate native ownership/readback/cost/electrical gate.
+                # P0 containment is immutable via UI or persisted options.
+                if safety.COORDINATED_ACTUATION_ENABLED and not self._stopped:
+                    await self._apply_native_plan(
+                        controller, chargers, observed, result
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -187,6 +197,54 @@ class V2ControllerRuntime:
                 self.snapshot = result
                 self._notify()
 
+    async def _apply_native_plan(self, controller, chargers, observed, result):
+        """One physically serialized writer per owned Charger, not per event."""
+        for uid, writer in tuple(self._writers.items()):
+            current = chargers.get(uid)
+            if (
+                current is None
+                or writer.charger.control_entity != current.control_entity
+                or writer.controller_uid != controller.uid
+            ):
+                writer.close()
+                self._writers.pop(uid, None)
+
+        # Shared group headroom cannot be called certified unless every
+        # participating load has a valid canonical native power measurement.
+        watts_known = all(
+            observed.get(uid, {}).get("power_kw") is not None
+            for uid in chargers
+        )
+        group_actual = sum(
+            observed.get(uid, {}).get("power_kw") or 0
+            for uid in chargers
+        )
+        for uid, charger in chargers.items():
+            if self._stopped or not safety.COORDINATED_ACTUATION_ENABLED:
+                break
+            if not charger.control_entity:
+                continue
+            writer = self._writers.get(uid)
+            if writer is None:
+                writer = NativeChargeWriter(self.hass, charger, controller.uid)
+                self._writers[uid] = writer
+            own_power = observed.get(uid, {}).get("power_kw") or 0
+            capacity_valid = watts_known and (
+                controller.power_budget_kw is None
+                or group_actual - own_power + (charger.max_ac_kw or 0)
+                <= controller.power_budget_kw + 1e-9
+            )
+            status = await writer.async_reconcile(
+                result,
+                dt.utcnow(),
+                connected=observed.get(uid, {}).get("connected"),
+                measured_power_kw=observed.get(uid, {}).get("power_kw"),
+                actual_budget_certified=controller.cost_budget_eur is None,
+                group_capacity_certified=capacity_valid,
+            )
+            if status not in ("ALREADY_AT_TARGET", "COMMAND_COOLDOWN"):
+                _LOGGER.debug("EVSC V2 %s physical admission: %s", uid, status)
+
     @callback
     def stop(self):
         self._stopped = True
@@ -196,4 +254,7 @@ class V2ControllerRuntime:
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
+        for writer in self._writers.values():
+            writer.close()
+        self._writers.clear()
         self._listeners.clear()
