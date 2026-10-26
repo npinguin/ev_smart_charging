@@ -110,7 +110,8 @@
           "max_ac_kw": "Known maximum AC power (kW)",
           "phase_count": "Known charging phase count",
           "max_current_a": "Known maximum charging current (A)"
-        }
+        },
+        "description": "Original Local daily Ready By: {legacy_ready_by}. This is a suggestion for the Vehicle profile only. Verify its schedule before switching charging ownership; the existing Local configuration is not modified."
       }
     },
     "error": {
