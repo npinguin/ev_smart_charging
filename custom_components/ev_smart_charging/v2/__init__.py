@@ -1,4 +1,5 @@
 """Independent, opt-in EVSC V2 runtime. Legacy v8 entries are not migrated."""
+
 ENTRY_VEHICLE = "vehicle_v2"
 ENTRY_CHARGER = "charger_v2"
 ENTRY_CONTROLLER = "controller_v2"
