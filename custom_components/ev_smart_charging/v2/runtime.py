@@ -13,7 +13,7 @@ from homeassistant.util import dt
 
 from .catalog import catalog
 from ..controller import safety
-from .execution import NativeChargeWriter
+from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory, parse_tariff_slots
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +130,43 @@ def read_inputs(hass, chargers, vehicles):
     return result
 
 
+def _group_admissions(controller, chargers, observed, plan, when):
+    """Reserve real worst-case power before issuing any new Start.
+
+    One deterministic pass; no second planner, state cache, or extra task.
+    Active measured loads get priority so a new Start cannot displace them.
+    """
+    if any(observed.get(uid, {}).get("power_kw") is None for uid in chargers):
+        return set()
+    total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
+    active = sum(observed[uid]["power_kw"] > 0.05 for uid in chargers)
+    wanted = [
+        uid for uid in chargers if _desired_now(plan, uid, when)
+    ]
+    wanted.sort(key=lambda uid: (observed[uid]["power_kw"] <= 0.05, uid))
+    admitted = set()
+    for uid in wanted:
+        charger = chargers[uid]
+        measured = observed[uid]["power_kw"]
+        ceiling = charger.max_ac_kw
+        if ceiling is None:
+            continue
+        running = measured > 0.05
+        extra_kw = max(0.0, ceiling - measured)
+        if not running and active >= controller.max_parallel:
+            continue
+        if (
+            controller.power_budget_kw is not None
+            and total_kw + extra_kw > controller.power_budget_kw + 1e-9
+        ):
+            continue
+        admitted.add(uid)
+        total_kw += extra_kw
+        if not running:
+            active += 1
+    return admitted
+
+
 class V2ControllerRuntime:
     """One Charge Controller = one planner, for 0..N Chargers."""
 
@@ -244,16 +281,14 @@ class V2ControllerRuntime:
                 await writer.async_close()
                 self._writers.pop(uid, None)
 
-        # Shared group headroom cannot be called certified unless every
-        # participating load has a valid canonical native power measurement.
-        watts_known = all(
-            observed.get(uid, {}).get("power_kw") is not None for uid in chargers
-        )
-        group_actual = sum(
-            observed.get(uid, {}).get("power_kw") or 0 for uid in chargers
+        # Single conservative reservation pass across the entire Controller.
+        # Independent per-Charger checks can over-allocate a shared budget.
+        when = dt.utcnow()
+        admitted = _group_admissions(
+            controller, chargers, observed, result, when
         )
         native_results = {}
-        for uid, charger in chargers.items():
+        for uid, charger in sorted(chargers.items()):
             if self._stopped or not safety.COORDINATED_ACTUATION_ENABLED:
                 break
             if not charger.control_entity:
@@ -262,19 +297,13 @@ class V2ControllerRuntime:
             if writer is None:
                 writer = NativeChargeWriter(self.hass, charger, controller.uid)
                 self._writers[uid] = writer
-            own_power = observed.get(uid, {}).get("power_kw") or 0
-            capacity_valid = watts_known and (
-                controller.power_budget_kw is None
-                or group_actual - own_power + (charger.max_ac_kw or 0)
-                <= controller.power_budget_kw + 1e-9
-            )
             status = await writer.async_reconcile(
                 result,
-                dt.utcnow(),
+                when,
                 connected=observed.get(uid, {}).get("connected"),
                 measured_power_kw=observed.get(uid, {}).get("power_kw"),
                 actual_budget_certified=controller.cost_budget_eur is None,
-                group_capacity_certified=capacity_valid,
+                group_capacity_certified=uid in admitted,
             )
             native_results[uid] = status
             if status not in ("ALREADY_AT_TARGET", "COMMAND_COOLDOWN"):
