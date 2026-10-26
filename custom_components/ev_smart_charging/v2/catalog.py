@@ -67,6 +67,9 @@ def model(entry):
             max_ac_kw=optional_positive(data.get("max_ac_kw"), "charger_ac"),
             phase_count=data.get("phase_count"),
             max_current_a=optional_positive(data.get("max_current_a"), "current"),
+            nominal_phase_voltage_v=optional_positive(
+                data.get("nominal_phase_voltage_v"), "phase_voltage"
+            ),
             legacy_entry_id=data.get("legacy_entry_id", ""),
         )
     if kind == ENTRY_CONTROLLER:
