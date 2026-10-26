@@ -78,6 +78,7 @@ class Charger:
     max_ac_kw: float | None = None
     phase_count: int | None = None
     max_current_a: float | None = None
+    nominal_phase_voltage_v: float | None = None
     legacy_entry_id: str = ""
 
     def __post_init__(self):
@@ -85,6 +86,8 @@ class Charger:
             raise ConfigurationError("charger_requires_controller")
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("charger_phases_invalid")
+        if self.nominal_phase_voltage_v is not None:
+            optional_positive(self.nominal_phase_voltage_v, "phase_voltage")
         if self.control_semantics not in (
             "unspecified",
             "charge_request",
@@ -154,9 +157,15 @@ def validate_catalog(
 def effective_charge_kw(vehicle: Vehicle, charger: Charger) -> float | None:
     """Bound by known physical caps, not guessed from current idle measurements."""
     caps = [v for v in (vehicle.max_ac_kw, charger.max_ac_kw) if v is not None]
-    if charger.max_current_a is not None and charger.phase_count is not None:
+    if charger.max_current_a is not None:
+        # Current-to-power conversion requires a known installation voltage
+        # and the charger's verified wiring, never an assumed local grid.
+        if charger.phase_count is None or charger.nominal_phase_voltage_v is None:
+            return None
         count = min(charger.phase_count, vehicle.phase_count or charger.phase_count)
-        caps.append(count * 230.0 * charger.max_current_a / 1000.0)
+        caps.append(
+            count * charger.nominal_phase_voltage_v * charger.max_current_a / 1000.0
+        )
     if not caps:
         return None
     return min(caps)
