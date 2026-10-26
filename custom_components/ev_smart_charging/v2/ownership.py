@@ -11,6 +11,7 @@ This module owns *configuration* only; it never issues EVSE commands.
 from __future__ import annotations
 
 import asyncio
+from contextlib import AsyncExitStack
 from dataclasses import replace
 from types import SimpleNamespace
 from uuid import uuid4
@@ -24,12 +25,23 @@ from .model import ConfigurationError, validate_catalog
 
 _STORAGE_KEY = f"{DOMAIN}.v2_ownership_transactions"
 _LOCK_KEY = f"{DOMAIN}.v2_ownership_lock"
+_CONTROL_LOCKS_KEY = f"{DOMAIN}.v2_control_locks"
 _STORE_KEY = f"{DOMAIN}.v2_ownership_store"
 _VERSION = 1
 
 
 def _lock(hass):
     return hass.data.setdefault(_LOCK_KEY, asyncio.Lock())
+
+
+def control_lock(hass, charger_uid):
+    """Physical command serialization is per Charger, never site-global.
+
+    A stalled physical service call may not delay unrelated Controllers or
+    Chargers. Assignment transactions acquire only their affected locks.
+    """
+    locks = hass.data.setdefault(_CONTROL_LOCKS_KEY, {})
+    return locks.setdefault(charger_uid, asyncio.Lock())
 
 
 def _store(hass):
@@ -110,30 +122,38 @@ async def _recover_locked(hass):
     if current_vehicle not in (before_target_vehicle, desired_vehicle):
         raise ConfigurationError("ownership_recovery_conflict")
 
-    if source_uid is not None and source_uid != target_uid:
-        source = _entry_by_uid(hass, source_uid)
-        current_source = details(source).get("vehicle_uid", "")
-        if current_source not in ("", desired_vehicle):
-            raise ConfigurationError("ownership_source_changed")
-        if current_source == desired_vehicle:
-            _write_charger(hass, source, {"vehicle_uid": ""})
+    # Wait only for physical writers affected by this transaction.
+    # Sorted acquisition avoids deadlocks during opposite-direction moves.
+    targets = {target_uid}
+    if source_uid is not None:
+        targets.add(source_uid)
+    async with AsyncExitStack() as stack:
+        for uid in sorted(targets):
+            await stack.enter_async_context(control_lock(hass, uid))
+        if source_uid is not None and source_uid != target_uid:
+            source = _entry_by_uid(hass, source_uid)
+            current_source = details(source).get("vehicle_uid", "")
+            if current_source not in ("", desired_vehicle):
+                raise ConfigurationError("ownership_source_changed")
+            if current_source == desired_vehicle:
+                _write_charger(hass, source, {"vehicle_uid": ""})
 
-    # Recheck the whole catalog; no second claim may have been introduced.
-    vehicles, chargers, controllers = catalog(hass)
-    proposal = model(
-        SimpleNamespace(
-            data=target.data,
-            options={**target.options, **options},
+        # Recheck the whole catalog; no second claim may have been introduced.
+        vehicles, chargers, controllers = catalog(hass)
+        proposal = model(
+            SimpleNamespace(
+                data=target.data,
+                options={**target.options, **options},
+            )
         )
-    )
-    hypothetical = dict(chargers)
-    hypothetical[target_uid] = proposal
-    validate_catalog(vehicles, hypothetical, controllers)
-    if any(details(target).get(key) != value for key, value in options.items()):
-        _write_charger(hass, target, options)
-    catalog(hass)
-    await store.async_remove()
-    return True
+        hypothetical = dict(chargers)
+        hypothetical[target_uid] = proposal
+        validate_catalog(vehicles, hypothetical, controllers)
+        if any(details(target).get(key) != value for key, value in options.items()):
+            _write_charger(hass, target, options)
+        catalog(hass)
+        await store.async_remove()
+        return True
 
 
 async def async_recover_ownership(hass):
