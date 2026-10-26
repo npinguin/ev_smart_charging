@@ -44,7 +44,8 @@ def store(monkeypatch):
 
 def make_entry(hass, kind, uid, name, **data):
     item = MockConfigEntry(
-        domain=DOMAIN, entry_id=f"test_owner_{uid}",
+        domain=DOMAIN,
+        entry_id=f"test_owner_{uid}",
         data={MARKER: kind, "uid": uid, "name": name, **data},
         version=8,
     )
@@ -59,18 +60,30 @@ def make_catalog(hass):
     make_entry(hass, ENTRY_VEHICLE, "mercedes", "Mercedes")
     make_entry(hass, ENTRY_VEHICLE, "guest", "Guest")
     a = make_entry(
-        hass, ENTRY_CHARGER, "white", "White",
-        controller_uid="north", vehicle_uid="audi",
+        hass,
+        ENTRY_CHARGER,
+        "white",
+        "White",
+        controller_uid="north",
+        vehicle_uid="audi",
         control_entity="switch.white",
     )
     b = make_entry(
-        hass, ENTRY_CHARGER, "black", "Black",
-        controller_uid="south", vehicle_uid="mercedes",
+        hass,
+        ENTRY_CHARGER,
+        "black",
+        "Black",
+        controller_uid="south",
+        vehicle_uid="mercedes",
         control_entity="switch.black",
     )
     c = make_entry(
-        hass, ENTRY_CHARGER, "peblar", "Peblar",
-        controller_uid="north", vehicle_uid="",
+        hass,
+        ENTRY_CHARGER,
+        "peblar",
+        "Peblar",
+        controller_uid="north",
+        vehicle_uid="",
         control_entity="switch.peblar",
     )
     return a, b, c
@@ -111,9 +124,7 @@ async def test_single_charger_controller_change_has_no_intermediate_two_owners(
     assert store.saved is None
 
 
-async def test_missing_controller_or_duplicate_native_target_never_writes(
-    hass, store
-):
+async def test_missing_controller_or_duplicate_native_target_never_writes(hass, store):
     make_catalog(hass)
     with pytest.raises(ConfigurationError, match="missing_controller"):
         await ownership.async_move_charger(hass, "white", "unknown")
@@ -146,14 +157,10 @@ async def test_failed_midway_transfer_recovers_after_restart_without_duplicate(
     assert store.saved is not None
     assert details(a)["vehicle_uid"] == ""
     assert details(c).get("vehicle_uid", "") == ""
-    assert sum(
-        ch.vehicle_uid == "audi" for ch in catalog(hass)[1].values()
-    ) == 0
+    assert sum(ch.vehicle_uid == "audi" for ch in catalog(hass)[1].values()) == 0
     monkeypatch.setattr(ownership, "_write_charger", original)
     assert await ownership.async_recover_ownership(hass)
-    assert sum(
-        ch.vehicle_uid == "audi" for ch in catalog(hass)[1].values()
-    ) == 1
+    assert sum(ch.vehicle_uid == "audi" for ch in catalog(hass)[1].values()) == 1
     assert details(c)["vehicle_uid"] == "audi"
     assert store.saved is None
 
