@@ -99,6 +99,47 @@ def proposed_charger(legacy, controller_uid, *, vehicle_uid="", overrides=None):
     return result
 
 
+def legacy_ready_suggestion(hass, legacy):
+    """Find original daily Ready By without guessing restored HA overrides.
+
+    This is a proposal for the *Vehicle*, never a Charger setting.
+    A live, restored HA Select wins over Config Entry data/default.
+    """
+    from homeassistant.helpers.entity_registry import async_get as entity_registry_get
+    from .ready_schedule import parse_clock, ReadyScheduleError
+
+    source = "legacy_default"
+    raw = _legacy_settings(legacy).get("ready_quarter", "08:00")
+    if "ready_quarter" in _legacy_settings(legacy):
+        source = "legacy_config"
+    registry = entity_registry_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "select", DOMAIN, f"{legacy.entry_id}.select.chargecompletiontime"
+    )
+    if entity_id:
+        state = hass.states.get(entity_id)
+        if state is not None and state.state not in ("unknown", "unavailable"):
+            raw, source = state.state, "restored_ha_select"
+    if raw == "None":
+        return {
+            "mode": None, "time": None, "source": source,
+            "requires_operator_confirmation": True,
+        }
+    try:
+        parsed = parse_clock(raw)
+    except ReadyScheduleError:
+        return {
+            "mode": None, "time": None, "source": "invalid_legacy_ready_by",
+            "requires_operator_confirmation": True,
+        }
+    return {
+        "mode": "daily",
+        "time": parsed.strftime("%H:%M"),
+        "source": source,
+        "requires_operator_confirmation": True,
+    }
+
+
 def discover(hass):
     """Idempotent candidates; already mapped Local entries aren't re-migrated."""
     mapped = {
@@ -126,6 +167,7 @@ def discover(hass):
                 },
                 "requires_operator_mapping": unresolved,
                 "physical_cutover": False,
+                "vehicle_ready_by_suggestion": legacy_ready_suggestion(hass, legacy),
             }
         )
     return result
