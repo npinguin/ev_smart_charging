@@ -108,9 +108,7 @@ def test_vehicle_cannot_displace_occupied_charger():
 
 def test_duplicate_physical_control_target_rejected():
     v, c, p = setup_catalog()
-    c["peblar"] = replace(
-        c["peblar"], control_entity="switch.wallbox_white"
-    )
+    c["peblar"] = replace(c["peblar"], control_entity="switch.wallbox_white")
     with pytest.raises(ConfigurationError, match="duplicate_physical_target"):
         validate_catalog(v, c, p)
 
