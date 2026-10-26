@@ -85,6 +85,9 @@ async def _schema(hass, kind, old):
                 [
                     opt("vehicle_uid", vol.In(vehicles), ""),
                     opt("control_entity", _entity(["switch", "input_boolean"])),
+                    opt("control_semantics", vol.In([
+                        "unspecified", "charge_request", "availability_enable", "power_relay"
+                    ]), "unspecified"),
                     opt("connected_entity", _entity(["sensor", "binary_sensor"])),
                     opt("charging_entity", _entity(["sensor", "binary_sensor"])),
                     opt("power_entity", _entity("sensor")),
