@@ -61,13 +61,18 @@ class NativeChargeWriter:
     """One serialized native writer, one control entity, one owning Controller."""
 
     def __init__(
-        self, hass, charger: Charger, controller_uid: str,
+        self,
+        hass,
+        charger: Charger,
+        controller_uid: str,
         port: ChargeControlPort | None = None,
     ):
         self.hass = hass
         self.charger = charger
         self.controller_uid = controller_uid
-        self._port = port if port is not None else resolve_control_port(charger.control_entity)
+        self._port = (
+            port if port is not None else resolve_control_port(charger.control_entity)
+        )
         self._lock = asyncio.Lock()
         self._last_command = None
         self._last_at = 0.0
