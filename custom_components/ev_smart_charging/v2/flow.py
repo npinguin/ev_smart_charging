@@ -36,15 +36,23 @@ async def _schema(hass, kind, old):
 
     fields = {vol.Required("name", default=old.get("name", "")): str}
     if kind == ENTRY_VEHICLE:
-        fields.update(dict([
-            opt("soc_entity", _entity()),
-            opt("target_soc", vol.All(vol.Coerce(float), vol.Range(min=0, max=100)), 80),
-            opt("battery_kwh", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-            opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-            opt("phase_count", vol.In([1, 2, 3])),
-            opt("ready_by", selector.DateTimeSelector()),
-            opt("user_id", vol.In(await _users(hass)), ""),
-        ]))
+        fields.update(
+            dict(
+                [
+                    opt("soc_entity", _entity()),
+                    opt(
+                        "target_soc",
+                        vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                        80,
+                    ),
+                    opt("battery_kwh", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
+                    opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
+                    opt("phase_count", vol.In([1, 2, 3])),
+                    opt("ready_by", selector.DateTimeSelector()),
+                    opt("user_id", vol.In(await _users(hass)), ""),
+                ]
+            )
+        )
     elif kind == ENTRY_CHARGER:
         controllers = {
             e.data["uid"]: details(e)["name"]
@@ -59,27 +67,56 @@ async def _schema(hass, kind, old):
         }
         if not controllers:
             raise ValueError("create_controller_first")
-        fields[vol.Required("controller_uid", default=old.get("controller_uid", next(iter(controllers))))] = vol.In(controllers)
-        fields.update(dict([
-            opt("vehicle_uid", vol.In(vehicles), ""),
-            opt("control_entity", _entity("switch")),
-            opt("connected_entity", _entity()),
-            opt("charging_entity", _entity()),
-            opt("power_entity", _entity("sensor")),
-            opt("energy_entity", _entity("sensor")),
-            opt("tariff_entity", _entity("sensor")),
-            opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-            opt("phase_count", vol.In([1, 2, 3])),
-            opt("max_current_a", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-        ]))
+        fields[
+            vol.Required(
+                "controller_uid",
+                default=old.get("controller_uid", next(iter(controllers))),
+            )
+        ] = vol.In(controllers)
+        fields.update(
+            dict(
+                [
+                    opt("vehicle_uid", vol.In(vehicles), ""),
+                    opt("control_entity", _entity("switch")),
+                    opt("connected_entity", _entity()),
+                    opt("charging_entity", _entity()),
+                    opt("power_entity", _entity("sensor")),
+                    opt("energy_entity", _entity("sensor")),
+                    opt("tariff_entity", _entity("sensor")),
+                    opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
+                    opt("phase_count", vol.In([1, 2, 3])),
+                    opt(
+                        "max_current_a", vol.All(vol.Coerce(float), vol.Range(min=0.01))
+                    ),
+                ]
+            )
+        )
     elif kind == ENTRY_CONTROLLER:
-        fields.update(dict([
-            opt("max_parallel", vol.All(vol.Coerce(int), vol.Range(min=1, max=16)), 1),
-            opt("horizon_days", vol.All(vol.Coerce(int), vol.Range(min=1, max=14)), 2),
-            opt("power_budget_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-            opt("price_cap_eur_kwh", vol.Coerce(float)),
-            opt("cost_budget_eur", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
-        ]))
+        fields.update(
+            dict(
+                [
+                    opt(
+                        "max_parallel",
+                        vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
+                        1,
+                    ),
+                    opt(
+                        "horizon_days",
+                        vol.All(vol.Coerce(int), vol.Range(min=1, max=14)),
+                        2,
+                    ),
+                    opt(
+                        "power_budget_kw",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.01)),
+                    ),
+                    opt("price_cap_eur_kwh", vol.Coerce(float)),
+                    opt(
+                        "cost_budget_eur",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.01)),
+                    ),
+                ]
+            )
+        )
     return vol.Schema(fields)
 
 
@@ -92,12 +129,14 @@ async def create(flow, kind, user_input=None):
             check_proposed(flow.hass, kind, data)
         except (ValueError, TypeError, KeyError):
             return flow.async_show_form(
-                step_id=kind, data_schema=await _schema(flow.hass, kind, user_input),
+                step_id=kind,
+                data_schema=await _schema(flow.hass, kind, user_input),
                 errors={"base": "invalid_v2_configuration"},
             )
         return flow.async_create_entry(title=data["name"], data=data)
     return flow.async_show_form(
-        step_id=kind, data_schema=await _schema(flow.hass, kind, {}),
+        step_id=kind,
+        data_schema=await _schema(flow.hass, kind, {}),
     )
 
 
@@ -117,10 +156,14 @@ class V2OptionsFlow(config_entries.OptionsFlow):
                 check_proposed(self.hass, kind, proposed, editing_uid=old["uid"])
             except (ValueError, TypeError, KeyError):
                 return self.async_show_form(
-                    step_id="init", data_schema=await _schema(self.hass, kind, proposed),
+                    step_id="init",
+                    data_schema=await _schema(self.hass, kind, proposed),
                     errors={"base": "invalid_v2_configuration"},
                 )
-            return self.async_create_entry(title="", data={**entry.options, **user_input})
+            return self.async_create_entry(
+                title="", data={**entry.options, **user_input}
+            )
         return self.async_show_form(
-            step_id="init", data_schema=await _schema(self.hass, kind, old),
+            step_id="init",
+            data_schema=await _schema(self.hass, kind, old),
         )
