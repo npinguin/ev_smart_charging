@@ -70,7 +70,9 @@ class V2Fact(SensorEntity):
         # scalar. Static metadata never needs a source-event listener.
         source = None
         if self.kind == ENTRY_VEHICLE and self.key in (
-            "soc", "required_battery_kwh", "source_quality"
+            "soc",
+            "required_battery_kwh",
+            "source_quality",
         ):
             source = obj.soc_entity
         elif self.kind == ENTRY_CHARGER:
