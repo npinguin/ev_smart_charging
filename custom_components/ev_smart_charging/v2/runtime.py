@@ -1,0 +1,153 @@
+"""Passive, independent per-Controller V2 planner. No physical EVSE writes."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import timedelta
+from math import isfinite
+
+from homeassistant.core import callback
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt
+
+from .catalog import catalog
+from .planning import compile_advisory, parse_tariff_slots
+
+_LOGGER = logging.getLogger(__name__)
+_INTERVAL = timedelta(minutes=1)
+
+
+def _number(state, lower=0, upper=None):
+    if state is None or state.state in ("unknown", "unavailable"):
+        return None
+    try:
+        value = float(state.state)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    if not isfinite(value) or value < lower or (upper is not None and value > upper):
+        return None
+    return value
+
+
+def _connected(state):
+    if state is None:
+        return None
+    value = str(state.state).lower()
+    if value in ("on", "connected", "true", "charging"):
+        return True
+    if value in ("off", "disconnected", "false"):
+        return False
+    return None
+
+
+def read_inputs(hass, chargers, vehicles):
+    """Use existing HA cached state only, never poll an OEM/cloud service."""
+    result = {}
+    for charger in chargers.values():
+        vehicle = vehicles.get(charger.vehicle_uid)
+        soc = _number(
+            hass.states.get(vehicle.soc_entity)
+            if vehicle is not None and vehicle.soc_entity else None,
+            0, 100,
+        )
+        tariff = hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
+        prices, quality = parse_tariff_slots(
+            tariff.attributes.get("price_slots") if tariff else None,
+            tariff.attributes.get("currency") if tariff else None,
+            tariff.attributes.get("unit_of_measurement") if tariff else None,
+        )
+        result[charger.uid] = {
+            "soc": soc,
+            "connected": _connected(
+                hass.states.get(charger.connected_entity)
+                if charger.connected_entity else None
+            ),
+            "prices": prices,
+            "tariff_quality": quality,
+            "power_kw": _number(
+                hass.states.get(charger.power_entity)
+                if charger.power_entity else None,
+            ),
+            "energy_kwh": _number(
+                hass.states.get(charger.energy_entity)
+                if charger.energy_entity else None,
+            ),
+        }
+    return result
+
+
+class V2ControllerRuntime:
+    """One Charge Controller = one planner, for 0..N Chargers."""
+
+    def __init__(self, hass, entry):
+        self.hass = hass
+        self.entry = entry
+        self.snapshot = {
+            "status": "INITIALIZING",
+            "controller_uid": entry.data["uid"],
+            "advisory_only": True,
+            "physical_actuation_authorized": False,
+        }
+        self._unsub = None
+        self._listeners = set()
+        self._lock = asyncio.Lock()
+        self._stopped = False
+
+    @callback
+    def subscribe(self, fn):
+        self._listeners.add(fn)
+        return lambda: self._listeners.discard(fn)
+
+    @callback
+    def _notify(self):
+        for fn in tuple(self._listeners):
+            fn()
+
+    async def async_start(self):
+        self._unsub = async_track_time_interval(
+            self.hass, self._on_tick, _INTERVAL
+        )
+        await self.async_refresh()
+
+    @callback
+    def _on_tick(self, _now):
+        if not self._stopped and not self._lock.locked():
+            self.hass.async_create_task(self.async_refresh())
+
+    async def async_refresh(self):
+        if self._stopped or self._lock.locked():
+            return
+        async with self._lock:
+            try:
+                vehicles, all_chargers, controllers = catalog(self.hass)
+                controller = controllers[self.entry.data["uid"]]
+                chargers = {
+                    uid: charger
+                    for uid, charger in all_chargers.items()
+                    if charger.controller_uid == controller.uid
+                }
+                observed = read_inputs(self.hass, chargers, vehicles)
+                result = await self.hass.async_add_executor_job(
+                    compile_advisory, controller, chargers, vehicles, observed, dt.utcnow()
+                )
+            except (ValueError, TypeError, KeyError, OverflowError) as exc:
+                _LOGGER.warning("EVSC V2 planner configuration invalid: %s", exc)
+                result = {
+                    "status": "INVALID_CONFIGURATION",
+                    "reason": type(exc).__name__,
+                    "controller_uid": self.entry.data["uid"],
+                    "advisory_only": True,
+                    "physical_actuation_authorized": False,
+                }
+            if not self._stopped:
+                self.snapshot = result
+                self._notify()
+
+    @callback
+    def stop(self):
+        self._stopped = True
+        if self._unsub is not None:
+            self._unsub()
+            self._unsub = None
+        self._listeners.clear()
