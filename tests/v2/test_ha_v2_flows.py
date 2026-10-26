@@ -181,7 +181,7 @@ async def test_weekly_vehicle_calendar_is_stored_on_vehicle_not_controller(hass)
     assert created["type"] == FlowResultType.CREATE_ENTRY
     assert created["data"]["ready_mode"] == "weekly"
     assert created["data"]["ready_mon"] == "06:45:00"
-    assert "ready_tue" not in created["data"]
+    assert created["data"]["ready_tue"] == ""
     assert created["data"][MARKER] == ENTRY_VEHICLE
 
 
