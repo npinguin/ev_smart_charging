@@ -110,7 +110,8 @@
           "max_ac_kw": "Bekend maximaal AC-vermogen (kW)",
           "phase_count": "Bekend aantal laadfasen",
           "max_current_a": "Bekende maximale laadstroom (A)"
-        }
+        },
+        "description": "Oorspronkelijke Local gereed-tijd (dagelijks): {legacy_ready_by}. Dit is enkel een voorstel voor het Vehicle-profiel. Controleer het laadpatroon vóór de overdracht; de bestaande Local-configuratie wordt niet gewijzigd."
       }
     },
     "error": {
