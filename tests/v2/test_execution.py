@@ -409,3 +409,76 @@ async def test_charger_transfer_waits_for_in_flight_native_command(
             command.cancel()
             await asyncio.gather(command, return_exceptions=True)
         await writer.async_close()
+
+
+async def test_slow_charger_does_not_delay_unrelated_native_charger(
+    hass, charger, monkeypatch
+):
+    """A slow OEM/HA call on A must not freeze B or another Controller."""
+    monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
+    entered_a = asyncio.Event()
+    entered_b = asyncio.Event()
+    release_a = asyncio.Event()
+
+    async def turn_on(call):
+        target = call.data.get("entity_id")
+        if target == "switch.native_charger":
+            entered_a.set()
+            await release_a.wait()
+        else:
+            entered_b.set()
+        hass.states.async_set(target, "on")
+
+    hass.services.async_register("switch", "turn_on", turn_on)
+    hass.states.async_set("switch.native_charger", "off")
+    hass.states.async_set("switch.independent_charger", "off")
+    other_entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="independent_charger",
+        data={
+            MARKER: ENTRY_CHARGER,
+            "uid": "other",
+            "name": "Other",
+            "controller_uid": "main",
+            "control_entity": "switch.independent_charger",
+            "control_semantics": "charge_request",
+            "max_ac_kw": 7.4,
+        },
+        version=8,
+    )
+    other_entry.add_to_hass(hass)
+    other = Charger(
+        uid="other",
+        name="Other",
+        controller_uid="main",
+        control_entity="switch.independent_charger",
+        control_semantics="charge_request",
+        max_ac_kw=7.4,
+    )
+    writer_a = NativeChargeWriter(hass, charger, "main")
+    writer_b = NativeChargeWriter(hass, other, "main")
+    plan_b = _snapshot()
+    plan_b["loads"]["other"] = plan_b["loads"].pop("ch")
+    a = asyncio.create_task(
+        writer_a.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            group_capacity_certified=True,
+        )
+    )
+    b = None
+    try:
+        await asyncio.wait_for(entered_a.wait(), timeout=2)
+        b = asyncio.create_task(
+            writer_b.async_reconcile(
+                plan_b, NOW, connected=True, measured_power_kw=0,
+                group_capacity_certified=True,
+            )
+        )
+        await asyncio.wait_for(entered_b.wait(), timeout=2)
+        assert await b == "COMMAND_SENT_AWAITING_READBACK"
+        assert not a.done()
+    finally:
+        release_a.set()
+        await asyncio.gather(a, *([b] if b is not None else []), return_exceptions=True)
+        await writer_a.async_close()
+        await writer_b.async_close()
