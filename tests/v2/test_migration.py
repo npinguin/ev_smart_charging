@@ -19,6 +19,7 @@ from custom_components.ev_smart_charging.v2.migration import (
     by_legacy_id,
     discover,
     proposed_charger,
+    legacy_ready_suggestion,
 )
 
 
@@ -163,3 +164,31 @@ async def test_migration_without_controller_is_explicitly_rejected(hass):
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "create_controller_first"
+
+
+def test_legacy_daily_ready_by_is_proposed_to_vehicle_not_duplicated_on_charger(hass):
+    legacy = _local(hass)
+    legacy_ready = legacy_ready_suggestion(hass, legacy)
+    assert legacy_ready == {
+        "mode": "daily", "time": "08:00", "source": "legacy_default",
+        "requires_operator_confirmation": True,
+    }
+    proposal = proposed_charger(legacy, "main")
+    assert "ready_time" not in proposal
+    assert "ready_mode" not in proposal
+    row = discover(hass)[0]
+    assert row["vehicle_ready_by_suggestion"]["time"] == "08:00"
+
+
+def test_legacy_custom_daily_ready_time_is_respected_without_mutating_original(hass):
+    legacy = _local(hass)
+    hass.config_entries.async_update_entry(
+        legacy, options={**legacy.options, "ready_quarter": "06:45"}
+    )
+    assert legacy_ready_suggestion(hass, legacy)["time"] == "06:45"
+    assert legacy_ready_suggestion(hass, legacy)["source"] == "legacy_config"
+    hass.config_entries.async_update_entry(
+        legacy, options={**legacy.options, "ready_quarter": "None"}
+    )
+    assert legacy_ready_suggestion(hass, legacy)["mode"] is None
+    assert legacy_ready_suggestion(hass, legacy)["time"] is None
