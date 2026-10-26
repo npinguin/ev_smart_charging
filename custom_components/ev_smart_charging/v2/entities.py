@@ -9,7 +9,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE
 from .catalog import details, model
-from .runtime import _connected, _number
+from .runtime import _connected, _number, _meter
 
 
 class V2Fact(SensorEntity):
@@ -113,14 +113,15 @@ class V2Fact(SensorEntity):
                     else ("disconnected" if status is False else "unknown")
                 )
             if self.key == "power_kw":
-                return _number(
-                    self.hass.states.get(obj.power_entity) if obj.power_entity else None
+                return _meter(
+                    self.hass.states.get(obj.power_entity) if obj.power_entity else None,
+                    "power",
                 )
             if self.key == "energy_kwh":
-                return _number(
+                return _meter(
                     self.hass.states.get(obj.energy_entity)
-                    if obj.energy_entity
-                    else None
+                    if obj.energy_entity else None,
+                    "energy",
                 )
         elif self.kind == ENTRY_CONTROLLER:
             manager = self.hass.data[DOMAIN].get(self.entry.entry_id)
