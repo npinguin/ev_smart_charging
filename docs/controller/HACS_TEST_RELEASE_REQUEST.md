@@ -18,3 +18,11 @@ Run the repository's full test workflow through `.github/workflows/hacs-test-pre
 Read `docs/engineering/V2_RC14_STABILITY_ACCEPTANCE.md`. Preserve all existing Local behavior. Physical V2 Coordinated start/stop remains P0 locked without live Peblar/Wallbox sign-off; CI alone cannot certify real HA eventloop latency or physical charging. Use a full backup, install only for staging and retain rc.13 rollback. No merge/main promotion or overwrite of an existing release is permitted.
 
 **If any exact-head job fails or is still queued, do not create a release.**
+
+## Final fix after deep CI diagnosis
+
+Earlier Python 3.12–3.14 logs exposed test timeouts caused by an HA-tracked debounce task sleeping while Home Assistant's `async_block_till_done` awaited it. This version uses immediate single-task handling for the first Local source event, with a cancellable HA timer **only** when feedback arrives during an active refresh. It retains the original Local response semantics while bounding feedback loops.
+
+The full CI gate additionally checks there is no `await asyncio.sleep` in the Local source-drain coroutine. A release is forbidden if any Python test, source-feedback regression, formatting check or HA validation is queued, failed or unverified.
+
+**This exact request commit supersedes prior queued rc.14 build requests. Do not manually publish an older PR source SHA.**
