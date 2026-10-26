@@ -318,22 +318,33 @@ class EVSmartChargingIndividualFact(EVSmartChargingSensor):
         await super().async_added_to_hass()
         # Refresh from authoritative native sources rather than duplicating
         # their device registration or adding one timer per scalar entity.
+        options = self.coordinator.config_entry.options
+        sources = {
+            "soc": self.coordinator.ev_soc_entity_id,
+            "target_soc": self.coordinator.ev_target_soc_entity_id,
+            "power": options.get("evsc_actual_power_entity"),
+            "energy": options.get("evsc_actual_energy_entity"),
+            "capacity": options.get("evsc_capacity_entity"),
+            "current": options.get("evsc_current_energy_entity"),
+            "target": options.get("evsc_target_energy_entity"),
+            "price": options.get("evsc_effective_price_entity")
+            or self.coordinator.price_entity_id,
+        }
+        dependencies = {
+            "current_charging_power": ("power",),
+            "battery_capacity": ("capacity",),
+            "battery_energy_current": ("current", "capacity", "soc"),
+            "battery_energy_target": ("target", "capacity", "target_soc"),
+            "charging_required": (
+                "current", "target", "capacity", "soc", "target_soc"
+            ),
+            "indicative_charging_cost": ("price", "soc", "target_soc"),
+            "actual_charging_cost": ("price", "energy"),
+        }
         ids = {
-            value
-            for value in (
-                self.coordinator.charging_state_entity_id,
-                self.coordinator.ev_soc_entity_id,
-                self.coordinator.ev_target_soc_entity_id,
-                self.coordinator.config_entry.options.get("evsc_actual_power_entity"),
-                self.coordinator.config_entry.options.get("evsc_actual_energy_entity"),
-                self.coordinator.config_entry.options.get("evsc_capacity_entity"),
-                self.coordinator.config_entry.options.get("evsc_current_energy_entity"),
-                self.coordinator.config_entry.options.get("evsc_target_energy_entity"),
-                self.coordinator.config_entry.options.get(
-                    "evsc_effective_price_entity"
-                ),
-            )
-            if value
+            sources[name]
+            for name in dependencies[self._entity_key]
+            if sources[name]
         }
         if ids:
             self.async_on_remove(
