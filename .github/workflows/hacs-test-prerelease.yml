@@ -1,11 +1,11 @@
-name: HACS guarded clean V2 test prerelease
+name: HACS guarded V2 2026.10 calendar test prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - refactor/v2-clean-mvp-foundation
+      - feature/v2-operational-mvp-gates
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,12 +24,12 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/refactor/v2-clean-mvp-foundation' }}
+    if: ${{ github.ref == 'refs/heads/feature/v2-operational-mvp-gates' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.12
+      VERSION: 2.6.0-rc.13
     steps:
       - uses: actions/checkout@v7
 
@@ -128,6 +128,24 @@ jobs:
           ):
             assert Path(required).is_file(), f"Missing V2 MVP gate: {required}"
           assert "get_v2_charge_plan" in Path("custom_components/ev_smart_charging/__init__.py").read_text()
+          # New V2 Ready By, exclusive ownership and native adapter regression gates.
+          for required in (
+            "custom_components/ev_smart_charging/v2/ready_schedule.py",
+            "custom_components/ev_smart_charging/v2/ownership.py",
+            "custom_components/ev_smart_charging/v2/execution.py",
+            "custom_components/ev_smart_charging/v2/ports.py",
+            "custom_components/ev_smart_charging/v2/adapters/home_assistant.py",
+            "tests/v2/test_ready_schedule.py",
+            "tests/v2/test_ownership.py",
+            "tests/v2/test_execution.py",
+            "tests/v2/test_group_admission.py",
+            "tests/v2/test_generic_boundaries.py",
+          ):
+            assert Path(required).is_file(), f"Missing mandatory V2 calendar/ownership gate: {required}"
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
+            "Do not deliver unqualified field physical actuation"
+          )
+
           assert "async_add_executor_job(" in runtime
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
@@ -146,7 +164,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc12-control-semantics-manual-zip
+          name: evsc-guarded-rc13-control-semantics-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -171,4 +189,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "EVSC V2 CLEAN ARCHITECTURE — TEST ONLY. Source $GITHUB_SHA, Draft PR #7. One Charge Controller equals one independent advisory planner (0..N Chargers). Each V2 Charger belongs to exactly one Controller; each Vehicle may be linked to at most one Charger and may remain unassigned. Explicit Controller reassignments and HA user association are supported by V2 configuration. V2 Vehicles, Chargers and Controllers use independent Home Assistant Config Entries, Devices and native scalar sensors. Read-only multi-day 15-minute planning reuses the current EVSC planner with kW group limits, concurrency, effective-price cap and ADVISORY ONLY expected-cost cap. No second physical EVSE writer is installed and Coordinated physical start/stop is HARD DISABLED while P0 #5 remains open. The original v8 Local Chargers, identities, settings and native Start/Stop remain fully backward compatible. V2 controller plan service is explicitly scoped by controller_uid. Missing SoC, cable readback, pricing and metering remain UNKNOWN rather than guessed. Before install: FULL HA BACKUP and record original config entries. This is NOT a production release, NOT a completed Migration Assistant, NOT a physically tested coordinated charging release. If rollback needed, restore the prior v2.6.0-rc.11 version and full HA backup. Full exact-head Python 3.11–3.14, 90% coverage, HACS/Hassfest, old Local regression and V2 tests are required by the workflow before tag creation."
+            --notes "EV Smart Charging V2 rc.13 — HACS TEST PRERELEASE ONLY. Source commit $GITHUB_SHA. Adds Vehicle Ready By one-time, daily (08:00 default), and weekly per-day deadlines; Brussels DST semantics; independent Vehicle, Charger and Charge Controller devices; one Controller per Charger and max one Charger per Vehicle; persistent assignment journal and rollback awareness; bounded Controller planning, group power reservations, source quality, dynamic price caps, and isolated native control adapters. Native physical Coordinated actuation is NOT field qualified and remains disabled (P0 #5): the previous Peblar mode change froze HA. Local entries and their original native operation remain intact. Economic cost cap is indicative and its live metered budget admission is not yet certified. This does not qualify as a completed operational release. Do not migrate physical ownership on a live EVSE before separately verified staging. Make a full HA backup before installation. Roll back to v2.6.0-rc.12 and restore backup if needed. Release requires exact-source CI, Python 3.11–3.14, HA/HACS/Hassfest, original Local and new V2 regression tests; never merge to main automatically."
