@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
+from .ready_schedule import WEEKDAYS
 from .model import (
     Charger,
     Controller,
@@ -40,6 +43,13 @@ def model(entry):
             phase_count=data.get("phase_count"),
             user_id=data.get("user_id", ""),
             ready_by=data.get("ready_by", ""),
+            ready_mode=data.get("ready_mode", ""),
+            ready_time=data.get("ready_time", "07:00"),
+            ready_weekly={
+                key: data[f"ready_{key}"]
+                for key in WEEKDAYS
+                if data.get(f"ready_{key}")
+            },
         )
     if kind == ENTRY_CHARGER:
         return Charger(
@@ -100,58 +110,27 @@ def catalog(hass):
 
 
 def check_proposed(hass, entry_type, data, editing_uid=None):
-    """Validate an atomic proposal across all configured, independent devices."""
+    """Validate one canonical proposed Config Entry; never duplicate parsing.
+
+    One shared model constructor is used for both persisted and proposed
+    configuration. This prevents creation/edit validation drift.
+    """
+    if entry_type not in (ENTRY_VEHICLE, ENTRY_CHARGER, ENTRY_CONTROLLER):
+        raise ValueError("unsupported_v2_entry")
+    item = model(
+        SimpleNamespace(
+            data={**data, MARKER: entry_type},
+            options={},
+        )
+    )
+    if editing_uid is not None and item.uid != editing_uid:
+        raise ValueError("immutable_identity_update")
     vehicles, chargers, controllers = catalog(hass)
     if entry_type == ENTRY_VEHICLE:
-        item = Vehicle(
-            uid=data["uid"],
-            name=data["name"],
-            soc_entity=data.get("soc_entity", ""),
-            target_soc=float(data.get("target_soc", 80)),
-            battery_kwh=optional_positive(data.get("battery_kwh"), "battery"),
-            max_ac_kw=optional_positive(data.get("max_ac_kw"), "vehicle_ac"),
-            phase_count=data.get("phase_count"),
-            user_id=data.get("user_id", ""),
-            ready_by=data.get("ready_by", ""),
-        )
         vehicles[item.uid] = item
     elif entry_type == ENTRY_CHARGER:
-        item = Charger(
-            uid=data["uid"],
-            name=data["name"],
-            controller_uid=data["controller_uid"],
-            vehicle_uid=data.get("vehicle_uid", ""),
-            control_entity=data.get("control_entity", ""),
-            control_semantics=data.get("control_semantics", "unspecified"),
-            connected_entity=data.get("connected_entity", ""),
-            charging_entity=data.get("charging_entity", ""),
-            power_entity=data.get("power_entity", ""),
-            energy_entity=data.get("energy_entity", ""),
-            tariff_entity=data.get("tariff_entity", ""),
-            max_ac_kw=optional_positive(data.get("max_ac_kw"), "charger_ac"),
-            phase_count=data.get("phase_count"),
-            max_current_a=optional_positive(data.get("max_current_a"), "current"),
-            legacy_entry_id=data.get("legacy_entry_id", ""),
-        )
         chargers[item.uid] = item
-    elif entry_type == ENTRY_CONTROLLER:
-        item = Controller(
-            uid=data["uid"],
-            name=data["name"],
-            max_parallel=int(data.get("max_parallel", 1)),
-            horizon_days=int(data.get("horizon_days", 2)),
-            power_budget_kw=optional_positive(
-                data.get("power_budget_kw"), "power_budget"
-            ),
-            price_cap_eur_kwh=(
-                float(data["price_cap_eur_kwh"])
-                if data.get("price_cap_eur_kwh") is not None
-                else None
-            ),
-            cost_budget_eur=optional_positive(
-                data.get("cost_budget_eur"), "cost_budget"
-            ),
-        )
+    else:
         controllers[item.uid] = item
     validate_catalog(vehicles, chargers, controllers)
     return item
