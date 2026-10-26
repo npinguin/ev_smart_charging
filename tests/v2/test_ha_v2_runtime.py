@@ -368,19 +368,23 @@ def test_vehicle_next_ready_sensor_is_derived_from_calendar(hass, monkeypatch):
 
     monkeypatch.setattr(hass.config, "time_zone", "Europe/Brussels")
     entry = _entry(
-        hass, ENTRY_VEHICLE, "calendar", "Work commuter",
-        ready_mode="weekly", ready_mon="06:45",
-        ready_wed="08:30", ready_fri="17:15",
+        hass,
+        ENTRY_VEHICLE,
+        "calendar",
+        "Work commuter",
+        ready_mode="weekly",
+        ready_mon="06:45",
+        ready_wed="08:30",
+        ready_fri="17:15",
     )
     sensor = V2Fact(
-        entry, ENTRY_VEHICLE, "next_ready_by", "Next Ready By",
+        entry,
+        ENTRY_VEHICLE,
+        "next_ready_by",
+        "Next Ready By",
         SensorDeviceClass.TIMESTAMP,
     )
     sensor.hass = hass
-    expected = next_ready_deadline(
-        model(entry), dt.utcnow(), "Europe/Brussels"
-    )
+    expected = next_ready_deadline(model(entry), dt.utcnow(), "Europe/Brussels")
     assert sensor.native_value == expected
-    assert sensor.device_info["identifiers"] == {
-        (DOMAIN, "v2:vehicle_v2:calendar")
-    }
+    assert sensor.device_info["identifiers"] == {(DOMAIN, "v2:vehicle_v2:calendar")}

@@ -185,7 +185,9 @@ async def test_weekly_vehicle_calendar_is_stored_on_vehicle_not_controller(hass)
     assert created["data"][MARKER] == ENTRY_VEHICLE
 
 
-async def test_one_time_local_selector_datetime_gets_explicit_utc_offset(hass, monkeypatch):
+async def test_one_time_local_selector_datetime_gets_explicit_utc_offset(
+    hass, monkeypatch
+):
     monkeypatch.setattr(hass.config, "time_zone", "Europe/Brussels")
     created = await start(hass, "v2_vehicle")
     created = await hass.config_entries.flow.async_configure(

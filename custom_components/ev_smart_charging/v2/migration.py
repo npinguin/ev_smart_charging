@@ -123,14 +123,18 @@ def legacy_ready_suggestion(hass, legacy):
             raw, source = state.state, "restored_ha_select"
     if raw == "None":
         return {
-            "mode": None, "time": None, "source": source,
+            "mode": None,
+            "time": None,
+            "source": source,
             "requires_operator_confirmation": True,
         }
     try:
         parsed = parse_clock(raw)
     except ReadyScheduleError:
         return {
-            "mode": None, "time": None, "source": "invalid_legacy_ready_by",
+            "mode": None,
+            "time": None,
+            "source": "invalid_legacy_ready_by",
             "requires_operator_confirmation": True,
         }
     return {

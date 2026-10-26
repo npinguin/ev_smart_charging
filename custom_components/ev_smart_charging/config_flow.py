@@ -235,7 +235,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema[vol.Optional(field, default=defaults[field])] = cv.string
         data_schema[
             vol.Optional("control_semantics", default=defaults["control_semantics"])
-        ] = vol.In(["unspecified", "charge_request", "availability_enable", "power_relay"])
+        ] = vol.In(
+            ["unspecified", "charge_request", "availability_enable", "power_relay"]
+        )
         data_schema[vol.Optional("max_ac_kw", default=defaults["max_ac_kw"])] = vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1000)
         )

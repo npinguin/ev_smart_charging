@@ -6,7 +6,10 @@ from datetime import timedelta
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_point_in_time
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_point_in_time,
+)
 from homeassistant.util import dt
 
 from ..const import DOMAIN

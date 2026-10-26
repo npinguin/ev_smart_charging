@@ -13,7 +13,10 @@ from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
 from .catalog import check_proposed, details, entries_of
 from .ownership import async_apply_charger_options
 from .ready_schedule import (
-    WEEKDAYS, READY_MODES, DEFAULT_READY_TIME, normalize_once_ready_by,
+    WEEKDAYS,
+    READY_MODES,
+    DEFAULT_READY_TIME,
+    normalize_once_ready_by,
 )
 
 _STEPS = {
@@ -70,10 +73,7 @@ async def _schema(hass, kind, old):
                     ),
                     opt("ready_by", selector.DateTimeSelector()),
                     opt("ready_time", minute_selector, DEFAULT_READY_TIME),
-                    *[
-                        opt(f"ready_{weekday}", minute_selector)
-                        for weekday in WEEKDAYS
-                    ],
+                    *[opt(f"ready_{weekday}", minute_selector) for weekday in WEEKDAYS],
                     opt("user_id", vol.In(await _users(hass)), ""),
                 ]
             )

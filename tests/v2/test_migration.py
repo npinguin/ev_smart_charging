@@ -170,7 +170,9 @@ def test_legacy_daily_ready_by_is_proposed_to_vehicle_not_duplicated_on_charger(
     legacy = _local(hass)
     legacy_ready = legacy_ready_suggestion(hass, legacy)
     assert legacy_ready == {
-        "mode": "daily", "time": "08:00", "source": "legacy_default",
+        "mode": "daily",
+        "time": "08:00",
+        "source": "legacy_default",
         "requires_operator_confirmation": True,
     }
     proposal = proposed_charger(legacy, "main")
