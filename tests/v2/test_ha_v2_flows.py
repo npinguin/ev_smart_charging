@@ -50,7 +50,7 @@ async def start(hass, choice):
 async def test_new_controller_is_a_separate_entry_with_its_own_planner(hass):
     result = await start(hass, "v2_controller")
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == ENTRY_CONTROLLER
+    assert result["step_id"] == "v2_controller"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
