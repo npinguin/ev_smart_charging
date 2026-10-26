@@ -13,7 +13,10 @@ class HAOnOffPort:
     _DOMAINS = frozenset({"switch", "input_boolean"})
 
     def supports(self, target: str) -> bool:
-        return isinstance(target, str) and target.partition(".")[0] in self._DOMAINS
+        if not isinstance(target, str):
+            return False
+        domain, separator, object_id = target.partition(".")
+        return bool(separator and object_id and domain in self._DOMAINS)
 
     def readback(self, hass, target: str) -> bool | None:
         if not self.supports(target):
