@@ -44,6 +44,7 @@ async def _schema(hass, kind, old):
             return (vol.Optional(key, default=default), validator)
         return (vol.Optional(key), validator)
 
+    minute_selector = selector.TimeSelector(selector.TimeSelectorConfig(no_second=True))
     fields = {vol.Required("name", default=old.get("name", "")): str}
     if kind == ENTRY_VEHICLE:
         fields.update(
@@ -68,9 +69,9 @@ async def _schema(hass, kind, old):
                         ),
                     ),
                     opt("ready_by", selector.DateTimeSelector()),
-                    opt("ready_time", selector.TimeSelector(), DEFAULT_READY_TIME),
+                    opt("ready_time", minute_selector, DEFAULT_READY_TIME),
                     *[
-                        opt(f"ready_{weekday}", selector.TimeSelector())
+                        opt(f"ready_{weekday}", minute_selector)
                         for weekday in WEEKDAYS
                     ],
                     opt("user_id", vol.In(await _users(hass)), ""),
