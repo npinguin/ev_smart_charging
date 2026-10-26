@@ -3,3 +3,5 @@
 Format the isolated V2 files to satisfy the existing style gate. The production/local runtime remains unchanged.
 
 Second formatting pass for completed HA lifecycle test and measured meter reader.
+
+Operational MVP normalization for Ready By calendar, migration and native executor.
