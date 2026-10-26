@@ -58,13 +58,21 @@ async def _schema(hass, kind, old):
                     opt("battery_kwh", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     opt("phase_count", vol.In([1, 2, 3])),
-                    opt("ready_mode", vol.In(READY_MODES),
-                        "once" if old.get("ready_by") and not old.get("ready_mode")
-                        else old.get("ready_mode", "daily")),
+                    opt(
+                        "ready_mode",
+                        vol.In(READY_MODES),
+                        (
+                            "once"
+                            if old.get("ready_by") and not old.get("ready_mode")
+                            else old.get("ready_mode", "daily")
+                        ),
+                    ),
                     opt("ready_by", selector.DateTimeSelector()),
                     opt("ready_time", selector.TimeSelector(), DEFAULT_READY_TIME),
-                    *[opt(f"ready_{weekday}", selector.TimeSelector())
-                      for weekday in WEEKDAYS],
+                    *[
+                        opt(f"ready_{weekday}", selector.TimeSelector())
+                        for weekday in WEEKDAYS
+                    ],
                     opt("user_id", vol.In(await _users(hass)), ""),
                 ]
             )
@@ -94,9 +102,18 @@ async def _schema(hass, kind, old):
                 [
                     opt("vehicle_uid", vol.In(vehicles), ""),
                     opt("control_entity", _entity(["switch", "input_boolean"])),
-                    opt("control_semantics", vol.In([
-                        "unspecified", "charge_request", "availability_enable", "power_relay"
-                    ]), "unspecified"),
+                    opt(
+                        "control_semantics",
+                        vol.In(
+                            [
+                                "unspecified",
+                                "charge_request",
+                                "availability_enable",
+                                "power_relay",
+                            ]
+                        ),
+                        "unspecified",
+                    ),
                     opt("connected_entity", _entity(["sensor", "binary_sensor"])),
                     opt("charging_entity", _entity(["sensor", "binary_sensor"])),
                     opt("power_entity", _entity("sensor")),
@@ -145,8 +162,7 @@ def _normalize_vehicle_form(values, timezone_name, *, original=None):
     original = original or {}
     changed.setdefault(
         "ready_mode",
-        original.get("ready_mode")
-        or ("once" if original.get("ready_by") else "daily"),
+        original.get("ready_mode") or ("once" if original.get("ready_by") else "daily"),
     )
     changed.setdefault("ready_time", original.get("ready_time", DEFAULT_READY_TIME))
     if changed["ready_mode"] == "weekly":
