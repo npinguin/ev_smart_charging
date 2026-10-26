@@ -129,6 +129,7 @@ def check_proposed(hass, entry_type, data, editing_uid=None):
             max_ac_kw=optional_positive(data.get("max_ac_kw"), "charger_ac"),
             phase_count=data.get("phase_count"),
             max_current_a=optional_positive(data.get("max_current_a"), "current"),
+            legacy_entry_id=data.get("legacy_entry_id", ""),
         )
         chargers[item.uid] = item
     elif entry_type == ENTRY_CONTROLLER:
