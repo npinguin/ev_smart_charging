@@ -233,7 +233,9 @@ def test_incomplete_tomorrow_tariff_is_not_a_verified_complete_plan():
     assert report["status"] != "PLANNED"
     assert report["total_indicative_eur"] is None
     assert report["loads"]["a"]["demand_status"] in (
-        "PROVISIONAL", "PENDING_PRICES", "INFEASIBLE",
+        "PROVISIONAL",
+        "PENDING_PRICES",
+        "INFEASIBLE",
     )
     assert report["physical_actuation_authorized"] is False
 
@@ -259,14 +261,18 @@ def test_weekly_ready_by_is_resolved_for_the_right_calendar_day():
     )
     assert report["loads"]["a"]["next_ready_by"] == "2026-10-28T10:45:00+00:00"
     assert report["loads"]["a"]["demand_status"] in (
-        "PROVISIONAL", "PENDING_PRICES", "INFEASIBLE", "PLANNED",
+        "PROVISIONAL",
+        "PENDING_PRICES",
+        "INFEASIBLE",
+        "PLANNED",
     )
 
 
 def test_one_time_expired_deadline_does_not_fall_back_to_horizon_end():
     vehicles, controllers, chargers, observed = fixture_data()
     vehicles["v1"] = replace(
-        vehicles["v1"], ready_by="2026-10-25T12:00:00+00:00",
+        vehicles["v1"],
+        ready_by="2026-10-25T12:00:00+00:00",
         ready_mode="once",
     )
     report = compile_advisory(
@@ -279,7 +285,9 @@ def test_one_time_expired_deadline_does_not_fall_back_to_horizon_end():
 def test_daily_ready_by_at_0800_over_midnight_has_correct_utc_deadline():
     vehicles, controllers, chargers, observed = fixture_data()
     vehicles["v1"] = replace(
-        vehicles["v1"], ready_mode="daily", ready_by="",
+        vehicles["v1"],
+        ready_mode="daily",
+        ready_by="",
         ready_time="08:00",
     )
     report = compile_advisory(
