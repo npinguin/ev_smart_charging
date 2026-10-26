@@ -9,7 +9,11 @@ from custom_components.ev_smart_charging.v2.adapters.home_assistant import (
 
 
 def test_charge_port_is_agnostic_to_vendor_and_device_name():
-    for entity in ("switch.garage", "switch.some_other_installation", "input_boolean.mock_ev"):
+    for entity in (
+        "switch.garage",
+        "switch.some_other_installation",
+        "input_boolean.mock_ev",
+    ):
         port = resolve_control_port(entity)
         assert port is not None
         assert port.supports(entity)
