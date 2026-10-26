@@ -206,7 +206,7 @@ class V2ControllerRuntime:
                 or writer.charger.control_entity != current.control_entity
                 or writer.controller_uid != controller.uid
             ):
-                writer.close()
+                await writer.async_close()
                 self._writers.pop(uid, None)
 
         # Shared group headroom cannot be called certified unless every
@@ -244,6 +244,17 @@ class V2ControllerRuntime:
             )
             if status not in ("ALREADY_AT_TARGET", "COMMAND_COOLDOWN"):
                 _LOGGER.debug("EVSC V2 %s physical admission: %s", uid, status)
+
+    async def async_stop(self):
+        """HA unload must wait for any native-service critical section."""
+        task = self._tick_task
+        self._stopped = True
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        for writer in tuple(self._writers.values()):
+            await writer.async_close()
+        self.stop()
 
     @callback
     def stop(self):
