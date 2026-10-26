@@ -6,7 +6,6 @@ from custom_components.ev_smart_charging.v2.adapters.home_assistant import (
     HAOnOffPort,
     resolve_control_port,
 )
-from custom_components.ev_smart_charging.v2.ports import ChargeControlPort
 
 
 def test_charge_port_is_agnostic_to_vendor_and_device_name():
