@@ -75,16 +75,21 @@ def model(entry):
     raise ValueError("unsupported_v2_entry")
 
 
+def _unique_entries(hass, entry_type):
+    """Do not silently overwrite duplicate persisted V2 identities."""
+    result = {}
+    for entry in entries_of(hass, entry_type):
+        uid = entry.data.get("uid")
+        if not uid or uid in result:
+            raise ValueError("duplicate_or_missing_v2_identity")
+        result[uid] = model(entry)
+    return result
+
+
 def catalog(hass):
-    vehicles = {
-        item.data["uid"]: model(item) for item in entries_of(hass, ENTRY_VEHICLE)
-    }
-    chargers = {
-        item.data["uid"]: model(item) for item in entries_of(hass, ENTRY_CHARGER)
-    }
-    controllers = {
-        item.data["uid"]: model(item) for item in entries_of(hass, ENTRY_CONTROLLER)
-    }
+    vehicles = _unique_entries(hass, ENTRY_VEHICLE)
+    chargers = _unique_entries(hass, ENTRY_CHARGER)
+    controllers = _unique_entries(hass, ENTRY_CONTROLLER)
     validate_catalog(vehicles, chargers, controllers)
     return vehicles, chargers, controllers
 
