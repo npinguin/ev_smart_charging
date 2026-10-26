@@ -2,6 +2,15 @@
   "config": {
     "step": {
       "user": {
+        "title": "EV Smart Charging setup",
+        "menu_options": {
+          "v2_controller": "Add Charge Controller (one planner)",
+          "v2_vehicle": "Add Vehicle",
+          "v2_charger": "Add Charger",
+          "legacy_local": "Add classic Local Smart Charger"
+        }
+      },
+      "legacy_local": {
         "description": "Configuration of name and external entities.",
         "data": {
           "device_name": "Name",
@@ -11,6 +20,47 @@
           "charger_entity": "Charger control entity (single space to remove)",
           "charging_state_entity": "Charging state entity (single space to remove)",
           "ev_controlled": "An EV integration will control start/stop of charging"
+        }
+      },
+      "v2_vehicle": {
+        "title": "Add Vehicle",
+        "data": {
+          "name": "Vehicle name",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum vehicle AC power (kW)",
+          "phase_count": "Number of AC phases",
+          "ready_by": "Ready by (timezone aware)",
+          "user_id": "Associated Home Assistant user (optional)"
+        }
+      },
+      "v2_charger": {
+        "title": "Add Charger",
+        "data": {
+          "name": "Charger name",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native control switch (observation only during P0)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Session energy sensor",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "max_current_a": "Maximum charging current (A)"
+        }
+      },
+      "v2_controller": {
+        "title": "Add Charge Controller (one planner)",
+        "data": {
+          "name": "Controller name",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Maximum indicative session cost (EUR)"
         }
       }
     },
@@ -24,7 +74,11 @@
       "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
       "charger_control_switch_not_found": "Charger control entity not found.",
       "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
-      "charging_state_entity_not_found": "Charging state entity not found."
+      "charging_state_entity_not_found": "Charging state entity not found.",
+      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
+    },
+    "abort": {
+      "create_controller_first": "Create a Charge Controller before adding a Charger."
     }
   },
   "options": {
@@ -40,7 +94,29 @@
           "ev_controlled": "An EV integration will control start/stop of charging",
           "evsc_load_energy_kwh": "Requested energy (kWh; optional, for source-less load preview only)",
           "evsc_load_duration_quarters": "Requested duration (15-minute quarters; optional, preview only)",
-          "evsc_control_semantics": "Charger control switch semantics"
+          "evsc_control_semantics": "Charger control switch semantics",
+          "name": "Charger name",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "ready_by": "Ready by (timezone aware)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native control switch (observation only during P0)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Session energy sensor",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_current_a": "Maximum charging current (A)"
         },
         "menu_options": {
           "policy": "Charge Controller policy",
@@ -170,7 +246,8 @@
       "exclusive_load_demand": "Configure requested kWh OR duration, not both.",
       "invalid_charger_link": "Unknown Charger",
       "unlink_coordinated_first": "Return Charger to Local before unlinking",
-      "charger_not_linked": "Link Charger to Controller first"
+      "charger_not_linked": "Link Charger to Controller first",
+      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
     },
     "abort": {
       "no_vehicles": "No Vehicles configured. Add a Vehicle first."
