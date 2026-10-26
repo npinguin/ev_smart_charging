@@ -265,7 +265,9 @@ def test_stale_native_switch_state_is_not_valid_physical_readback(hass, monkeypa
     """Replayed HA switch state cannot establish current physical authority."""
     from types import SimpleNamespace
     from homeassistant.util import dt
-    from custom_components.ev_smart_charging.v2.adapters.home_assistant import HAOnOffPort
+    from custom_components.ev_smart_charging.v2.adapters.home_assistant import (
+        HAOnOffPort,
+    )
 
     stale = SimpleNamespace(
         state="off",
@@ -461,7 +463,10 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
     plan_b["loads"]["other"] = plan_b["loads"].pop("ch")
     a = asyncio.create_task(
         writer_a.async_reconcile(
-            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=0,
             group_capacity_certified=True,
         )
     )
