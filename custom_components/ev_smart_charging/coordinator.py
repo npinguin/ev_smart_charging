@@ -109,12 +109,17 @@ class ChargerSwitch:
         """Initialize."""
 
         self.entity_id = entity_id
-        self.domain = None
-
-        if len(entity_id) > 0:
-            entity = hass.states.get(entity_id)
-            if entity and entity.domain:
-                self.domain = entity.domain
+        # The configured HA entity ID fixes the service domain even if the
+        # source is temporarily unavailable at startup. A one-time state
+        # lookup could otherwise leave the Local writer permanently inert.
+        # No new hardware writer or unsolicited native command is created.
+        self.domain = (
+            entity_id.split(".", 1)[0]
+            if isinstance(entity_id, str)
+            and "." in entity_id
+            and all(entity_id.split(".", 1))
+            else None
+        )
 
 
 class EVSmartChargingCoordinator:

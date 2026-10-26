@@ -11,7 +11,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.const import STATE_OFF, STATE_ON, SERVICE_TURN_ON, SERVICE_TURN_OFF
 from homeassistant.util import dt
 
-from custom_components.ev_smart_charging.coordinator import EVSmartChargingCoordinator
+from custom_components.ev_smart_charging.coordinator import (
+    ChargerSwitch,
+    EVSmartChargingCoordinator,
+)
 
 
 async def test_local_planned_quarter_dispatches_native_start_once_and_stop(hass):
@@ -255,3 +258,16 @@ async def test_local_retry_does_not_repeat_when_evse_enabled_but_idle(hass):
     native.ev_soc = 90
     await native.periodic_check_charging_state()
     native.turn_on_charging.assert_not_awaited()
+
+
+def test_native_control_domain_survives_missing_source_at_boot(hass):
+    """A recovered Wallbox/MQTT entity keeps its original HA service domain."""
+    native_switch = ChargerSwitch(hass, "switch.peblar_outside")
+    manual_relay = ChargerSwitch(hass, "input_boolean.utility_plug")
+    assert native_switch.domain == "switch"
+    assert manual_relay.domain == "input_boolean"
+    assert ChargerSwitch(hass, "").domain is None
+    hass.states.async_set("switch.peblar_outside", "on")
+    hass.states.async_set("input_boolean.utility_plug", "off")
+    assert native_switch.domain == "switch"
+    assert manual_relay.domain == "input_boolean"
