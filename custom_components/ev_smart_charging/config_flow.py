@@ -174,6 +174,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         defaults = {
             "name": candidate["name"],
             "control_entity": candidate.get("control_entity", ""),
+            "control_semantics": candidate.get("control_semantics", "unspecified"),
             "connected_entity": candidate.get("connected_entity", ""),
             "charging_entity": candidate.get("charging_entity", ""),
             "tariff_entity": candidate.get("tariff_entity", ""),
@@ -221,6 +222,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "tariff_entity",
         ):
             data_schema[vol.Optional(field, default=defaults[field])] = cv.string
+        data_schema[
+            vol.Optional("control_semantics", default=defaults["control_semantics"])
+        ] = vol.In(["unspecified", "charge_request", "availability_enable", "power_relay"])
         data_schema[vol.Optional("max_ac_kw", default=defaults["max_ac_kw"])] = vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1000)
         )
