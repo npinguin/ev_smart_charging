@@ -312,13 +312,19 @@ def _local_execution_diagnostics(hass, charger):
         "reconciliation_status": (
             "not_applicable_availability_enable"
             if semantics == "availability_enable"
-            else "semantics_not_configured"
-            if semantics == "unspecified"
-            else "readback_unknown"
-            if actual is None
-            else "matches_command"
-            if actual == ("on" if desired else "off")
-            else "command_readback_disagreement"
+            else (
+                "semantics_not_configured"
+                if semantics == "unspecified"
+                else (
+                    "readback_unknown"
+                    if actual is None
+                    else (
+                        "matches_command"
+                        if actual == ("on" if desired else "off")
+                        else "command_readback_disagreement"
+                    )
+                )
+            )
         ),
         "next_internal_action": (
             "start"
@@ -379,9 +385,9 @@ def _charger_diagnostics(hass, charger, manager=None):
         charge_feedback=(
             "on"
             if sources["charging_readback"].get("charging") is True
-            else "off"
-            if sources["charging_readback"].get("charging") is False
-            else None
+            else (
+                "off" if sources["charging_readback"].get("charging") is False else None
+            )
         ),
         power_kw=(
             sources["actual_power"]["value"]
@@ -673,8 +679,7 @@ def _controller_diagnostics(hass, manager):
     ):
         blockers.append("charger_session_meter_coverage_incomplete")
     if any(
-        not item["coverage"]["effective_price_validated"]
-        for item in entries.values()
+        not item["coverage"]["effective_price_validated"] for item in entries.values()
     ):
         blockers.append("effective_price_coverage_incomplete")
     if not vehicles["configured"]:
@@ -686,8 +691,7 @@ def _controller_diagnostics(hass, manager):
     ):
         blockers.append("measured_charging_without_connection")
     if any(
-        "charging_sensor_power_disagree"
-        in item["physical_observation"]["observations"]
+        "charging_sensor_power_disagree" in item["physical_observation"]["observations"]
         for item in entries.values()
     ):
         blockers.append("charging_state_and_power_disagree")

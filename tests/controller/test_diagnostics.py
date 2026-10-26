@@ -56,7 +56,7 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
         assert result["entry_type"] == "charge_controller"
         assert result["coordinated_hard_safety_hold"] is True
         assert result["controller"]["status"] == "LOCAL_MONITORING"
-        assert result["diagnostics_schema_version"] == "1.2"
+        assert result["diagnostics_schema_version"] == "1.3"
         assert (
             result["controller"]["diagnostic_scope"]
             == "entire_ev_smart_charging_installation"

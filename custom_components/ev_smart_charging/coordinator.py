@@ -127,7 +127,7 @@ class EVSmartChargingCoordinator:
         self._coordinated_command_lock = asyncio.Lock()
         self._last_coordinated_command = None
         self._last_coordinated_command_at = 0.0
-        self._last_local_retry_at = 0.0
+        self._last_local_retry_at = None
         self.platforms = []
         self.listeners = []
         self.setup_timestamp = None
@@ -287,7 +287,8 @@ class EVSmartChargingCoordinator:
             return
         # Bound retry cadence even when repeated readback updates arrive.
         now = monotonic()
-        if now - getattr(self, "_last_local_retry_at", 0.0) < 900:
+        last_retry = getattr(self, "_last_local_retry_at", None)
+        if last_retry is not None and now - last_retry < 900:
             return
         self._last_local_retry_at = now
         _LOGGER.warning(

@@ -44,14 +44,17 @@ def observe_charger(
         semantics = "unspecified"
     control_known = control_state in ("on", "off")
     reported_charging = charging_readback(charge_feedback)
-    observed_power = isinstance(power_kw, (int, float)) and not isinstance(
-        power_kw, bool
-    ) and 0 <= power_kw < float("inf")
+    observed_power = (
+        isinstance(power_kw, (int, float))
+        and not isinstance(power_kw, bool)
+        and 0 <= power_kw < float("inf")
+    )
     measured_charging = power_kw > 0 if observed_power else None
 
     connection_status = (
-        "connected" if connected is True else
-        "disconnected" if connected is False else "unknown"
+        "connected"
+        if connected is True
+        else "disconnected" if connected is False else "unknown"
     )
     if measured_charging is True:
         charging_status = "charging_measured"
@@ -79,9 +82,7 @@ def observe_charger(
         and measured_charging != reported_charging
     ):
         concerns.append("charging_sensor_power_disagree")
-    if connected is False and (
-        measured_charging is True or reported_charging is True
-    ):
+    if connected is False and (measured_charging is True or reported_charging is True):
         concerns.append("reported_charging_without_connection")
 
     return {
@@ -91,8 +92,9 @@ def observe_charger(
         "connection_status": connection_status,
         "charging_status": charging_status,
         "charging_feedback": (
-            "charging" if reported_charging is True else
-            "idle" if reported_charging is False else "unknown"
+            "charging"
+            if reported_charging is True
+            else "idle" if reported_charging is False else "unknown"
         ),
         "measured_power_kw": power_kw if observed_power else None,
         "physical_charging_confirmed": measured_charging,
