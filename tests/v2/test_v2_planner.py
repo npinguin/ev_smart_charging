@@ -57,6 +57,7 @@ def fixture_data():
             max_ac_kw=7.4,
             phase_count=1,
             max_current_a=32,
+            nominal_phase_voltage_v=230,
         ),
         "b": Charger(
             uid="b",
@@ -66,6 +67,7 @@ def fixture_data():
             max_ac_kw=11,
             phase_count=3,
             max_current_a=16,
+            nominal_phase_voltage_v=230,
         ),
         "empty": Charger(uid="empty", name="Empty", controller_uid="c1"),
     }
@@ -294,3 +296,19 @@ def test_daily_ready_by_at_0800_over_midnight_has_correct_utc_deadline():
         controllers["c1"], chargers, vehicles, observed, NOW, "Europe/Brussels"
     )
     assert report["loads"]["a"]["next_ready_by"] == "2026-10-27T07:00:00+00:00"
+
+
+def test_current_limited_power_requires_actual_electrical_voltage():
+    vehicles, controllers, chargers, observed = fixture_data()
+    chargers["a"] = replace(chargers["a"], nominal_phase_voltage_v=None)
+    assert effective_charge_kw(vehicles["v1"], chargers["a"]) is None
+    result = compile_advisory(controllers["c1"], chargers, vehicles, observed, NOW)
+    assert result["excluded"]["a"] == "CHARGE_POWER_UNKNOWN"
+
+
+def test_capability_power_calculation_uses_configured_supply_not_local_assumption():
+    vehicles, controllers, chargers, _ = fixture_data()
+    chargers["a"] = replace(chargers["a"], max_ac_kw=None, nominal_phase_voltage_v=120)
+    assert effective_charge_kw(vehicles["v1"], chargers["a"]) == pytest.approx(3.84)
+    chargers["a"] = replace(chargers["a"], nominal_phase_voltage_v=230)
+    assert effective_charge_kw(vehicles["v1"], chargers["a"]) == pytest.approx(7.36)
