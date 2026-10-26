@@ -190,6 +190,7 @@ class V2ControllerRuntime:
                     vehicles,
                     observed,
                     dt.utcnow(),
+                    self.hass.config.time_zone,
                 )
                 # A plan only becomes a physical command after a completely
                 # separate native ownership/readback/cost/electrical gate.
