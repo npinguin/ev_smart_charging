@@ -46,15 +46,6 @@
         },
         "data_description": {
           "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline."
-        },
-        "data_select": {
-          "ready_mode": {
-            "options": {
-              "once": "Eenmalig tegen datum en tijd",
-              "daily": "Elke dag hetzelfde tijdstip",
-              "weekly": "Weekkalender met specifieke dagen en tijdstippen"
-            }
-          }
         }
       },
       "v2_charger": {
