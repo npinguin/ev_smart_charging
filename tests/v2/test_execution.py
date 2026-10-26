@@ -416,24 +416,29 @@ async def test_charger_transfer_waits_for_in_flight_native_command(
 async def test_slow_charger_does_not_delay_unrelated_native_charger(
     hass, charger, monkeypatch
 ):
-    """A slow OEM/HA call on A must not freeze B or another Controller."""
+    """One slow adapter must not acquire a lock held by a different Charger."""
     monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
     entered_a = asyncio.Event()
     entered_b = asyncio.Event()
     release_a = asyncio.Event()
 
-    async def turn_on(call):
-        target = call.data.get("entity_id")
-        if target == "switch.native_charger":
-            entered_a.set()
-            await release_a.wait()
-        else:
-            entered_b.set()
-        hass.states.async_set(target, "on")
+    class FakePort:
+        def __init__(self, start_event, hold=None):
+            self.start_event = start_event
+            self.hold = hold
 
-    hass.services.async_register("switch", "turn_on", turn_on)
-    hass.states.async_set("switch.native_charger", "off")
-    hass.states.async_set("switch.independent_charger", "off")
+        def supports(self, _target):
+            return True
+
+        def readback(self, _hass, _target):
+            return False
+
+        async def async_set_enabled(self, _hass, _target, enabled):
+            assert enabled is True
+            self.start_event.set()
+            if self.hold is not None:
+                await self.hold.wait()
+
     other_entry = MockConfigEntry(
         domain=DOMAIN,
         entry_id="independent_charger",
@@ -457,16 +462,15 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
         control_semantics="charge_request",
         max_ac_kw=7.4,
     )
-    writer_a = NativeChargeWriter(hass, charger, "main")
-    writer_b = NativeChargeWriter(hass, other, "main")
+    writer_a = NativeChargeWriter(
+        hass, charger, "main", port=FakePort(entered_a, release_a)
+    )
+    writer_b = NativeChargeWriter(hass, other, "main", port=FakePort(entered_b))
     plan_b = _snapshot()
     plan_b["loads"]["other"] = plan_b["loads"].pop("ch")
     a = asyncio.create_task(
         writer_a.async_reconcile(
-            _snapshot(),
-            NOW,
-            connected=True,
-            measured_power_kw=0,
+            _snapshot(), NOW, connected=True, measured_power_kw=0,
             group_capacity_certified=True,
         )
     )
@@ -475,10 +479,7 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
         await asyncio.wait_for(entered_a.wait(), timeout=2)
         b = asyncio.create_task(
             writer_b.async_reconcile(
-                plan_b,
-                NOW,
-                connected=True,
-                measured_power_kw=0,
+                plan_b, NOW, connected=True, measured_power_kw=0,
                 group_capacity_certified=True,
             )
         )
