@@ -1,4 +1,4 @@
-"""Local source storms use HA timers; never sleep inside HA-managed tasks."""
+"""Local source storms are one immediate task; feedback waits on an HA timer."""
 
 import asyncio
 from types import SimpleNamespace
@@ -8,7 +8,6 @@ from custom_components.ev_smart_charging.coordinator import EVSmartChargingCoord
 
 
 def _lightweight_local(hass):
-    # Source lifecycle only: no real charger setup or physical commands.
     obj = EVSmartChargingCoordinator.__new__(EVSmartChargingCoordinator)
     obj.hass = hass
     obj.listeners = []
@@ -33,25 +32,15 @@ def _event(entity_id, prior, current):
     )
 
 
-async def _fire_pending_timer(obj, hass):
-    """Drive the scheduled HA timer deterministically without wall-clock delay."""
-    assert obj._source_refresh_unsub is not None
-    obj._source_refresh_unsub()
-    obj._source_refresh_unsub = None
-    obj._source_timer_fired(None)
-    await hass.async_block_till_done()
-
-
-async def test_2000_source_events_schedule_one_timer_not_2000_tasks(hass):
+async def test_2000_source_events_create_one_local_refresh_task(hass):
     obj = _lightweight_local(hass)
     for _ in range(2000):
         obj.update_sensors_new(_event("sensor.soc", "10", "11"))
-    assert obj._source_refresh_task is None
-    assert obj._source_refresh_unsub is not None
-    # Waiting for all HA tasks must NOT wait for a sleeping debounce task.
+    task = obj._source_refresh_task
+    assert task is not None and not task.done()
+    assert obj._source_refresh_unsub is None
+    # No sleeping task: HA can drain immediately and see updated Local status.
     await hass.async_block_till_done()
-    obj.update_sensors.assert_not_awaited()
-    await _fire_pending_timer(obj, hass)
     obj.update_sensors.assert_awaited_once_with(
         entity_id=None, configuration_updated=False
     )
@@ -59,20 +48,18 @@ async def test_2000_source_events_schedule_one_timer_not_2000_tasks(hass):
     assert obj._source_refresh_unsub is None
 
 
-async def test_target_change_survives_coalescing_and_unload_cancels_timer(hass):
+async def test_target_change_survives_coalescing_and_unload(hass):
     obj = _lightweight_local(hass)
     obj.update_sensors_new(_event("sensor.soc", "10", "11"))
     obj.update_sensors_new(_event("sensor.target_soc", "75", "80"))
-    await _fire_pending_timer(obj, hass)
+    await hass.async_block_till_done()
     obj.update_sensors.assert_awaited_once_with(
         entity_id="sensor.target_soc", configuration_updated=True
     )
-    obj.update_sensors_new(_event("sensor.soc", "11", "12"))
-    assert obj._source_refresh_unsub is not None
     obj.unsubscribe_listeners()
-    obj.update_sensors_new(_event("sensor.soc", "12", "13"))
-    assert obj._source_refresh_unsub is None
+    obj.update_sensors_new(_event("sensor.soc", "11", "12"))
     assert obj._source_refresh_task is None
+    assert obj._source_refresh_unsub is None
 
 
 async def test_identical_source_reports_are_ignored(hass):
@@ -92,11 +79,11 @@ async def test_feedback_during_refresh_reschedules_without_task_loop(hass):
 
     obj.update_sensors.side_effect = reentrant
     obj.update_sensors_new(_event("sensor.soc", "10", "11"))
-    await _fire_pending_timer(obj, hass)
+    await hass.async_block_till_done()
     obj.update_sensors.assert_awaited_once()
     assert obj._source_refresh_task is None
     assert obj._source_refresh_unsub is not None
-    # The pending retry is a cancellable HA timer, NOT a HA-tracked Task.
+    # A timer waiting for the next retry is not a HA tracked task.
     await hass.async_block_till_done()
     obj.update_sensors.assert_awaited_once()
     obj.unsubscribe_listeners()
@@ -114,11 +101,8 @@ async def test_unload_cancels_an_actively_running_source_refresh(hass):
 
     obj.update_sensors.side_effect = blocked
     obj.update_sensors_new(_event("sensor.soc", "10", "11"))
-    assert obj._source_refresh_unsub is not None
-    obj._source_refresh_unsub()
-    obj._source_refresh_unsub = None
-    obj._source_timer_fired(None)
     task = obj._source_refresh_task
+    assert task is not None
     try:
         await asyncio.wait_for(entered.wait(), 2)
         obj.unsubscribe_listeners()
