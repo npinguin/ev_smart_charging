@@ -163,3 +163,62 @@ async def test_invalid_edit_cannot_assign_unknown_controller(hass):
     }
     with pytest.raises(ValueError, match="missing_controller"):
         check_proposed(hass, ENTRY_CHARGER, proposed, editing_uid="one")
+
+
+async def test_weekly_vehicle_calendar_is_stored_on_vehicle_not_controller(hass):
+    created = await start(hass, "v2_vehicle")
+    assert created["type"] == FlowResultType.FORM
+    created = await hass.config_entries.flow.async_configure(
+        created["flow_id"],
+        {
+            "name": "Commuter",
+            "ready_mode": "weekly",
+            "ready_mon": "06:45:00",
+            "ready_wed": "08:30:00",
+            "ready_fri": "17:15:00",
+        },
+    )
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["data"]["ready_mode"] == "weekly"
+    assert created["data"]["ready_mon"] == "06:45:00"
+    assert "ready_tue" not in created["data"]
+    assert created["data"][MARKER] == ENTRY_VEHICLE
+
+
+async def test_one_time_local_selector_datetime_gets_explicit_utc_offset(hass):
+    hass.config.set_time_zone("Europe/Brussels")
+    created = await start(hass, "v2_vehicle")
+    created = await hass.config_entries.flow.async_configure(
+        created["flow_id"],
+        {
+            "name": "Day trip",
+            "ready_mode": "once",
+            "ready_by": "2026-10-27 08:15:00",
+        },
+    )
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["data"]["ready_by"] == "2026-10-27T07:15:00+00:00"
+
+
+async def test_weekly_calendar_requires_at_least_one_enabled_day(hass):
+    created = await start(hass, "v2_vehicle")
+    created = await hass.config_entries.flow.async_configure(
+        created["flow_id"], {"name": "No deadline", "ready_mode": "weekly"}
+    )
+    assert created["type"] == FlowResultType.FORM
+    assert created["errors"]["base"] == "invalid_v2_configuration"
+
+
+def test_ha_options_clearing_one_weekday_does_not_leave_shadow_assignment():
+    from custom_components.ev_smart_charging.v2.flow import _normalize_vehicle_form
+    updated = _normalize_vehicle_form(
+        {"ready_mode": "weekly", "ready_tue": "09:00"},
+        "Europe/Brussels",
+        original={
+            "ready_mode": "weekly", "ready_mon": "08:00",
+            "ready_tue": "09:00",
+        },
+    )
+    assert updated["ready_mon"] == ""
+    assert updated["ready_tue"] == "09:00"
+    assert updated["ready_wed"] == ""
