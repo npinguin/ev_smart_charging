@@ -1,23 +1,25 @@
-# EVSC v2.6.0-rc.11 — guarded native control-semantics and Local reliability
+# Explicit HACS test prerelease request — v2.6.0-rc.12
 
-**User-requested:** comprehensive correction of actual Charger/Local/diagnostics issues, one drop-in HACS prerelease, no duplicate Device or integration, and no loss of original EV Smart Charging behavior.
+Requested by the EV Smart Charging product owner on 26 October 2026.
 
-## Acceptance on existing Home Assistant
+## Exact-source publication gate
 
-1. All four v8 Charger Config Entries and original entity/device/user-renamed IDs are preserved. Original Local 15/60-minute tariffs, schedules, manual Start/Stop and EV SoC/ready-by/overrides still work.
-2. Native Charger controls have explicit **per-Charger** source semantics configured in original EVSC Options: `unspecified` (safe default, no guessed matching), `charge_request`, `availability_enable`, `power_relay`. This is descriptive metadata and must not create another EVSE writer.
-3. The real integrated Controller diagnostics v1.3 includes all Chargers (linked/unlinked), Vehicles, planning and physical observations, separating enable state, EVSC presence flag, charging-state feedback and true measured power. An unplugged Wallbox/Peblar with native enable ON and 0 kW is not an active charging alarm. MQTT relay power ON is not vehicle identification.
-4. True measurement/source contradictions are still reported, including charging power with EVSC connected flag false, and a charging-state sensor contradicting a valid meter. Invalid currency/unvalidated effective-price sensors are not silently called complete.
-5. The original Local readback retry remains available but only for a connected, active, target-unmet EVSE with native control OFF and no confirmed active session; at most once per 15 minutes, never a repetitive Start storm on idle/available Chargers.
-6. If native HA control entity is missing on startup, original `ConfigEntryNotReady` behavior remains; after registration its configured native service domain stays valid. No silent failure to bind a now-available switch or input_boolean.
-7. Native Local and Controller regressions across Python 3.11–3.14, HA Config Entry lifecycle and Options, diagnostics privacy, P0 thread-safety and event-poll controls, HACS/Hassfest and Black must pass on the **exact tagged SHA**.
+Publish v2.6.0-rc.12 as **GitHub prerelease only**, from this isolated V2 branch and exact source SHA, ONLY AFTER the new request-triggered full GitHub Actions gate passes: Black, HACS, Hassfest, Python 3.11–3.14, full pytest with at least 90% overall coverage, original Local / Controller smoke and dedicated V2 functional/HA lifecycle tests. Release workflow must not overwrite any existing tag, change main or submit upstream.
 
-## Hard safety restriction
+## Scope
 
-Existing P0 [#5](https://github.com/npinguin/ev_smart_charging/issues/5) remains OPEN. `COORDINATED_ACTUATION_ENABLED=False` must remain hard-coded at the release tag; do not enable physical Local→Coordinated or claim the new multi-day controller physically controls EVSEs. No physical claims without site/OEM readback testing. The original Local writer remains the sole production physical owner.
+- V2 Vehicle, Charger and Charge Controller each have independent HA Config Entry and HA Device identities.
+- One Charge Controller = one planner; many independent controllers are supported.
+- Each Charger has exactly one Controller, can be reassigned, and has 0..1 Vehicle.
+- Each Vehicle is assigned to at most one Charger; None is valid.
+- Read-only per-Controller 15-minute / multi-day plan uses existing planner, with concurrency, group kW, validated effective EUR/kWh cap and strictly advisory cost cap.
+- Known source data derived from cached Home Assistant readings; unknown does not become zero or asserted hardware status.
+- Explicit HA-user picklist association; user association is not HA permission authorization.
+- All original v8 Local Charger Config Entries, original IDs, legacy scheduler, native Start/Stop and diagnostics remain unchanged.
+- **Physical Coordinated Actuation hard OFF** under still-open P0 #5. No V2 physical writer.
 
-## Publication instructions
+## Operator acceptance / rollback
 
-Publish guarded **v2.6.0-rc.11** only if the full Gate A release workflow passes. HACS must install from integration source tree with exact version parity in manifest and const. Never overwrite rc.10/tag or change main/upstream. Draft PR #6 remains a development PR.
+Follow docs/engineering/V2_RC12_TEST_ACCEPTANCE.md. Make full Home Assistant backup before installation; use previous v2.6.0-rc.11 and backup to roll back if required. This is NOT a stable release or final physical acceptance; migration assistant and physical admission remain future gates. Leave PR #7 in draft.
 
-**Field test:** [rc.11 control semantics and Local safety](RC11_CONTROL_SEMANTICS_AND_RUNTIME.md); full Home Assistant backup, known-good original Local Charger first, rollback to rc.10 and backup if any regression. Actual native control meaning must be verified by the operator before selecting its explicit semantics.
+**No publish unless every named gate passes for the exact release commit.**
