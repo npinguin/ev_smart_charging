@@ -751,7 +751,8 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         """Stop old Controller only after useful V2 config has been imported."""
         source = self.config_entry
         controllers = [
-            e for e in v2_entries(self.hass, V2_CONTROLLER)
+            e
+            for e in v2_entries(self.hass, V2_CONTROLLER)
             if e.data.get("imported_from_intermediate") == source.entry_id
         ]
         profiles = source.options.get(VEHICLES) or {}
@@ -778,10 +779,11 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=options)
         return self.async_show_form(
             step_id="retire_to_v2",
-            data_schema=vol.Schema({
-                vol.Required("confirm", default=False):
-                    selector.BooleanSelector(),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirm", default=False): selector.BooleanSelector(),
+                }
+            ),
             description_placeholders={"missing": "None"},
             errors={"base": "confirm_required"} if user_input is not None else {},
         )

@@ -8,7 +8,11 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
-from custom_components.ev_smart_charging.v2 import ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER
+from custom_components.ev_smart_charging.v2 import (
+    ENTRY_CONTROLLER,
+    ENTRY_VEHICLE,
+    MARKER,
+)
 
 
 @pytest.fixture(autouse=True)

@@ -8,7 +8,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.const import DOMAIN
 from custom_components.ev_smart_charging.v2 import (
-    ENTRY_CONTROLLER, ENTRY_VEHICLE, MARKER,
+    ENTRY_CONTROLLER,
+    ENTRY_VEHICLE,
+    MARKER,
 )
 
 
@@ -79,7 +81,10 @@ async def test_retirement_requires_positive_confirmation_preserves_old_store(has
     legacy = old(hass)
     v2(hass, ENTRY_CONTROLLER, "home", legacy)
     v2(
-        hass, ENTRY_VEHICLE, "audi", legacy,
+        hass,
+        ENTRY_VEHICLE,
+        "audi",
+        legacy,
         imported_intermediate_vehicle_id="audi",
     )
     form = await retire_form(hass, legacy)
