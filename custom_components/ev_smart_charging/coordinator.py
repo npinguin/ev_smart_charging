@@ -1032,8 +1032,10 @@ class EVSmartChargingCoordinator:
         if self._source_refresh_unsub is None and (
             self._source_refresh_task is None or self._source_refresh_task.done()
         ):
+            # HA normally starts tasks eagerly; defer until this event-loop
+            # turn completes so a synchronous source burst stays one batch.
             self._source_refresh_task = self.hass.async_create_task(
-                self._drain_source_updates()
+                self._drain_source_updates(), eager_start=False
             )
 
     @callback
@@ -1042,8 +1044,10 @@ class EVSmartChargingCoordinator:
         if self._stopped or not self._source_refresh_dirty:
             return
         if self._source_refresh_task is None or self._source_refresh_task.done():
+            # HA normally starts tasks eagerly; defer until this event-loop
+            # turn completes so a synchronous source burst stays one batch.
             self._source_refresh_task = self.hass.async_create_task(
-                self._drain_source_updates()
+                self._drain_source_updates(), eager_start=False
             )
 
     async def _drain_source_updates(self):
