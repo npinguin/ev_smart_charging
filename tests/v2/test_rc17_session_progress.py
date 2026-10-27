@@ -9,24 +9,30 @@ from custom_components.ev_smart_charging.v2.session_progress import SessionProgr
 from custom_components.ev_smart_charging.v2.planning import compile_advisory
 from custom_components.ev_smart_charging.controller.planner import PriceSlot
 
-
 NOW = datetime(2026, 10, 27, 9, tzinfo=timezone.utc)
 
 
 def observe(tracker, at=NOW, meter=100, power=2, connected=True):
     return tracker.observe(
-        "utility", connected=connected,
-        energy_kwh=meter, energy_kind="total_increasing",
+        "utility",
+        connected=connected,
+        energy_kwh=meter,
+        energy_kind="total_increasing",
         energy_source="sensor.utility_lifetime_kwh",
-        power_kw=power, now=at,
+        power_kw=power,
+        now=at,
     )
 
 
 def plan(progress, *, amount=None, duration=None):
     charger = Charger(
-        uid="utility", name="Smart Plug", controller_uid="home",
-        connection_source="manual", energy_source_kind="total_increasing",
-        max_ac_kw=2.0, requested_grid_kwh=amount,
+        uid="utility",
+        name="Smart Plug",
+        controller_uid="home",
+        connection_source="manual",
+        energy_source_kind="total_increasing",
+        max_ac_kw=2.0,
+        requested_grid_kwh=amount,
         requested_duration_quarters=duration,
     )
     prices = [
@@ -39,16 +45,22 @@ def plan(progress, *, amount=None, duration=None):
     ]
     result = compile_advisory(
         Controller(uid="home", name="Home"),
-        {"utility": charger}, {}, {
+        {"utility": charger},
+        {},
+        {
             "utility": {
-                "soc": None, "connected": True,
-                "prices": prices, "tariff_quality": "VALID",
+                "soc": None,
+                "connected": True,
+                "prices": prices,
+                "tariff_quality": "VALID",
                 "session_grid_kwh": progress["delivered_kwh"],
                 "session_elapsed_seconds": progress["elapsed_seconds"],
                 "session_meter_quality": progress["meter_quality"],
                 "session_duration_quality": progress["duration_quality"],
             },
-        }, NOW, "Europe/Brussels",
+        },
+        NOW,
+        "Europe/Brussels",
     )
     return result
 
@@ -115,8 +127,13 @@ def test_counter_reset_and_unobserved_gap_fail_closed_without_fake_rebase():
 def test_no_meter_invalidates_kwh_demand_but_duration_can_use_real_power():
     tracker = SessionProgress()
     first = tracker.observe(
-        "utility", connected=True, energy_kwh=None,
-        energy_kind="unknown", energy_source="", power_kw=2, now=NOW,
+        "utility",
+        connected=True,
+        energy_kwh=None,
+        energy_kind="unknown",
+        energy_source="",
+        power_kw=2,
+        now=NOW,
     )
     assert first["meter_quality"] == "METER_UNAVAILABLE"
     assert plan(first, amount=2)["excluded"]["utility"] == "SESSION_METER_UNVERIFIED"

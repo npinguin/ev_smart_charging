@@ -91,13 +91,17 @@ class V2Fact(SensorEntity):
             source = obj.soc_entity
         elif self.kind == ENTRY_CHARGER:
             if self.key in (
-                "actual_cost_today", "known_actual_cost_eur", "energy_kwh",
-                "session_elapsed_minutes", "session_meter_quality",
+                "actual_cost_today",
+                "known_actual_cost_eur",
+                "energy_kwh",
+                "session_elapsed_minutes",
+                "session_meter_quality",
                 "session_duration_quality",
             ):
                 self.async_on_remove(
                     async_dispatcher_connect(
-                        self.hass, f"{DOMAIN}_v2_vehicle_sources",
+                        self.hass,
+                        f"{DOMAIN}_v2_vehicle_sources",
                         self._source_changed,
                     )
                 )
@@ -227,16 +231,18 @@ class V2Fact(SensorEntity):
                             )
                 return None
             if self.key in (
-                "energy_kwh", "session_elapsed_minutes",
-                "session_meter_quality", "session_duration_quality",
+                "energy_kwh",
+                "session_elapsed_minutes",
+                "session_meter_quality",
+                "session_duration_quality",
             ):
                 from .runtime import V2ControllerRuntime
 
                 for runtime in self.hass.data.get(DOMAIN, {}).values():
                     if isinstance(runtime, V2ControllerRuntime):
-                        session = runtime.snapshot.get(
-                            "session_sources", {}
-                        ).get(obj.uid)
+                        session = runtime.snapshot.get("session_sources", {}).get(
+                            obj.uid
+                        )
                         if session is not None:
                             return {
                                 "energy_kwh": session.get("delivered_kwh"),
@@ -315,19 +321,31 @@ def sensors_for_entry(entry):
     if kind == ENTRY_CHARGER:
         return [
             V2Fact(
-                entry, kind, "actual_cost_today", "Actual cost today",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "actual_cost_today",
+                "Actual cost today",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
-                entry, kind, "known_actual_cost_eur", "Verified cost subtotal",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "known_actual_cost_eur",
+                "Verified cost subtotal",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(entry, kind, "controller", "Charge Controller"),
             V2Fact(entry, kind, "vehicle", "Assigned Vehicle"),
             V2Fact(entry, kind, "connected", "Connection"),
             V2Fact(
-                entry, kind, "session_elapsed_minutes", "Charging duration",
-                SensorDeviceClass.DURATION, "min",
+                entry,
+                kind,
+                "session_elapsed_minutes",
+                "Charging duration",
+                SensorDeviceClass.DURATION,
+                "min",
             ),
             V2Fact(entry, kind, "session_meter_quality", "Session energy quality"),
             V2Fact(entry, kind, "session_duration_quality", "Duration quality"),
@@ -363,12 +381,20 @@ def sensors_for_entry(entry):
                 "EUR",
             ),
             V2Fact(
-                entry, kind, "actual_cost_today", "Actual cost today",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "actual_cost_today",
+                "Actual cost today",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
-                entry, kind, "known_actual_cost_eur", "Verified cost subtotal",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "known_actual_cost_eur",
+                "Verified cost subtotal",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(entry, kind, "actual_cost_coverage", "Actual cost coverage"),
             V2Fact(entry, kind, "charger_count", "Chargers"),

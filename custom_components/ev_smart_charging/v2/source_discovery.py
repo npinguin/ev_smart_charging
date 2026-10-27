@@ -84,22 +84,20 @@ def _score(entity, state, role):
     if role == "tariff_entity":
         if domain != "sensor" or state is None:
             return 0
-        if (
-            unit in ("EUR/kWh", "€/kWh")
-            and isinstance(attrs.get("price_slots"), list)
-        ):
+        if unit in ("EUR/kWh", "€/kWh") and isinstance(attrs.get("price_slots"), list):
             return 10
         # Classic Nord Pool / supplier integrations expose a genuine
         # provider price curve, but this is NOT necessarily all-in. Suggest
         # the source and require the user to confirm price mode and fees.
-        if (
-            unit in ("EUR/kWh", "€/kWh", "EUR/MWh", "€/MWh")
-            and any(
-                isinstance(attrs.get(key), (list, tuple)) and attrs[key]
-                for key in (
-                    "raw_today", "prices_today", "today_interval_prices",
-                    "prices", "data", "forecast",
-                )
+        if unit in ("EUR/kWh", "€/kWh", "EUR/MWh", "€/MWh") and any(
+            isinstance(attrs.get(key), (list, tuple)) and attrs[key]
+            for key in (
+                "raw_today",
+                "prices_today",
+                "today_interval_prices",
+                "prices",
+                "data",
+                "forecast",
             )
         ):
             return 6

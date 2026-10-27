@@ -124,13 +124,11 @@ class Charger:
         if self.price_mode not in ("effective_slots", "spot_with_fees"):
             raise ConfigurationError("price_mode_invalid")
         if self.price_mode == "spot_with_fees" and (
-            self.spot_markup_eur_kwh is None
-            or self.price_vat_percent is None
+            self.spot_markup_eur_kwh is None or self.price_vat_percent is None
         ):
             raise ConfigurationError("spot_requires_explicit_fees_and_vat")
         if self.spot_markup_eur_kwh is not None and (
-            not isfinite(self.spot_markup_eur_kwh)
-            or abs(self.spot_markup_eur_kwh) > 10
+            not isfinite(self.spot_markup_eur_kwh) or abs(self.spot_markup_eur_kwh) > 10
         ):
             raise ConfigurationError("invalid_spot_markup")
         if self.price_vat_percent is not None and (

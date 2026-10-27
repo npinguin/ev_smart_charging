@@ -64,10 +64,7 @@ def source_tariff_slots(state, charger):
         )
     if charger.price_mode != "spot_with_fees":
         return [], "UNSUPPORTED_PRICE_MODE"
-    if (
-        charger.spot_markup_eur_kwh is None
-        or charger.price_vat_percent is None
-    ):
+    if charger.spot_markup_eur_kwh is None or charger.price_vat_percent is None:
         return [], "PRICE_ADJUSTMENTS_REQUIRED"
     factor = {
         "EUR/kWh": 1.0,
@@ -95,9 +92,9 @@ def source_tariff_slots(state, charger):
                 effective_spot = rate / 100.0
             else:
                 effective_spot = rate * factor
-            effective = (
-                effective_spot + charger.spot_markup_eur_kwh
-            ) * (1 + charger.price_vat_percent / 100.0)
+            effective = (effective_spot + charger.spot_markup_eur_kwh) * (
+                1 + charger.price_vat_percent / 100.0
+            )
             if not isfinite(effective):
                 raise ValueError("effective_price_not_finite")
             starts.append((start, effective, row))
@@ -112,19 +109,17 @@ def source_tariff_slots(state, charger):
             end = (
                 _as_aware(raw["end"])
                 if raw.get("end") is not None
-                else starts[i + 1][0]
-                if i + 1 < len(starts)
-                else start + last_step
+                else starts[i + 1][0] if i + 1 < len(starts) else start + last_step
             )
-            if end <= start or end - start not in (
-                QUARTER, timedelta(hours=1)
-            ):
+            if end <= start or end - start not in (QUARTER, timedelta(hours=1)):
                 raise ValueError("price_period_not_quarter_or_hour")
-            normalized.append({
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-                "effective_eur_per_kwh": rate,
-            })
+            normalized.append(
+                {
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                    "effective_eur_per_kwh": rate,
+                }
+            )
         return parse_tariff_slots(normalized, "EUR", "EUR/kWh")
     except (ValueError, TypeError, KeyError, OverflowError, AttributeError):
         return [], "INVALID_TARIFF_CURVE"

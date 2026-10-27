@@ -141,9 +141,7 @@ def compile_advisory(
             if remaining_seconds <= 0:
                 excluded[charger.uid] = "DEMAND_COMPLETE"
                 continue
-            remaining_quarters = max(
-                1, int((remaining_seconds + 899.999999) // 900)
-            )
+            remaining_quarters = max(1, int((remaining_seconds + 899.999999) // 900))
         if not has_soc_demand and not explicit:
             excluded[charger.uid] = (
                 "BATTERY_DEMAND_UNKNOWN" if vehicle else "NO_EXPLICIT_DEMAND"
@@ -185,9 +183,7 @@ def compile_advisory(
             enabled=True,
             # Demand in explicit mode is GRID kWh/quarters, not battery kWh.
             efficiency=0.90 if has_soc_demand else 1.0,
-            requested_grid_kwh=(
-                remaining_grid_kwh if not has_soc_demand else None
-            ),
+            requested_grid_kwh=(remaining_grid_kwh if not has_soc_demand else None),
             requested_duration_quarters=(
                 remaining_quarters if not has_soc_demand else None
             ),

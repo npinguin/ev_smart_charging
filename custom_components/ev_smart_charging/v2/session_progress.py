@@ -31,8 +31,15 @@ class SessionProgress:
         return self.sessions
 
     def observe(
-        self, uid, *, connected, energy_kwh, energy_kind, energy_source,
-        power_kw, now,
+        self,
+        uid,
+        *,
+        connected,
+        energy_kwh,
+        energy_kind,
+        energy_source,
+        power_kw,
+        now,
     ):
         if now.tzinfo is None:
             return self._unknown("CLOCK_UNAVAILABLE")
@@ -64,7 +71,9 @@ class SessionProgress:
                 "elapsed_seconds": 0.0,
                 "last_power_kw": power,
                 "meter_quality": "VALID" if has_meter else "METER_UNAVAILABLE",
-                "duration_quality": "VALID" if power is not None else "POWER_UNAVAILABLE",
+                "duration_quality": (
+                    "VALID" if power is not None else "POWER_UNAVAILABLE"
+                ),
             }
             self.sessions[uid] = existing
             self.dirty = True
@@ -132,11 +141,13 @@ class SessionProgress:
         return {
             "delivered_kwh": (
                 round(session["delivered_kwh"], 5)
-                if session.get("meter_quality") == "VALID" else None
+                if session.get("meter_quality") == "VALID"
+                else None
             ),
             "elapsed_seconds": (
                 round(session["elapsed_seconds"], 2)
-                if session.get("duration_quality") == "VALID" else None
+                if session.get("duration_quality") == "VALID"
+                else None
             ),
             "meter_quality": session.get("meter_quality", "UNKNOWN"),
             "duration_quality": session.get("duration_quality", "UNKNOWN"),

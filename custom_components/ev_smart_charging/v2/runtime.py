@@ -134,14 +134,17 @@ def read_inputs(hass, chargers, vehicles):
         tariff = _fresh_state(tariff, max_age=timedelta(hours=36))
         prices, quality = source_tariff_slots(tariff, charger)
         energy_state = (
-            hass.states.get(charger.energy_entity)
-            if charger.energy_entity else None
+            hass.states.get(charger.energy_entity) if charger.energy_entity else None
         )
         result[charger.uid] = {
             "energy_observed_at": (
-                getattr(energy_state, "last_reported", None)
-                or getattr(energy_state, "last_updated", None)
-            ) if energy_state is not None else None,
+                (
+                    getattr(energy_state, "last_reported", None)
+                    or getattr(energy_state, "last_updated", None)
+                )
+                if energy_state is not None
+                else None
+            ),
             "soc": soc,
             "oem_soc": _number(soc_state, 0, 100),
             "oem_at": getattr(soc_state, "last_changed", None),
@@ -248,16 +251,11 @@ class V2ControllerRuntime:
             hass, 1, f"{DOMAIN}.v2_actual_cost_{entry.data['uid']}"
         )
         self._cost_ledgers = {}
-        self._session_store = Store(
-            hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}"
-        )
+        self._session_store = Store(hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}")
         self._session_progress = SessionProgress()
 
     def _cost_payload(self):
-        return {
-            uid: ledger.to_storage()
-            for uid, ledger in self._cost_ledgers.items()
-        }
+        return {uid: ledger.to_storage() for uid, ledger in self._cost_ledgers.items()}
 
     @callback
     def subscribe(self, fn):
@@ -274,9 +272,7 @@ class V2ControllerRuntime:
             return
         restored = await self._soc_store.async_load()
         self._soc_estimator = SocEstimator(restored)
-        self._session_progress = SessionProgress(
-            await self._session_store.async_load()
-        )
+        self._session_progress = SessionProgress(await self._session_store.async_load())
         stored_costs = await self._cost_store.async_load()
         self._cost_ledgers = {
             uid: ActualCostLedger.from_storage(state)
@@ -370,22 +366,21 @@ class V2ControllerRuntime:
                 cost_changed = False
                 for uid, charger in chargers.items():
                     item = observed[uid]
-                    ledger = self._cost_ledgers.setdefault(
-                        uid, ActualCostLedger()
-                    )
+                    ledger = self._cost_ledgers.setdefault(uid, ActualCostLedger())
                     previous = ledger.to_storage()
                     meter = item.get("energy_kwh")
                     stamp = item.get("energy_observed_at")
                     if (
-                        charger.energy_source_kind
-                        in ("session", "total_increasing")
+                        charger.energy_source_kind in ("session", "total_increasing")
                         and charger.energy_entity
                         and meter is not None
                         and stamp is not None
                         and item.get("tariff_quality") == "VALID"
                     ):
                         ledger.observe(
-                            stamp, meter, charger.energy_entity,
+                            stamp,
+                            meter,
+                            charger.energy_entity,
                             item.get("prices", []),
                         )
                     elif ledger.day is not None:
@@ -416,7 +411,10 @@ class V2ControllerRuntime:
                     if charger.vehicle_uid
                 }
                 result["group"] = group_facts(
-                    result, chargers, observed, dt.utcnow(),
+                    result,
+                    chargers,
+                    observed,
+                    dt.utcnow(),
                     self.hass.config.time_zone,
                     cost_reports=result["actual_cost_per_charger"],
                 )
