@@ -1,19 +1,40 @@
-# Explicit HACS guarded prerelease request — v2.6.0-rc.15
+# Explicit HACS V2 setup/maintenance test release request — v2.6.0-rc.16
 
-The previous `v2.6.0-rc.14` tag is already published at commit `3dae1d3a...` and must NEVER be modified or moved. It lacks the restored original Local next-day 08:00 behavior. The product owner explicitly requested that issue to be fixed and a fresh release.
+Operator requested a fresh HACS-installable prerelease on 27 October 2026.
+The immutable `v2.6.0-rc.15` stays untouched, as does main. This request applies to the
+exact current commit of branch `fix/v1-upstream-v2-migration-ux`; its published
+tag **MUST** equal the commit SHA that passed all required `pull.yml` checks.
 
-## Exact-commit release gate
+## Mandatory checks (no waivers)
 
-Run the nine-job workflow defined by `.github/workflows/pull.yml` against the **current exact commit of `fix/rc13-ha-eventloop-stability`**. Publish `v2.6.0-rc.15` as a HACS **prerelease only** after all tests succeed: Python 3.11–3.14 with coverage >=90%, HACS/Hassfest, Python compilation, Black, unchanged native Local smoke tests, Controller regressions, upstream compatibility, all V2 once/daily/weekly Ready By tests, and all HA performance/stability tests.
+- 9/9 code gates: Python 3.11–3.14, coverage >=90%, Black, compilation,
+  HACS/Hassfest, original Local smoke, Controller regressions and upstream
+  baseline compatibility, on **the exact publication SHA**.
+- V1 Local device/entity registration must match upstream (no extra
+  sensor/select/button/datetime entities); original v8 data/options and
+  original Local schedules remain, including tomorrow 08:00 and price update.
+- No V2-to-V1 physical migration. The `COORDINATED_ACTUATION_ENABLED = False`
+  source guard remains and P0 #5 stays open.
+- Independent V2 Vehicle / Charger / Charge Controller Config Entries,
+  searchable filtered HA entity selectors in Add/Configure/migrate forms,
+  clearing optional bindings without accidental retained defaults.
+- V1 → V2 provenance mapping may reuse an existing Charger, Controller and
+  Vehicle without touching original Local Config Entry. No duplicate physical
+  owners and no implicit full 1-to-3 auto-provisioning.
+- Do not publish if any job fails or remains incomplete, and never move or
+  reuse an existing tag.
 
-Specifically require:
-- `tests/controller/test_legacy_next_day_ready.py`: at 15:10 with Legacy Ready By 08:00, the scheduler resolves **tomorrow 08:00** and rebuilds the real nighttime schedule on arrival of next-day tariff data without a new SoC update.
-- `tests/test_select.py`: user selection of a recurring clock clears a stale one-time absolute override without breaking restoration of explicitly configured absolute deadlines.
-- `tests/controller/test_local_event_coalescing.py`: 2,000 events coalesce; no orphan timer, eager task feedback storm or lifecycle leak.
-- All rc.14 performance fixes: bounded tariffs, low-allocation 5s source fingerprints, 30s periodic persisted meter ledger, relevant HA entity listeners, no EVSC V2 self-source cycles.
+## In-field HACS acceptance (not included in CI)
 
-Do not change the original recurring computation in `helpers/coordinator.py`; no new planner or vendor-specific logic. Keep the legacy native control fully compatible and retain the physical V2 Coordinated P0 lock. No main merge or stable promotion.
+Back up HA config and existing Local settings. Install this explicit prerelease
+in HACS and restart HA. Check all original Local chargers still expose their
+upstream devices/entities and Ready By operations. Then create V2 Controller,
+Vehicle and Charger from Add Entry; configure each via their native HA Options
+forms, including source picker search and clearing; verify that existing V2
+devices can be reused for migration. Confirm physical V2 control never issues
+EVSE commands. Run repeated HA reload/unload and observe event-loop behavior,
+then report screenshots and diagnostics before any stable promotion.
 
-Acceptance and backup/rollback: `docs/engineering/V2_RC15_LEGACY_READY_ACCEPTANCE.md`. Roll back to immutable `v2.6.0-rc.14` if required. The prerelease alone cannot certify live Home Assistant soak performance, the physical Peblar issue, or measured physical session-euro-budget enforcement.
-
-**This is a fresh rc.15 publication request superseding all rc.14 requests. Do not publish while any job is queued, in progress, cancelled, or failed. Do not overwrite a tag.**
+**Rollback:** reinstall immutable `v2.6.0-rc.15`; keep Home Assistant backup.
+The RC16 V2 registry/entity changes and cleanup are release-specific and must
+not be treated as automatically reversible by downgrading package files.

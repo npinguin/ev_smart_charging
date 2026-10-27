@@ -1,11 +1,11 @@
-name: HACS guarded V2 stability and original Legacy Ready By prerelease
+name: HACS guarded V1 parity and V2 config test prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - fix/rc13-ha-eventloop-stability
+      - fix/v1-upstream-v2-migration-ux
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,12 +24,12 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/fix/rc13-ha-eventloop-stability' }}
+    if: ${{ github.ref == 'refs/heads/fix/v1-upstream-v2-migration-ux' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.15
+      VERSION: 2.6.0-rc.16
     steps:
       - uses: actions/checkout@v7
 
@@ -93,8 +93,14 @@ jobs:
           assert "async_step_link_chargers" in config_code
           assert "linked_chargers" in config_code
           selects = Path("custom_components/ev_smart_charging/select.py").read_text()
-          assert "ChargerControllerLinkSelect" in selects
-          assert "VehicleAssignmentSelect" in selects
+          # V1 Local surface must remain exactly upstream; V2 owns new
+          # controller and vehicle link entities on separate Config Entries.
+          assert "selects.append(ChargerControllerLinkSelect(" not in selects
+          assert "selects.append(VehicleAssignmentSelect(" not in selects
+          assert "DATETIME" not in Path("custom_components/ev_smart_charging/const.py").read_text().split("PLATFORMS =", 1)[1].split("]", 1)[0]
+          assert Path("tests/v2/test_local_upstream_surface.py").is_file()
+          assert Path("tests/v2/test_legacy_surface_registry.py").is_file()
+          assert Path("tests/v2/test_migration.py").is_file()
           assert Path("tests/controller/test_vehicle_config.py").exists()
           assert Path("tests/controller/test_ha_managed_bootstrap.py").exists()
           assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
@@ -197,7 +203,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc15-control-semantics-manual-zip
+          name: evsc-guarded-rc16-control-semantics-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -221,5 +227,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "EV Smart Charging V2 rc.14 — GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. Includes all rc.13 Ready By once/daily/weekly calendar, multi-Controller and exclusive ownership features plus verified original Legacy daily 08:00 next-day Ready By repair and stability hardening: bounded legacy tariff expansion, light five-second state fingerprints, coalesced Local event worker, relevant-only source sensor subscriptions, V2 cyclic source validation, periodic buffered cost writes with unload flush, CI bounded workers and 2000-event storm regressions. Legacy Local Config Entries and existing native commands are preserved. Physical V2 Coordinated actuation remains locked due to unresolved field P0 #5; live hardware qualification and metered session cost enforcement are NOT complete. Test only on a backed-up HA instance. Roll back to v2.6.0-rc.14 if needed. Do not promote to stable or merge automatically."
+            --title "EV Smart Charging $tag — V1 upstream parity / V2 setup test" \
+            --notes "EVSC $tag: GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. V1 original Local Chargers retain original device/entity surface and Options; rc.15 next-day 08:00 Ready By, performance, and native Local controls remain. Known prerelease-only Local registry entities are cleaned by exact unique ID. Setup: HA-native separated Vehicle, Charger and Controller entries, searchable HA entity pickers, independent Options screens, source selectors and clearing/unlinking. Non-destructive migration supports new or existing V2 Charger with an existing Controller and optional Vehicle. Full automatic 1-to-3 Config Entry creation and physical cutover are NOT supported. PHYSICAL V2 ACTUATION LOCKED by open Peblar P0 #5; actual metered cost budget also NOT hard-enforced. Test on a backed-up Home Assistant instance, start with existing Local charging without migrating, then exercise V2 setup and association. No stable promotion. Roll back to immutable v2.6.0-rc.15 if needed."
