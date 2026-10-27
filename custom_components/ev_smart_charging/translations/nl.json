@@ -286,7 +286,8 @@
           "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         },
         "menu_options": {
-          "link_chargers": "Laadpunten koppelen"
+          "link_chargers": "Laadpunten koppelen",
+          "retire_to_v2": "Oude tussen-Controller uit dienst nemen"
         }
       },
       "charger": {
@@ -415,6 +416,13 @@
           "battery_kwh": "Voor SoC-gebaseerde laadplanning verplicht: bruikbare capaciteit in kWh, bijvoorbeeld 20 kWh. Niet de volledige bruto capaciteit wanneer onbekend.",
           "controller_uid": "Verplicht. Selecteer de bestaande V2 Charge Controller die de planning en elektrische limieten van dit laadpunt beheert."
         }
+      },
+      "retire_to_v2": {
+        "title": "Oude tussen-Controller uit dienst nemen",
+        "description": "Neem eerst het oude Controllerbeleid en alle Vehicle-profielen over via V2 Setup. Nog te controleren: {missing}. De bevestiging bewaart de oude configuratie voor herstel, maar stopt de oude tweede planner. V1 Local blijft werken.",
+        "data": {
+          "confirm": "Bevestig de uitdienstname"
+        }
       }
     },
     "error": {
@@ -431,7 +439,12 @@
       "invalid_charger_link": "Onbekend laadpunt",
       "unlink_coordinated_first": "Zet de Charger eerst terug in Local-modus",
       "charger_not_linked": "Koppel de Charger eerst aan de Controller",
-      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
+      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing.",
+      "intermediate_import_incomplete": "Het beleid of Vehicle-profielen ontbreken nog in V2."
+    },
+    "abort": {
+      "intermediate_controller_retired": "Deze tussen-Controller is al uit dienst genomen.",
+      "intermediate_profiles_invalid": "Oude Vehicle-profielen kunnen niet veilig worden gelezen."
     }
   },
   "entity": {
