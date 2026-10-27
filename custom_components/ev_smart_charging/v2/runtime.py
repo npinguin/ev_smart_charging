@@ -196,9 +196,7 @@ def _group_admissions(
         effective_budget_kw = (
             min(controller.power_budget_kw, peak_limit_kw)
             if controller.power_budget_kw is not None and peak_limit_kw is not None
-            else controller.power_budget_kw
-            if peak_limit_kw is None
-            else peak_limit_kw
+            else controller.power_budget_kw if peak_limit_kw is None else peak_limit_kw
         )
         if (
             effective_budget_kw is not None
@@ -354,7 +352,8 @@ class V2ControllerRuntime:
         when = dt.utcnow()
         site_kw = _site_meter(
             self.hass.states.get(controller.site_power_entity)
-            if controller.site_power_entity else None
+            if controller.site_power_entity
+            else None
         )
         headroom = peak_headroom(controller, observed, site_kw)
         result["peak_status"] = "disabled"
@@ -366,9 +365,7 @@ class V2ControllerRuntime:
                 self._peak_latched = True
                 self._peak_recovery_since = None
             else:
-                actual_load = sum(
-                    observed[uid]["power_kw"] or 0 for uid in chargers
-                )
+                actual_load = sum(observed[uid]["power_kw"] or 0 for uid in chargers)
                 if actual_load > headroom + 1e-9:
                     self._peak_latched = True
                     self._peak_recovery_since = None
@@ -376,23 +373,19 @@ class V2ControllerRuntime:
                     # Avoid chatter: allow restart only after one minute of
                     # stable headroom for a whole Charger at verified max power.
                     expected = [
-                        ch.max_ac_kw for ch in chargers.values()
+                        ch.max_ac_kw
+                        for ch in chargers.values()
                         if ch.max_ac_kw is not None
                     ]
                     minimum = min(expected) if expected else None
-                    if (
-                        minimum is None
-                        or headroom < minimum + 0.2
-                    ):
+                    if minimum is None or headroom < minimum + 0.2:
                         self._peak_recovery_since = None
                     elif self._peak_recovery_since is None:
                         self._peak_recovery_since = when
                     elif when - self._peak_recovery_since >= timedelta(minutes=1):
                         self._peak_latched = False
                         self._peak_recovery_since = None
-                result["peak_status"] = (
-                    "paused" if self._peak_latched else "active"
-                )
+                result["peak_status"] = "paused" if self._peak_latched else "active"
         limit = 0.0 if self._peak_latched else headroom
         admitted = _group_admissions(
             controller, chargers, observed, result, when, peak_limit_kw=limit

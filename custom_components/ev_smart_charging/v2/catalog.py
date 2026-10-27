@@ -103,9 +103,7 @@ def model(entry):
             physical_enabled=data.get("physical_enabled", False),
             peak_shaving_enabled=data.get("peak_shaving_enabled", False),
             site_power_entity=data.get("site_power_entity", ""),
-            peak_target_kw=optional_positive(
-                data.get("peak_target_kw"), "peak_target"
-            ),
+            peak_target_kw=optional_positive(data.get("peak_target_kw"), "peak_target"),
             peak_reserve_kw=float(data.get("peak_reserve_kw") or 0),
         )
     raise ValueError("unsupported_v2_entry")

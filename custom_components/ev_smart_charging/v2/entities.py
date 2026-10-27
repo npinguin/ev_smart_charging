@@ -183,10 +183,14 @@ class V2Fact(SensorEntity):
                 "planning_status": snap.get("status", "NOT_READY"),
                 "planned_kwh": snap.get("total_planned_kwh"),
                 "indicative_cost": snap.get("total_indicative_eur"),
+                "peak_status": snap.get("peak_status", "disabled"),
+                "available_ev_power_kw": snap.get("available_ev_power_kw"),
             }
-            return values[self.key] if self.key in values else snap.get(
-                "group", {}
-            ).get(self.key)
+            return (
+                values[self.key]
+                if self.key in values
+                else snap.get("group", {}).get(self.key)
+            )
         return None
 
 
@@ -253,49 +257,91 @@ def sensors_for_entry(entry):
                 "EUR",
             ),
             V2Fact(entry, kind, "charger_count", "Chargers"),
+            V2Fact(entry, kind, "peak_status", "Peak shaving status"),
+            V2Fact(
+                entry, kind, "available_ev_power_kw", "EV site headroom",
+                SensorDeviceClass.POWER, "kW",
+            ),
             V2Fact(entry, kind, "connected_chargers", "Connected Chargers"),
             V2Fact(entry, kind, "connection_unknown", "Unknown connections"),
             V2Fact(entry, kind, "charging_chargers", "Physically charging"),
             V2Fact(entry, kind, "power_coverage", "Power metering coverage"),
             V2Fact(entry, kind, "energy_coverage", "Session energy coverage"),
             V2Fact(
-                entry, kind, "measured_power_kw", "Actual charging power",
-                SensorDeviceClass.POWER, "kW",
+                entry,
+                kind,
+                "measured_power_kw",
+                "Actual charging power",
+                SensorDeviceClass.POWER,
+                "kW",
             ),
             V2Fact(
-                entry, kind, "session_energy_kwh", "Measured session energy",
-                SensorDeviceClass.ENERGY, "kWh",
+                entry,
+                kind,
+                "session_energy_kwh",
+                "Measured session energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
             ),
             V2Fact(
-                entry, kind, "required_energy_kwh", "Required battery energy",
-                SensorDeviceClass.ENERGY, "kWh",
+                entry,
+                kind,
+                "required_energy_kwh",
+                "Required battery energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
             ),
             V2Fact(
-                entry, kind, "planned_today_kwh", "Planned today",
-                SensorDeviceClass.ENERGY, "kWh",
+                entry,
+                kind,
+                "planned_today_kwh",
+                "Planned today",
+                SensorDeviceClass.ENERGY,
+                "kWh",
             ),
             V2Fact(
-                entry, kind, "planned_tomorrow_kwh", "Planned tomorrow",
-                SensorDeviceClass.ENERGY, "kWh",
+                entry,
+                kind,
+                "planned_tomorrow_kwh",
+                "Planned tomorrow",
+                SensorDeviceClass.ENERGY,
+                "kWh",
             ),
             V2Fact(
-                entry, kind, "indicative_today_eur", "Indicative cost today",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "indicative_today_eur",
+                "Indicative cost today",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
-                entry, kind, "indicative_tomorrow_eur", "Indicative cost tomorrow",
-                SensorDeviceClass.MONETARY, "EUR",
+                entry,
+                kind,
+                "indicative_tomorrow_eur",
+                "Indicative cost tomorrow",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
-                entry, kind, "planning_start", "Planning start",
+                entry,
+                kind,
+                "planning_start",
+                "Planning start",
                 SensorDeviceClass.TIMESTAMP,
             ),
             V2Fact(
-                entry, kind, "planning_end", "Planning end",
+                entry,
+                kind,
+                "planning_end",
+                "Planning end",
                 SensorDeviceClass.TIMESTAMP,
             ),
             V2Fact(
-                entry, kind, "price_horizon_end", "Price horizon end",
+                entry,
+                kind,
+                "price_horizon_end",
+                "Price horizon end",
                 SensorDeviceClass.TIMESTAMP,
             ),
         ]

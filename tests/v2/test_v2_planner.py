@@ -245,7 +245,7 @@ def test_incomplete_tomorrow_tariff_is_not_a_verified_complete_plan():
 def test_unassigned_load_does_not_fake_a_certified_group_total():
     vehicles, controllers, chargers, observed = fixture_data()
     result = compile_advisory(controllers["c1"], chargers, vehicles, observed, NOW)
-    assert result["excluded"]["empty"] == "NO_VEHICLE_ASSIGNED"
+    assert result["excluded"]["empty"] == "NO_EXPLICIT_DEMAND"
     assert result["total_planned_kwh"] is None
     assert result["known_planned_kwh"] >= 0
 

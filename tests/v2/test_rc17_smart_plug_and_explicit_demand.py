@@ -21,7 +21,6 @@ from custom_components.ev_smart_charging.v2.ready_schedule import (
 )
 from custom_components.ev_smart_charging.controller.planner import PriceSlot
 
-
 NOW = datetime(2026, 10, 26, 16, 0, tzinfo=timezone.utc)
 
 

@@ -17,7 +17,6 @@ from custom_components.ev_smart_charging.v2.runtime import (
 )
 from types import SimpleNamespace
 
-
 NOW = datetime(2026, 10, 26, 19, tzinfo=timezone.utc)
 
 
@@ -47,7 +46,8 @@ def obs(power_a=0.0, power_b=0.0):
 
 def test_site_net_import_can_be_signed_and_units_required():
     state = SimpleNamespace(
-        state="-500", attributes={"unit_of_measurement": "W"},
+        state="-500",
+        attributes={"unit_of_measurement": "W"},
         last_reported=NOW,
     )
     from unittest.mock import patch
@@ -93,21 +93,29 @@ def test_v2_admission_uses_electric_headroom_without_second_planner():
     )
     plan = {
         "loads": {
-            "a": {"demand_status": "PLANNED", "slots": [
-                {"start": NOW.isoformat(), "end": (NOW + timedelta(minutes=15)).isoformat()}
-            ]},
-            "b": {"demand_status": "PLANNED", "slots": [
-                {"start": NOW.isoformat(), "end": (NOW + timedelta(minutes=15)).isoformat()}
-            ]},
+            "a": {
+                "demand_status": "PLANNED",
+                "slots": [
+                    {
+                        "start": NOW.isoformat(),
+                        "end": (NOW + timedelta(minutes=15)).isoformat(),
+                    }
+                ],
+            },
+            "b": {
+                "demand_status": "PLANNED",
+                "slots": [
+                    {
+                        "start": NOW.isoformat(),
+                        "end": (NOW + timedelta(minutes=15)).isoformat(),
+                    }
+                ],
+            },
         }
     }
     assert _group_admissions(c, chargers(), obs(), plan, NOW) == set()
-    assert _group_admissions(
-        c, chargers(), obs(), plan, NOW, peak_limit_kw=0
-    ) == set()
-    result = _group_admissions(
-        c, chargers(), obs(), plan, NOW, peak_limit_kw=8
-    )
+    assert _group_admissions(c, chargers(), obs(), plan, NOW, peak_limit_kw=0) == set()
+    result = _group_admissions(c, chargers(), obs(), plan, NOW, peak_limit_kw=8)
     assert result <= {"a", "b"}
     assert "a" in result
 
@@ -120,19 +128,25 @@ def test_controller_group_facts_have_complete_and_partial_data_quality():
         "loads": {
             "a": {
                 "required_battery_kwh": 1.0,
-                "slots": [{
-                    "start": now.isoformat(),
-                    "end": (now + timedelta(minutes=15)).isoformat(),
-                    "grid_kwh": 1.0,
-                    "rate_eur_kwh": 0.2,
-                }],
+                "slots": [
+                    {
+                        "start": now.isoformat(),
+                        "end": (now + timedelta(minutes=15)).isoformat(),
+                        "grid_kwh": 1.0,
+                        "rate_eur_kwh": 0.2,
+                    }
+                ],
             }
         },
     }
-    ch = {"a": Charger(
-        uid="a", name="Charger", controller_uid="main",
-        energy_source_kind="session",
-    )}
+    ch = {
+        "a": Charger(
+            uid="a",
+            name="Charger",
+            controller_uid="main",
+            energy_source_kind="session",
+        )
+    }
     observed = {"a": {"connected": True, "power_kw": 1.2, "energy_kwh": 2.0}}
     result = group_facts(plan, ch, observed, now, "Europe/Brussels")
     assert result["measured_power_kw"] == 1.2
@@ -141,15 +155,20 @@ def test_controller_group_facts_have_complete_and_partial_data_quality():
     assert result["indicative_today_eur"] == 0.2
     assert result["planned_tomorrow_kwh"] == 0.0
 
-    ch = {"a": Charger(
-        uid="a", name="Charger", controller_uid="main",
-        energy_source_kind="total_increasing",
-    )}
+    ch = {
+        "a": Charger(
+            uid="a",
+            name="Charger",
+            controller_uid="main",
+            energy_source_kind="total_increasing",
+        )
+    }
     result = group_facts(plan, ch, observed, now, "Europe/Brussels")
     assert result["session_energy_kwh"] is None
     assert result["energy_coverage"] == 0
     assert result["measured_power_kw"] == 1.2
     observed["a"]["power_kw"] = None
-    assert group_facts(plan, ch, observed, now, "Europe/Brussels")[
-        "measured_power_kw"
-    ] is None
+    assert (
+        group_facts(plan, ch, observed, now, "Europe/Brussels")["measured_power_kw"]
+        is None
+    )
