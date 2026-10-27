@@ -67,13 +67,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._v2_migrate_selection = None
 
     async def async_step_import(self, user_input=None):
-        """Create one persistent, internal controller config entry per HA instance."""
-        await self.async_set_unique_id("evsc_charge_controller")
-        self._abort_if_unique_id_configured()
-        return self.async_create_entry(
-            title="EVSC Charge Controller",
-            data={"__evsc_entry_type": "charge_controller"},
-        )
+        """No new transitional Controller entries in the V1/V2-only product."""
+        return self.async_abort(reason="legacy_controller_retired")
 
     @staticmethod
     @callback

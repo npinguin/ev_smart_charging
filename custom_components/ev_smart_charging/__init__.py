@@ -3,9 +3,9 @@
 import asyncio
 import logging
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState, SOURCE_IMPORT
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION, Platform
-from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 
 try:
     from homeassistant.core import SupportsResponse
@@ -44,19 +44,6 @@ CONTROLLER_ENTRY_MARKER = "__evsc_entry_type"
 
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
-
-
-async def _ensure_controller(hass: HomeAssistant) -> None:
-    """Import exactly one persistent controller after managed charger startup."""
-    if not any(
-        entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE
-        for entry in hass.config_entries.async_entries(DOMAIN)
-    ):
-        await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_IMPORT},
-            data={CONTROLLER_ENTRY_MARKER: CONTROLLER_ENTRY_TYPE},
-        )
 
 
 def _register_charge_plan_service(hass: HomeAssistant) -> None:
@@ -122,24 +109,6 @@ def _register_v2_plan_service(hass: HomeAssistant) -> None:
         get_v2_charge_plan,
         supports_response=SupportsResponse.ONLY,
     )
-
-
-def _queue_controller_bootstrap(hass: HomeAssistant) -> None:
-    """Schedule import outside platform forwarding, at most once per HA run."""
-    bootstrap_marker = f"{DOMAIN}_controller_bootstrap_queued"
-    if hass.data.get(bootstrap_marker):
-        return
-    hass.data[bootstrap_marker] = True
-    if hass.is_running:
-        hass.async_create_task(_ensure_controller(hass))
-    else:
-
-        @callback
-        def _on_hass_started(_event):
-            """Schedule bootstrap on the event loop, not a worker thread."""
-            hass.async_create_task(_ensure_controller(hass))
-
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_hass_started)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -263,12 +232,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         device.id, name_by_user=entry.title
                     )
 
-    # Home Assistant owns real config-entry transitions. Legacy callers that
-    # invoke async_setup_entry directly on an already-LOADED mock entry must
-    # never trigger a second setup from inside platform forwarding.
-    if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
-        _queue_controller_bootstrap(hass)
-
+    # Original Local V1 never creates a third, transitional Controller
+    # Config Entry. Existing historical entries are retained for explicit
+    # user-reviewed metadata conversion to independent V2 objects.
     return True
 
 
