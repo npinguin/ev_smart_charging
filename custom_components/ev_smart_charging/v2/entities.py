@@ -166,6 +166,8 @@ class V2Fact(SensorEntity):
                     "power",
                 )
             if self.key == "energy_kwh":
+                if obj.energy_source_kind != "session":
+                    return None
                 return _meter(
                     (
                         self.hass.states.get(obj.energy_entity)
@@ -177,11 +179,14 @@ class V2Fact(SensorEntity):
         elif self.kind == ENTRY_CONTROLLER:
             manager = self.hass.data[DOMAIN].get(self.entry.entry_id)
             snap = manager.snapshot if manager is not None else {}
-            return {
+            values = {
                 "planning_status": snap.get("status", "NOT_READY"),
                 "planned_kwh": snap.get("total_planned_kwh"),
                 "indicative_cost": snap.get("total_indicative_eur"),
-            }[self.key]
+            }
+            return values[self.key] if self.key in values else snap.get(
+                "group", {}
+            ).get(self.key)
         return None
 
 
@@ -246,6 +251,52 @@ def sensors_for_entry(entry):
                 "Indicative cost",
                 SensorDeviceClass.MONETARY,
                 "EUR",
+            ),
+            V2Fact(entry, kind, "charger_count", "Chargers"),
+            V2Fact(entry, kind, "connected_chargers", "Connected Chargers"),
+            V2Fact(entry, kind, "connection_unknown", "Unknown connections"),
+            V2Fact(entry, kind, "charging_chargers", "Physically charging"),
+            V2Fact(entry, kind, "power_coverage", "Power metering coverage"),
+            V2Fact(entry, kind, "energy_coverage", "Session energy coverage"),
+            V2Fact(
+                entry, kind, "measured_power_kw", "Actual charging power",
+                SensorDeviceClass.POWER, "kW",
+            ),
+            V2Fact(
+                entry, kind, "session_energy_kwh", "Measured session energy",
+                SensorDeviceClass.ENERGY, "kWh",
+            ),
+            V2Fact(
+                entry, kind, "required_energy_kwh", "Required battery energy",
+                SensorDeviceClass.ENERGY, "kWh",
+            ),
+            V2Fact(
+                entry, kind, "planned_today_kwh", "Planned today",
+                SensorDeviceClass.ENERGY, "kWh",
+            ),
+            V2Fact(
+                entry, kind, "planned_tomorrow_kwh", "Planned tomorrow",
+                SensorDeviceClass.ENERGY, "kWh",
+            ),
+            V2Fact(
+                entry, kind, "indicative_today_eur", "Indicative cost today",
+                SensorDeviceClass.MONETARY, "EUR",
+            ),
+            V2Fact(
+                entry, kind, "indicative_tomorrow_eur", "Indicative cost tomorrow",
+                SensorDeviceClass.MONETARY, "EUR",
+            ),
+            V2Fact(
+                entry, kind, "planning_start", "Planning start",
+                SensorDeviceClass.TIMESTAMP,
+            ),
+            V2Fact(
+                entry, kind, "planning_end", "Planning end",
+                SensorDeviceClass.TIMESTAMP,
+            ),
+            V2Fact(
+                entry, kind, "price_horizon_end", "Price horizon end",
+                SensorDeviceClass.TIMESTAMP,
             ),
         ]
     return []

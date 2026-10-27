@@ -82,6 +82,7 @@ class Charger:
     legacy_entry_id: str = ""
     # Manual connection supports plug-in/smart-plug Chargers without OEM cable data.
     connection_source: str = "sensor"
+    energy_source_kind: str = "unknown"
     requested_grid_kwh: float | None = None
     requested_duration_quarters: int | None = None
     charge_ready_time: str = "08:00"
@@ -102,6 +103,8 @@ class Charger:
             raise ConfigurationError("unsupported_control_semantics")
         if self.connection_source not in ("sensor", "manual"):
             raise ConfigurationError("invalid_connection_source")
+        if self.energy_source_kind not in ("unknown", "session", "total_increasing"):
+            raise ConfigurationError("invalid_energy_meter_kind")
         if self.requested_grid_kwh is not None:
             optional_positive(self.requested_grid_kwh, "requested_grid_kwh")
         if self.requested_duration_quarters is not None and (

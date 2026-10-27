@@ -132,6 +132,7 @@ class NativeChargeWriter:
         if self.charger.control_semantics not in (
             "charge_request",
             "availability_enable",
+            "power_relay",
         ):
             return "UNVERIFIED_CONTROL_SEMANTICS"
         if self._port is None or not self._port.supports(self.charger.control_entity):

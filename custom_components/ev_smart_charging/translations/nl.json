@@ -66,7 +66,8 @@
           "connection_source": "Connected-status: HA-sensor of manueel",
           "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
           "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
-          "charge_ready_time": "Uiterlijk klaar om (HH:MM)"
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
+          "energy_source_kind": "Energiemeter type"
         },
         "data_description": {
           "control_entity": "Kies de fysieke bedieningsschakelaar (switch/input_boolean). Fysieke V2-aansturing blijft vergrendeld zolang P0 open is.",
@@ -78,7 +79,8 @@
           "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
           "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
           "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
-          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00."
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
+          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter."
         }
       },
       "v2_controller": {
@@ -302,7 +304,8 @@
           "connection_source": "Connected-status: HA-sensor of manueel",
           "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
           "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
-          "charge_ready_time": "Uiterlijk klaar om (HH:MM)"
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
+          "energy_source_kind": "Energiemeter type"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -316,7 +319,8 @@
           "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
           "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
           "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
-          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00."
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
+          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter."
         }
       }
     },

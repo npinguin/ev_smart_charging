@@ -151,6 +151,11 @@ async def _schema(hass, kind, old):
                     opt("charging_entity", _entity(["sensor", "binary_sensor"])),
                     opt("power_entity", _entity("sensor")),
                     opt("energy_entity", _entity("sensor")),
+                    opt(
+                        "energy_source_kind",
+                        vol.In(["unknown", "session", "total_increasing"]),
+                        "unknown",
+                    ),
                     opt("tariff_entity", _entity("sensor")),
                     opt(
                         "requested_grid_kwh",

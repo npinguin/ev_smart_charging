@@ -15,6 +15,7 @@ from .catalog import catalog
 from ..controller import safety
 from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory, parse_tariff_slots
+from .group_facts import group_facts
 
 _LOGGER = logging.getLogger(__name__)
 _INTERVAL = timedelta(minutes=1)
@@ -239,6 +240,9 @@ class V2ControllerRuntime:
                     observed,
                     dt.utcnow(),
                     self.hass.config.time_zone,
+                )
+                result["group"] = group_facts(
+                    result, chargers, observed, dt.utcnow(), self.hass.config.time_zone
                 )
                 # V2 physical execution is an explicit per-Controller choice.
                 # Original Local Coordinated remains locked independently.

@@ -72,6 +72,7 @@ def model(entry):
             ),
             legacy_entry_id=data.get("legacy_entry_id", ""),
             connection_source=data.get("connection_source", "sensor"),
+            energy_source_kind=data.get("energy_source_kind", "unknown"),
             requested_grid_kwh=optional_positive(
                 data.get("requested_grid_kwh"), "requested_grid_kwh"
             ),
