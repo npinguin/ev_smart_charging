@@ -114,7 +114,9 @@ def next_daily_deadline(clock: str, now: datetime, timezone_name: str) -> dateti
     local_today = now.astimezone(zone).date()
     chosen = parse_clock(clock)
     for offset in range(2):
-        candidate = _wall_clock_to_utc(local_today + timedelta(days=offset), chosen, zone)
+        candidate = _wall_clock_to_utc(
+            local_today + timedelta(days=offset), chosen, zone
+        )
         if candidate > now.astimezone(UTC):
             return candidate
     raise ReadyScheduleError("ready_recurrence_unresolvable")

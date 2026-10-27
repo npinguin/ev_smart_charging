@@ -101,9 +101,13 @@ def compile_advisory(
             charger.requested_grid_kwh is not None
             or charger.requested_duration_quarters is not None
         )
-        has_soc_demand = vehicle is not None and soc is not None and vehicle.battery_kwh is not None
+        has_soc_demand = (
+            vehicle is not None and soc is not None and vehicle.battery_kwh is not None
+        )
         if not has_soc_demand and not explicit:
-            excluded[charger.uid] = "BATTERY_DEMAND_UNKNOWN" if vehicle else "NO_EXPLICIT_DEMAND"
+            excluded[charger.uid] = (
+                "BATTERY_DEMAND_UNKNOWN" if vehicle else "NO_EXPLICIT_DEMAND"
+            )
             continue
         power = (
             effective_charge_kw(vehicle, charger)

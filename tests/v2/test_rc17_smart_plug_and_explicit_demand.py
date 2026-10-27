@@ -37,17 +37,17 @@ def price_quarters(count=80):
 
 
 def plug(**kwargs):
-    return Charger(
-        uid="utility",
-        name="Utility Smart Plug",
-        controller_uid="home",
-        control_entity="switch.utility",
-        control_semantics="availability_enable",
-        connection_source="manual",
-        max_ac_kw=2.0,
-        charge_ready_time="08:00",
-        **kwargs,
-    )
+    parameters = {
+        "uid": "utility",
+        "name": "Utility Smart Plug",
+        "controller_uid": "home",
+        "control_entity": "switch.utility",
+        "control_semantics": "availability_enable",
+        "connection_source": "manual",
+        "max_ac_kw": 2.0,
+        "charge_ready_time": "08:00",
+    }
+    return Charger(**(parameters | kwargs))
 
 
 def observed(connected=True):

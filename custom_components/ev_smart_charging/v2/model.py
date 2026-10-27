@@ -115,6 +115,7 @@ class Charger:
         ):
             raise ConfigurationError("choose_kwh_or_duration")
         from .ready_schedule import parse_clock
+
         parse_clock(self.charge_ready_time)
 
 

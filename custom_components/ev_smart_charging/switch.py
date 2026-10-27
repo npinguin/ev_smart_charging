@@ -306,7 +306,6 @@ class EVSmartChargingSwitchOpportunisticType2(EVSmartChargingSwitch):
         await self.coordinator.switch_opportunistic_type2_update(False)
 
 
-
 class V2ManualConnected(SwitchEntity, RestoreEntity):
     """Operator-declared EV connection, never derived from smart-plug power."""
 
