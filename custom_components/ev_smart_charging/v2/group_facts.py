@@ -10,7 +10,9 @@ from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 
-def group_facts(plan, chargers, observed, now, timezone_name):
+def group_facts(
+    plan, chargers, observed, now, timezone_name, *, cost_reports=None
+):
     count = len(chargers)
     observations = [observed.get(uid, {}) for uid in chargers]
     powers = [item.get("power_kw") for item in observations]
@@ -72,7 +74,21 @@ def group_facts(plan, chargers, observed, now, timezone_name):
         and len(demand_bases) == count
         and all(basis == "explicit_grid_kwh" for basis in demand_bases)
     )
+    reports = cost_reports or {}
+    actual = [reports.get(uid, {}).get("actual_cost_today") for uid in chargers]
+    known = [reports.get(uid, {}).get("known_subtotal_eur") for uid in chargers]
     return {
+        "actual_cost_coverage": sum(value is not None for value in actual),
+        "actual_cost_today": (
+            round(sum(actual), 4)
+            if count and all(value is not None for value in actual)
+            else None
+        ),
+        "known_actual_cost_eur": (
+            round(sum(value for value in known if value is not None), 4)
+            if any(value is not None for value in known)
+            else None
+        ),
         "charger_count": count,
         "connected_chargers": connected,
         "connection_unknown": unknown,
