@@ -60,5 +60,8 @@ class EVSmartChargingAbsoluteReadyBy(
         self.async_write_ha_state()
 
     def clear(self) -> None:
+        """Return Legacy to its original daily recurring Ready By selector."""
         self._attr_native_value = None
+        self.coordinator.absolute_ready_by = None
+        self.coordinator.absolute_ready_by_pending = False
         self.async_write_ha_state()
