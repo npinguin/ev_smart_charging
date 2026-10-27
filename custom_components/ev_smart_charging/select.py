@@ -116,10 +116,28 @@ class EVSmartChargingSelectReadyQuarter(EVSmartChargingSelect):
             )
             self.update_ha_state()
 
+    async def async_added_to_hass(self) -> None:
+        """Restoring the old daily selection is not a new user command."""
+        self._restoring_ready_quarter = True
+        try:
+            await super().async_added_to_hass()
+        finally:
+            self._restoring_ready_quarter = False
+
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """The original repeating Ready By time takes precedence when selected."""
         await super().async_select_option(option)
         if self.state:
+            if not getattr(self, "_restoring_ready_quarter", False):
+                # Older installations can retain a one-time calendar deadline.
+                # An explicit selection of the original recurring time must
+                # stop that date from silently overriding tomorrow's 08:00.
+                absolute = self.coordinator.absolute_ready_by_entity
+                if absolute is not None:
+                    absolute.clear()
+                else:
+                    self.coordinator.absolute_ready_by = None
+                    self.coordinator.absolute_ready_by_pending = False
             self.coordinator.ready_quarter_local = get_quarter_index(self.state)
             if self.coordinator.ready_quarter_local is None:
                 self.coordinator.ready_quarter_local = READY_QUARTER_NONE
