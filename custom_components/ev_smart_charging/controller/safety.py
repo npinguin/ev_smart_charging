@@ -9,4 +9,10 @@ requires an explicit, reviewed software revision and new physical acceptance.
 Original independent Local EVSC control is unaffected.
 """
 
-COORDINATED_ACTUATION_ENABLED = False
+COORDINATED_ACTUATION_ENABLED = False  # Legacy Coordinated remains quarantined.
+
+# V2 is an independently owned HA Config Entry. A V2 Controller must also be
+# explicitly activated via its own Options, and every target must pass native
+# ownership, freshness, metering and physical readback admission.
+# This is NOT permission to switch a live original Local entry into Coordinated.
+V2_PHYSICAL_EXECUTION_AVAILABLE = True

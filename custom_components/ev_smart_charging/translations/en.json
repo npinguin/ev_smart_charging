@@ -81,7 +81,11 @@
           "horizon_days": "Planning horizon (days)",
           "power_budget_kw": "Maximum total charging power (kW)",
           "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
-          "cost_budget_eur": "Maximum indicative session cost (EUR)"
+          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "physical_enabled": "Enable real V2 charging control (requires exclusive EVSE ownership)"
+        },
+        "data_description": {
+          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands."
         }
       },
       "v2_migrate": {
@@ -348,7 +352,8 @@
           "ready_fri": "Friday ready time (blank = no deadline)",
           "ready_sat": "Saturday ready time (blank = no deadline)",
           "ready_sun": "Sunday ready time (blank = no deadline)",
-          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit",
+          "physical_enabled": "Enable real V2 charging control"
         },
         "data_description": {
           "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
@@ -357,7 +362,8 @@
           "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
           "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
           "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
-          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff."
+          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff.",
+          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands."
         }
       }
     },

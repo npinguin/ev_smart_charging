@@ -23,7 +23,12 @@ def _entries(hass):
     controller = MockConfigEntry(
         domain=DOMAIN,
         entry_id="ctrl_main",
-        data={MARKER: ENTRY_CONTROLLER, "uid": "main", "name": "Main"},
+        data={
+            MARKER: ENTRY_CONTROLLER,
+            "uid": "main",
+            "name": "Main",
+            "physical_enabled": True,
+        },
         version=8,
     )
     charger = MockConfigEntry(
@@ -83,6 +88,13 @@ def charger(hass):
 async def test_global_safety_containment_cannot_be_overridden(hass, charger):
     hass.states.async_set("switch.native_charger", "off")
     writer = NativeChargeWriter(hass, charger, "main")
+    controller = next(
+        e for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data.get(MARKER) == ENTRY_CONTROLLER
+    )
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": False}
+    )
     result = await writer.async_reconcile(
         _snapshot(),
         NOW,
@@ -90,7 +102,7 @@ async def test_global_safety_containment_cannot_be_overridden(hass, charger):
         measured_power_kw=0,
         group_capacity_certified=True,
     )
-    assert result == "PHYSICAL_P0_LOCKOUT"
+    assert result == "CONTROLLER_CONTROL_DISABLED"
     assert not hass.data.get(f"{DOMAIN}.v2_native_writers")
     writer.close()
 
@@ -134,6 +146,18 @@ async def test_p0_synthetic_execution_is_idempotent_and_conflict_rejected(
         assert result == "ALREADY_AT_TARGET"
         assert len(calls) == 1
 
+        other = MockConfigEntry(
+            domain=DOMAIN,
+            entry_id="controller_other",
+            data={
+                MARKER: ENTRY_CONTROLLER,
+                "uid": "other",
+                "name": "Other",
+                "physical_enabled": True,
+            },
+            version=8,
+        )
+        other.add_to_hass(hass)
         second = NativeChargeWriter(hass, charger, "other")
         result = await second.async_reconcile(
             {**_snapshot(), "controller_uid": "other"},

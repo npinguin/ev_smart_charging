@@ -106,10 +106,13 @@ class Controller:
     power_budget_kw: float | None = None
     price_cap_eur_kwh: float | None = None
     cost_budget_eur: float | None = None
+    physical_enabled: bool = False
 
     def __post_init__(self):
         if not self.uid or not self.name.strip():
             raise ConfigurationError("invalid_controller_identity")
+        if not isinstance(self.physical_enabled, bool):
+            raise ConfigurationError("physical_enabled_must_be_boolean")
         if not 1 <= self.max_parallel <= 16:
             raise ConfigurationError("max_parallel_out_of_range")
         if not 1 <= self.horizon_days <= 14:

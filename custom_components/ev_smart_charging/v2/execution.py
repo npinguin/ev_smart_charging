@@ -116,14 +116,17 @@ class NativeChargeWriter:
     ) -> str:
         """Apply a validated plan with native readback and retry suppression.
 
-        No optimistic readback, no unbounded tasks, and no configuration-based
-        bypass of safety.COORDINATED_ACTUATION_ENABLED.
+        No optimistic readback, unbounded tasks or bypass of controller
+        physical-enable, native ownership and readback gates.
         """
         if when.tzinfo is None:
             return "INVALID_TIME"
         when = when.astimezone(timezone.utc)
-        if not safety.COORDINATED_ACTUATION_ENABLED:
-            return "PHYSICAL_P0_LOCKOUT"
+        if not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:
+            return "PHYSICAL_EXECUTION_UNAVAILABLE"
+        controller = catalog(self.hass)[2].get(self.controller_uid)
+        if controller is None or not controller.physical_enabled:
+            return "CONTROLLER_CONTROL_DISABLED"
         if self._closed:
             return "WRITER_CLOSED"
         if self.charger.control_semantics not in (
@@ -170,8 +173,11 @@ class NativeChargeWriter:
             # Only this Charger's configuration handoff waits for its
             # in-flight native command; unrelated Chargers remain responsive.
             async with control_lock(self.hass, self.charger.uid):
-                if self._closed or not safety.COORDINATED_ACTUATION_ENABLED:
+                if self._closed or not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:
                     return "WRITER_CLOSED_OR_SAFETY_HOLD"
+                current_controller = catalog(self.hass)[2].get(self.controller_uid)
+                if current_controller is None or not current_controller.physical_enabled:
+                    return "CONTROLLER_CONTROL_DISABLED"
                 if not self._acquire():
                     return "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
                 # Options changes can move a Charger while its previous Controller

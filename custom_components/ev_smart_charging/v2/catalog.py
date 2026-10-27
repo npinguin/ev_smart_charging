@@ -89,6 +89,7 @@ def model(entry):
             cost_budget_eur=optional_positive(
                 data.get("cost_budget_eur"), "cost_budget"
             ),
+            physical_enabled=data.get("physical_enabled", False),
         )
     raise ValueError("unsupported_v2_entry")
 

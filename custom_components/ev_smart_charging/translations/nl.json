@@ -81,7 +81,11 @@
           "horizon_days": "Planningshorizon (dagen)",
           "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
           "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
-          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)"
+          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)",
+          "physical_enabled": "Fysieke V2-laadsturing inschakelen (vereist afzonderlijke ownership)"
+        },
+        "data_description": {
+          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen."
         }
       },
       "v2_migrate": {
@@ -285,7 +289,8 @@
           "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
           "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
           "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
-          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen",
+          "physical_enabled": "Fysieke V2-laadsturing actief"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -294,7 +299,8 @@
           "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
           "power_entity": "Kies het gemeten laadvermogen. Ook bestaande OCPP- of templatesensoren zonder device_class zijn selecteerbaar.",
           "energy_entity": "Kies de laadsessie-energiemeter, niet de huismeter.",
-          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is."
+          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is.",
+          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen."
         }
       }
     },

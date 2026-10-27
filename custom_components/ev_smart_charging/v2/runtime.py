@@ -234,13 +234,24 @@ class V2ControllerRuntime:
                     dt.utcnow(),
                     self.hass.config.time_zone,
                 )
-                # A plan only becomes a physical command after a completely
-                # separate native ownership/readback/cost/electrical gate.
-                # P0 containment is immutable via UI or persisted options.
-                if safety.COORDINATED_ACTUATION_ENABLED and not self._stopped:
+                # V2 physical execution is an explicit per-Controller choice.
+                # Original Local Coordinated remains locked independently.
+                # Every individual EVSE still passes physical readback,
+                # source quality, owner exclusivity and budget admission.
+                result["execution_status"] = (
+                    "CONTROLLER_CONTROL_DISABLED"
+                    if not controller.physical_enabled
+                    else "PHYSICAL_VALIDATION_REQUIRED"
+                )
+                if (
+                    safety.V2_PHYSICAL_EXECUTION_AVAILABLE
+                    and controller.physical_enabled
+                    and not self._stopped
+                ):
                     result["native_execution"] = await self._apply_native_plan(
                         controller, chargers, observed, result
                     )
+                    result["execution_status"] = "ACTIVE_WITH_NATIVE_ADMISSION"
                     result["advisory_only"] = False
                     result["physical_actuation_authorized"] = any(
                         state
@@ -285,7 +296,7 @@ class V2ControllerRuntime:
         admitted = _group_admissions(controller, chargers, observed, result, when)
         native_results = {}
         for uid, charger in sorted(chargers.items()):
-            if self._stopped or not safety.COORDINATED_ACTUATION_ENABLED:
+            if self._stopped or not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:
                 break
             if not charger.control_entity:
                 continue

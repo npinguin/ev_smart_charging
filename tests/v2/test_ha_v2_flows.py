@@ -296,3 +296,24 @@ def test_optional_selector_clear_does_not_clear_policy():
     assert updated["power_entity"] == "sensor.new_power"
     assert updated["energy_entity"] == ""
     assert "max_ac_kw" not in updated
+
+
+async def test_v2_controller_physical_enable_is_explicit_and_never_legacy(hass):
+    from custom_components.ev_smart_charging.v2.catalog import model
+    from custom_components.ev_smart_charging.v2.flow import _schema
+
+    created = entry(hass, ENTRY_CONTROLLER, "safe", "Safe")
+    assert model(created).physical_enabled is False
+    form = await _schema(hass, ENTRY_CONTROLLER, {})
+    physical = next(
+        (key, value)
+        for key, value in form.schema.items()
+        if key.schema == "physical_enabled"
+    )
+    assert physical[0].default() is False
+    assert physical[1] is not None
+    hass.config_entries.async_update_entry(
+        created, options={"physical_enabled": True}
+    )
+    assert model(created).physical_enabled is True
+    assert created.data["uid"] == "safe"
