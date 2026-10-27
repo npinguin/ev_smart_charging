@@ -15,13 +15,16 @@ def test_persistent_manual_stop_latch_is_checked_before_writer():
     # The original upstream Local STOP must never be repurposed as a
     # Controller pause command. V2 physical STOP is a separate owner action.
     methods = [
-        node for node in ast.walk(ast.parse(button))
+        node
+        for node in ast.walk(ast.parse(button))
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "async_press"
     ]
     assert any(
-        any(isinstance(call, ast.Call)
+        any(
+            isinstance(call, ast.Call)
             and ast.unparse(call.func) == "self.coordinator.turn_off_charging"
-            for call in ast.walk(method))
+            for call in ast.walk(method)
+        )
         for method in methods
     )
     assert "pause_supervised(" not in button

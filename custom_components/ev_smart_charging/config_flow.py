@@ -137,9 +137,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_migrate_bindings()
         return self.async_show_form(
             step_id="v2_migrate",
-            data_schema=vol.Schema({
-                vol.Required("legacy_entry_id"): vol.In(candidates),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("legacy_entry_id"): vol.In(candidates),
+                }
+            ),
         )
 
     async def async_step_v2_migrate_bindings(self, user_input=None):
@@ -157,40 +159,50 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if v2_details(entry).get("vehicle_uid")
         }
         vehicles = {"": "None"}
-        vehicles.update({
-            entry.data["uid"]: v2_details(entry)["name"]
-            for entry in v2_entries(self.hass, V2_VEHICLE)
-            if entry.data["uid"] not in assigned
-        })
+        vehicles.update(
+            {
+                entry.data["uid"]: v2_details(entry)["name"]
+                for entry in v2_entries(self.hass, V2_VEHICLE)
+                if entry.data["uid"] not in assigned
+            }
+        )
         if not controllers:
             return self.async_abort(reason="create_controller_first")
         # Common installation: one Controller and no eligible Vehicle.
         # Do not force another screen just to confirm two obvious defaults.
         if user_input is None and len(controllers) == 1 and len(vehicles) == 1:
-            selected.update({
-                "controller_uid": next(iter(controllers)),
-                "vehicle_uid": "",
-            })
+            selected.update(
+                {
+                    "controller_uid": next(iter(controllers)),
+                    "vehicle_uid": "",
+                }
+            )
             return await self.async_step_v2_migrate_confirm()
         if user_input is not None:
-            if (user_input.get("controller_uid") not in controllers
-                    or user_input.get("vehicle_uid", "") not in vehicles):
+            if (
+                user_input.get("controller_uid") not in controllers
+                or user_input.get("vehicle_uid", "") not in vehicles
+            ):
                 return self.async_show_form(
                     step_id="v2_migrate_bindings",
-                    data_schema=vol.Schema({
-                        vol.Required("controller_uid"): vol.In(controllers),
-                        vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
-                    }),
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("controller_uid"): vol.In(controllers),
+                            vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+                        }
+                    ),
                     errors={"base": "invalid_v2_configuration"},
                 )
             selected.update(user_input)
             return await self.async_step_v2_migrate_confirm()
         return self.async_show_form(
             step_id="v2_migrate_bindings",
-            data_schema=vol.Schema({
-                vol.Required("controller_uid"): vol.In(controllers),
-                vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("controller_uid"): vol.In(controllers),
+                    vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+                }
+            ),
         )
 
     async def async_step_v2_migrate_confirm(self, user_input=None):
@@ -205,61 +217,72 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="already_migrated")
         source = by_legacy_id(self.hass, source_id)
         candidate = proposed_charger(
-            source, selected["controller_uid"],
+            source,
+            selected["controller_uid"],
             vehicle_uid=selected.get("vehicle_uid", ""),
         )
         if user_input is not None and user_input.get("confirmed"):
             changes = {
-                key: value for key, value in user_input.items()
+                key: value
+                for key, value in user_input.items()
                 if key in ("name", "connected_entity", "max_ac_kw")
                 and value not in (None, "", 0)
             }
             candidate = proposed_charger(
-                source, selected["controller_uid"],
+                source,
+                selected["controller_uid"],
                 vehicle_uid=selected.get("vehicle_uid", ""),
                 overrides=changes,
             )
             # Validation protects existing Controller/Vehicle ownership and
             # prevents a second migration for the same original Config Entry.
-            if (source_id not in {
-                item["legacy_entry_id"] for item in discover_legacy(self.hass)
+            if source_id not in {
+                item["legacy_entry_id"]
+                for item in discover_legacy(self.hass)
                 if not item["mapped"]
-            }):
+            }:
                 return self.async_abort(reason="already_migrated")
             try:
                 v2_validate(self.hass, V2_CHARGER, candidate)
             except (ValueError, KeyError, TypeError):
                 return self.async_show_form(
                     step_id="v2_migrate_confirm",
-                    data_schema=vol.Schema({
-                        vol.Required("confirmed", default=False): cv.boolean,
-                        vol.Required("name", default=candidate["name"]): cv.string,
-                    }),
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("confirmed", default=False): cv.boolean,
+                            vol.Required("name", default=candidate["name"]): cv.string,
+                        }
+                    ),
                     errors={"base": "invalid_v2_configuration"},
                 )
             return self.async_create_entry(title=candidate["name"], data=candidate)
         ready = row["vehicle_ready_by_suggestion"]
         label = (
             f'{ready["time"]} ({ready["source"]})'
-            if ready["mode"] == "daily" else "Unverified"
+            if ready["mode"] == "daily"
+            else "Unverified"
         )
         return self.async_show_form(
             step_id="v2_migrate_confirm",
-            data_schema=vol.Schema({
-                vol.Required("name", default=candidate["name"]): cv.string,
-                vol.Optional(
-                    "connected_entity",
-                    default=candidate.get("connected_entity", ""),
-                ): cv.string,
-                vol.Optional(
-                    "max_ac_kw", default=candidate.get("max_ac_kw") or 0,
-                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
-                vol.Required("confirmed", default=False): cv.boolean,
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name", default=candidate["name"]): cv.string,
+                    vol.Optional(
+                        "connected_entity",
+                        default=candidate.get("connected_entity", ""),
+                    ): cv.string,
+                    vol.Optional(
+                        "max_ac_kw",
+                        default=candidate.get("max_ac_kw") or 0,
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+                    vol.Required("confirmed", default=False): cv.boolean,
+                }
+            ),
             description_placeholders={
                 "legacy_name": row["name"],
                 "legacy_ready_by": label,
-                "missing_sources": ", ".join(row["requires_operator_mapping"]) or "none",
+                "missing_sources": ", ".join(row["requires_operator_mapping"])
+                or "none",
             },
             last_step=True,
         )

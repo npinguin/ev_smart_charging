@@ -43,7 +43,8 @@ def test_original_ha_charger_config_entry_version_and_options_remain():
     # Extra per-Charger source mappings no longer belong on original Local
     # Options. They are explicitly migrated to the independent V2 Charger.
     original_options = next(
-        node for node in module.body
+        node
+        for node in module.body
         if isinstance(node, ast.ClassDef) and node.name == "OptionsFlowHandler"
     )
     assert not any(
