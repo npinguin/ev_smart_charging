@@ -133,20 +133,19 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_v2_import_intermediate_controller(self, user_input=None):
         from .v2.intermediate_import import historical_entries, controller_proposal
 
-        old = {
-            e.entry_id: e
-            for e in historical_entries(self.hass)
-        }
+        old = {e.entry_id: e for e in historical_entries(self.hass)}
         if not old:
             return self.async_abort(reason="no_intermediate_controller")
         if user_input is None:
             return self.async_show_form(
                 step_id="v2_import_intermediate_controller",
-                data_schema=vol.Schema({
-                    vol.Required("source_entry_id"): vol.In({
-                        uid: entry.title or uid for uid, entry in old.items()
-                    }),
-                }),
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("source_entry_id"): vol.In(
+                            {uid: entry.title or uid for uid, entry in old.items()}
+                        ),
+                    }
+                ),
             )
         entry = old.get(user_input.get("source_entry_id"))
         if entry is None:
@@ -183,12 +182,16 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(
                 step_id="v2_import_intermediate_vehicle",
-                data_schema=vol.Schema({
-                    vol.Required("source_vehicle"): vol.In({
-                        key: f"{entry.title} · {title}"
-                        for key, (entry, _, title) in choices.items()
-                    }),
-                }),
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("source_vehicle"): vol.In(
+                            {
+                                key: f"{entry.title} · {title}"
+                                for key, (entry, _, title) in choices.items()
+                            }
+                        ),
+                    }
+                ),
             )
         selected = choices.get(user_input.get("source_vehicle"))
         if selected is None:
@@ -222,19 +225,16 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_vehicle()
         return self.async_show_form(
             step_id="v2_import_intermediate_review",
-            data_schema=vol.Schema({
-                vol.Required("confirm", default=False):
-                    selector.BooleanSelector(),
-            }),
-            description_placeholders={
-                "unresolved": ", ".join(
-                    getattr(self, "_v2_import_warnings", [])
-                ) or "None",
-            },
-            errors=(
-                {"base": "confirm_required"}
-                if user_input is not None else {}
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirm", default=False): selector.BooleanSelector(),
+                }
             ),
+            description_placeholders={
+                "unresolved": ", ".join(getattr(self, "_v2_import_warnings", []))
+                or "None",
+            },
+            errors=({"base": "confirm_required"} if user_input is not None else {}),
         )
 
     async def async_step_v2_vehicle(self, user_input=None):
