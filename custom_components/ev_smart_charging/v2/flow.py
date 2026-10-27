@@ -66,9 +66,14 @@ async def _users(hass):
 
 async def _schema(hass, kind, old):
     def opt(key, validator, default=None):
-        # Empty optional entity bindings must not inject invalid "" defaults
-        # into Home Assistant EntitySelectors.
         value = old.get(key, default)
+        # HA renders suggested_value in its native entity picker without
+        # having Voluptuous silently reinsert a removed mapping on Save.
+        if key in _ENTITY_BINDINGS.get(kind, ()) and value not in (None, ""):
+            return (
+                vol.Optional(key, description={"suggested_value": value}),
+                validator,
+            )
         if value is not None and value != "":
             return (vol.Optional(key, default=value), validator)
         return (vol.Optional(key), validator)
