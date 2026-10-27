@@ -136,6 +136,11 @@ jobs:
             -o console_output_style=count \
             -p no:sugar \
             tests
+      - name: Enforce coverage on measured artifact
+        run: |
+          # Independent hard gate: catches runner/wrapper combinations that
+          # report a successful pytest step despite a cov-fail-under warning.
+          python3 -m coverage report --fail-under=90
       # External Codecov reporting is optional. pytest coverage remains a
       # required >=90% gate on every Python test matrix version.
       - name: "Upload coverage to Codecov (optional)"
