@@ -58,6 +58,10 @@ def observed(connected=True):
             "tariff_quality": "VALID",
             "power_kw": 0.0,
             "energy_kwh": 0.0,
+            "session_grid_kwh": 0.0,
+            "session_elapsed_seconds": 0.0,
+            "session_meter_quality": "VALID",
+            "session_duration_quality": "VALID",
         }
     }
 
