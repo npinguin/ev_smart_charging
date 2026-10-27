@@ -17,8 +17,10 @@ def group_facts(
     observations = [observed.get(uid, {}) for uid in chargers]
     powers = [item.get("power_kw") for item in observations]
     session_energy = [
-        item.get("energy_kwh") if charger.energy_source_kind == "session" else None
-        for charger, item in zip(chargers.values(), observations)
+        item.get("session_grid_kwh")
+        if item.get("session_meter_quality") == "VALID"
+        else None
+        for item in observations
     ]
     connected = sum(item.get("connected") is True for item in observations)
     unknown = sum(item.get("connected") is None for item in observations)
