@@ -96,6 +96,11 @@ def compile_advisory(
             excluded[charger.uid] = "VEHICLE_UNAVAILABLE"
             continue
         inputs = observed.get(charger.uid, {})
+        # Physical connection is the first eligibility gate. A disconnected
+        # Smart Plug never receives a charge request based on stale demand.
+        if inputs.get("connected") is not True:
+            excluded[charger.uid] = "PHYSICAL_CONNECTION_NOT_CONFIRMED"
+            continue
         soc = inputs.get("soc")
         explicit = (
             charger.requested_grid_kwh is not None
