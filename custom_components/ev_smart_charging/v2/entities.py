@@ -90,7 +90,11 @@ class V2Fact(SensorEntity):
         ):
             source = obj.soc_entity
         elif self.kind == ENTRY_CHARGER:
-            if self.key in ("actual_cost_today", "known_actual_cost_eur"):
+            if self.key in (
+                "actual_cost_today", "known_actual_cost_eur", "energy_kwh",
+                "session_elapsed_minutes", "session_meter_quality",
+                "session_duration_quality",
+            ):
                 self.async_on_remove(
                     async_dispatcher_connect(
                         self.hass, f"{DOMAIN}_v2_vehicle_sources",
@@ -222,17 +226,31 @@ class V2Fact(SensorEntity):
                                 else "known_subtotal_eur"
                             )
                 return None
-            if self.key == "energy_kwh":
-                if obj.energy_source_kind != "session":
-                    return None
-                return _meter(
-                    (
-                        self.hass.states.get(obj.energy_entity)
-                        if obj.energy_entity
-                        else None
-                    ),
-                    "energy",
-                )
+            if self.key in (
+                "energy_kwh", "session_elapsed_minutes",
+                "session_meter_quality", "session_duration_quality",
+            ):
+                from .runtime import V2ControllerRuntime
+
+                for runtime in self.hass.data.get(DOMAIN, {}).values():
+                    if isinstance(runtime, V2ControllerRuntime):
+                        session = runtime.snapshot.get(
+                            "session_sources", {}
+                        ).get(obj.uid)
+                        if session is not None:
+                            return {
+                                "energy_kwh": session.get("delivered_kwh"),
+                                "session_elapsed_minutes": (
+                                    round(session["elapsed_seconds"] / 60, 2)
+                                    if session.get("elapsed_seconds") is not None
+                                    else None
+                                ),
+                                "session_meter_quality": session.get("meter_quality"),
+                                "session_duration_quality": session.get(
+                                    "duration_quality"
+                                ),
+                            }[self.key]
+                return None
         elif self.kind == ENTRY_CONTROLLER:
             manager = self.hass.data[DOMAIN].get(self.entry.entry_id)
             snap = manager.snapshot if manager is not None else {}
@@ -307,6 +325,12 @@ def sensors_for_entry(entry):
             V2Fact(entry, kind, "controller", "Charge Controller"),
             V2Fact(entry, kind, "vehicle", "Assigned Vehicle"),
             V2Fact(entry, kind, "connected", "Connection"),
+            V2Fact(
+                entry, kind, "session_elapsed_minutes", "Charging duration",
+                SensorDeviceClass.DURATION, "min",
+            ),
+            V2Fact(entry, kind, "session_meter_quality", "Session energy quality"),
+            V2Fact(entry, kind, "session_duration_quality", "Duration quality"),
             V2Fact(
                 entry, kind, "power_kw", "Charging power", SensorDeviceClass.POWER, "kW"
             ),
