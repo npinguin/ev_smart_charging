@@ -100,12 +100,15 @@ def test_missing_meter_counter_reset_or_gaps_block_all_physical_cost_grants():
         == "BUDGET_LEDGER_UNVERIFIED"
     )
     observe(tracker, connected=False)
-    assert observe(
-        tracker,
-        meter=1,
-        at=NOW + timedelta(minutes=3),
-        session_start=(NOW + timedelta(minutes=3)).isoformat(),
-    ) == "CERTIFIED"
+    assert (
+        observe(
+            tracker,
+            meter=1,
+            at=NOW + timedelta(minutes=3),
+            session_start=(NOW + timedelta(minutes=3)).isoformat(),
+        )
+        == "CERTIFIED"
+    )
 
     other = CostBudgetGuard()
     observe(other, connected=False)
@@ -253,11 +256,18 @@ def test_connection_unknown_invalidates_existing_certified_cost_ledger():
     guard = CostBudgetGuard()
     observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
-    assert guard.observe(
-        "utility", connected=None, session_start=SESSION,
-        meter_source="sensor.utility_meter", meter_kwh=100,
-        meter_at=NOW, prices=rates(),
-    ) == "SESSION_UNVERIFIED"
+    assert (
+        guard.observe(
+            "utility",
+            connected=None,
+            session_start=SESSION,
+            meter_source="sensor.utility_meter",
+            meter_kwh=100,
+            meter_at=NOW,
+            prices=rates(),
+        )
+        == "SESSION_UNVERIFIED"
+    )
     assert allow(guard, 5)[0] == set()
     assert observe(guard) == "BUDGET_LEDGER_UNVERIFIED"
 

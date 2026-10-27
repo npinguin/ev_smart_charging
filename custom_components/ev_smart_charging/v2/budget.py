@@ -115,9 +115,7 @@ class CostBudgetGuard:
             except (ValueError, TypeError):
                 return "SESSION_START_UNVERIFIED"
             if beginning.tzinfo is None or not (
-                timedelta(minutes=-2)
-                <= stamp - beginning
-                <= timedelta(minutes=2)
+                timedelta(minutes=-2) <= stamp - beginning <= timedelta(minutes=2)
             ):
                 self.sessions[uid] = {
                     "session": session_start,
