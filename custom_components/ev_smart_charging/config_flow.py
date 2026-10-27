@@ -134,7 +134,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if source not in candidates:
                 return self.async_abort(reason="invalid_v2_migration_source")
             self._v2_migrate_selection = {"legacy_entry_id": source}
-            return await self.async_step_v2_migrate_bindings()
+            return await self.async_step_v2_migrate_target()
         return self.async_show_form(
             step_id="v2_migrate",
             data_schema=vol.Schema(
@@ -142,6 +142,95 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required("legacy_entry_id"): vol.In(candidates),
                 }
             ),
+        )
+
+    async def async_step_v2_migrate_target(self, user_input=None):
+        """Either create a V2 Charger or reuse an existing unlinked V2 Charger."""
+        selected = self._v2_migrate_selection
+        if not selected:
+            return self.async_abort(reason="invalid_v2_migration_source")
+        available = {
+            item.data["uid"]: v2_details(item)["name"]
+            for item in v2_entries(self.hass, V2_CHARGER)
+            if not v2_details(item).get("legacy_entry_id")
+        }
+        if not available:
+            return await self.async_step_v2_migrate_bindings()
+        destinations = {"": "Create new V2 Charger", **available}
+        if user_input is not None:
+            target = user_input.get("existing_charger_uid", "")
+            if target not in destinations:
+                return self.async_abort(reason="invalid_v2_migration_source")
+            if target:
+                selected["existing_charger_uid"] = target
+                return await self.async_step_v2_migrate_existing_confirm()
+            return await self.async_step_v2_migrate_bindings()
+        return self.async_show_form(
+            step_id="v2_migrate_target",
+            data_schema=vol.Schema({
+                vol.Required("existing_charger_uid", default=""): vol.In(destinations),
+            }),
+        )
+
+    async def async_step_v2_migrate_existing_confirm(self, user_input=None):
+        """Link provenance to existing V2 Charger without replacing its owner."""
+        from .v2.ownership import async_apply_charger_options
+
+        selected = self._v2_migrate_selection
+        if not selected or not selected.get("existing_charger_uid"):
+            return self.async_abort(reason="invalid_v2_migration_source")
+        source_id = selected["legacy_entry_id"]
+        targets = {
+            e.data["uid"]: e for e in v2_entries(self.hass, V2_CHARGER)
+            if not v2_details(e).get("legacy_entry_id")
+        }
+        target = targets.get(selected["existing_charger_uid"])
+        if target is None:
+            return self.async_abort(reason="already_migrated")
+        original = by_legacy_id(self.hass, source_id)
+        proposed = proposed_charger(original, v2_details(target)["controller_uid"])
+        old_control = v2_details(target).get("control_entity")
+        new_control = proposed.get("control_entity")
+        if old_control and new_control and old_control != new_control:
+            return self.async_abort(reason="v2_existing_charger_control_conflict")
+        if user_input is not None and user_input.get("confirmed"):
+            if source_id not in {
+                row["legacy_entry_id"] for row in discover_legacy(self.hass)
+                if not row["mapped"]
+            }:
+                return self.async_abort(reason="already_migrated")
+            changes = {"legacy_entry_id": source_id}
+            # Fill missing technical bindings only. Never overwrite a
+            # user-maintained existing V2 physical source or assignment.
+            for key in (
+                "control_entity", "charging_entity", "power_entity",
+                "energy_entity", "tariff_entity", "max_ac_kw",
+            ):
+                if not v2_details(target).get(key) and proposed.get(key):
+                    changes[key] = proposed[key]
+            try:
+                await async_apply_charger_options(
+                    self.hass, target.data["uid"], changes
+                )
+            except (ValueError, KeyError, TypeError):
+                return self.async_show_form(
+                    step_id="v2_migrate_existing_confirm",
+                    data_schema=vol.Schema({
+                        vol.Required("confirmed", default=False): cv.boolean
+                    }),
+                    errors={"base": "invalid_v2_configuration"},
+                )
+            return self.async_abort(reason="v2_existing_charger_linked")
+        return self.async_show_form(
+            step_id="v2_migrate_existing_confirm",
+            data_schema=vol.Schema({
+                vol.Required("confirmed", default=False): cv.boolean,
+            }),
+            description_placeholders={
+                "legacy_name": original.title,
+                "v2_name": v2_details(target)["name"],
+            },
+            last_step=True,
         )
 
     async def async_step_v2_migrate_bindings(self, user_input=None):

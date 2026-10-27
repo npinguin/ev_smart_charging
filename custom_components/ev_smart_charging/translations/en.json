@@ -107,6 +107,20 @@
           "controller_uid": "Charge Controller",
           "vehicle_uid": "Vehicle (optional)"
         }
+      },
+      "v2_migrate_target": {
+        "title": "Choose the V2 Charger",
+        "description": "Create a new V2 Charger or link an existing V2 Charger with no V1 source.",
+        "data": {
+          "existing_charger_uid": "Destination"
+        }
+      },
+      "v2_migrate_existing_confirm": {
+        "title": "Confirm existing Charger link",
+        "description": "Link {legacy_name} to existing V2 Charger {v2_name}. Existing V2 configuration stays authoritative; only missing source bindings are filled. Original Local charging remains unchanged, and no V2 charging commands are issued.",
+        "data": {
+          "confirmed": "Confirm link"
+        }
       }
     },
     "error": {
@@ -126,7 +140,9 @@
       "create_controller_first": "Create a Charge Controller before adding a Charger.",
       "no_legacy_chargers_to_migrate": "No unmapped original Local Chargers found.",
       "invalid_v2_migration_source": "Original Local source or Controller unavailable.",
-      "already_migrated": "This original Local Charger is already mapped."
+      "already_migrated": "This original Local Charger is already mapped.",
+      "v2_existing_charger_linked": "Existing V2 Charger linked; Local remains unchanged.",
+      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings."
     }
   },
   "options": {

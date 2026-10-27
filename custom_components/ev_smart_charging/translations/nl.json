@@ -107,6 +107,20 @@
           "controller_uid": "Charge Controller",
           "vehicle_uid": "Vehicle (optional)"
         }
+      },
+      "v2_migrate_target": {
+        "title": "Kies een V2 Charger",
+        "description": "Maak een nieuwe V2 Charger aan of gebruik een bestaande zonder V1-bron.",
+        "data": {
+          "existing_charger_uid": "Doel"
+        }
+      },
+      "v2_migrate_existing_confirm": {
+        "title": "Bevestig de koppeling",
+        "description": "Koppel {legacy_name} aan bestaande V2 Charger {v2_name}. Bestaande V2-instellingen blijven behouden; alleen ontbrekende bronbindings worden aangevuld. Er verandert niets aan de oorspronkelijke Local-laadsturing en er worden geen V2-laadcommando's verzonden.",
+        "data": {
+          "confirmed": "Koppeling bevestigen"
+        }
       }
     },
     "error": {
@@ -126,7 +140,9 @@
       "create_controller_first": "Maak eerst een laadcontroller aan.",
       "no_legacy_chargers_to_migrate": "Geen ongemigreerde Local-laders gevonden.",
       "invalid_v2_migration_source": "Oorspronkelijke lader of laadcontroller ontbreekt.",
-      "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld."
+      "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld.",
+      "v2_existing_charger_linked": "Bestaande V2 Charger gekoppeld; Local blijft ongewijzigd.",
+      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping."
     }
   },
   "options": {

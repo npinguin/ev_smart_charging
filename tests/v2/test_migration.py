@@ -193,3 +193,39 @@ def test_legacy_custom_daily_ready_time_is_respected_without_mutating_original(h
     )
     assert legacy_ready_suggestion(hass, legacy)["mode"] is None
     assert legacy_ready_suggestion(hass, legacy)["time"] is None
+
+async def test_migration_reuses_existing_charger_without_creating_duplicate(hass):
+    legacy = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    existing = _v2(
+        hass, ENTRY_CHARGER, "existing",
+        controller_uid="main", control_entity="switch.peblar",
+    )
+    before = (dict(legacy.data), dict(legacy.options))
+    start = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    form = await hass.config_entries.flow.async_configure(
+        start["flow_id"], {"next_step_id": "v2_migrate"}
+    )
+    target = await hass.config_entries.flow.async_configure(
+        form["flow_id"], {"legacy_entry_id": legacy.entry_id}
+    )
+    assert target["step_id"] == "v2_migrate_target"
+    confirm = await hass.config_entries.flow.async_configure(
+        target["flow_id"], {"existing_charger_uid": "existing"}
+    )
+    assert confirm["step_id"] == "v2_migrate_existing_confirm"
+    result = await hass.config_entries.flow.async_configure(
+        confirm["flow_id"], {"confirmed": True}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "v2_existing_charger_linked"
+    assert existing.options["legacy_entry_id"] == legacy.entry_id
+    assert existing.options["power_entity"] == "sensor.peblar_power"
+    assert (dict(legacy.data), dict(legacy.options)) == before
+    assert discover(hass)[0]["mapped"] is True
+    assert len([
+        entry for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get(MARKER) == ENTRY_CHARGER
+    ]) == 1
