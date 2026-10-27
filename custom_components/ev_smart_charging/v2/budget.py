@@ -188,6 +188,24 @@ class CostBudgetGuard:
                 "spent_upper_eur": None,
                 "remaining_eur": None,
             }
+        # Physical Start/Continue cannot rely on a once-valid but frozen
+        # source meter. A stale readback would silently lose later spending.
+        for session in active:
+            try:
+                last_meter_at = datetime.fromisoformat(session["last_at"])
+            except (KeyError, TypeError, ValueError):
+                last_meter_at = None
+            if (
+                last_meter_at is None
+                or last_meter_at.tzinfo is None
+                or at.tzinfo is None
+                or not timedelta(0) <= at - last_meter_at <= timedelta(minutes=2)
+            ):
+                return set(), {
+                    "status": "STALE_METER_READBACK",
+                    "spent_upper_eur": None,
+                    "remaining_eur": None,
+                }
         spent = sum(s["cost_upper_eur"] for s in active)
         reservations = 0.0
         approved = set()

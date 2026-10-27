@@ -49,7 +49,7 @@ def observe(
     )
 
 
-def allow(ledger, limit, prices=None):
+def allow(ledger, limit, prices=None, at=NOW):
     return ledger.admit(
         limit,
         {"utility": charger()},
@@ -60,7 +60,7 @@ def allow(ledger, limit, prices=None):
             }
         },
         {"utility"},
-        NOW,
+        at,
     )
 
 
@@ -76,11 +76,11 @@ def test_real_meter_budget_reserves_next_quarter_before_energizing():
         )
         == "CERTIFIED"
     )
-    allowed, status = allow(tracker, 0.35)
+    allowed, status = allow(tracker, 0.35, at=NOW + timedelta(minutes=1))
     assert allowed == {"utility"}
     assert status["spent_upper_eur"] == 0.2
     assert status["remaining_eur"] == 0.15
-    refused, status = allow(tracker, 0.25)
+    refused, status = allow(tracker, 0.25, at=NOW + timedelta(minutes=1))
     assert refused == set()
     assert status["status"] == "AT_LIMIT"
 
@@ -123,7 +123,7 @@ def test_ha_restart_restores_spent_amount_and_never_rezeros_cost():
     observe(original)
     observe(original, meter=101, at=NOW + timedelta(minutes=1))
     restored = CostBudgetGuard(original.snapshot())
-    approved, report = allow(restored, 0.25)
+    approved, report = allow(restored, 0.25, at=NOW + timedelta(minutes=1))
     assert approved == set()
     assert report["spent_upper_eur"] == 0.2
 
@@ -267,3 +267,18 @@ def test_stale_meter_cannot_certify_newly_witnessed_connected_session():
     observe(guard, connected=False)
     assert observe(guard, at=NOW - timedelta(minutes=4)) == "METER_ANCHOR_STALE"
     assert allow(guard, 5)[0] == set()
+
+
+def test_freezing_a_previously_certified_meter_blocks_new_energizing():
+    guard = CostBudgetGuard()
+    observe(guard, connected=False)
+    assert observe(guard) == "CERTIFIED"
+    approved, status = allow(guard, 5, at=NOW + timedelta(minutes=3))
+    assert approved == set()
+    assert status["status"] == "STALE_METER_READBACK"
+    # Same cached HA number at the same timestamp is not fresh evidence.
+    assert observe(guard) == "CERTIFIED"
+    approved, status = allow(guard, 5, at=NOW + timedelta(minutes=3))
+    assert approved == set()
+    assert status["spent_upper_eur"] is None
+    assert status["remaining_eur"] is None
