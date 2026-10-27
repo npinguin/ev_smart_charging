@@ -164,9 +164,9 @@ async def _schema(hass, kind, old):
             )
         )
     elif kind == ENTRY_CONTROLLER:
-        fields[vol.Required(
-            "physical_enabled", default=old.get("physical_enabled", False)
-        )] = selector.BooleanSelector()
+        fields[
+            vol.Required("physical_enabled", default=old.get("physical_enabled", False))
+        ] = selector.BooleanSelector()
         fields.update(
             dict(
                 [

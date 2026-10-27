@@ -312,8 +312,6 @@ async def test_v2_controller_physical_enable_is_explicit_and_never_legacy(hass):
     )
     assert physical[0].default() is False
     assert physical[1] is not None
-    hass.config_entries.async_update_entry(
-        created, options={"physical_enabled": True}
-    )
+    hass.config_entries.async_update_entry(created, options={"physical_enabled": True})
     assert model(created).physical_enabled is True
     assert created.data["uid"] == "safe"

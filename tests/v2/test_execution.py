@@ -89,7 +89,8 @@ async def test_global_safety_containment_cannot_be_overridden(hass, charger):
     hass.states.async_set("switch.native_charger", "off")
     writer = NativeChargeWriter(hass, charger, "main")
     controller = next(
-        e for e in hass.config_entries.async_entries(DOMAIN)
+        e
+        for e in hass.config_entries.async_entries(DOMAIN)
         if e.data.get(MARKER) == ENTRY_CONTROLLER
     )
     hass.config_entries.async_update_entry(

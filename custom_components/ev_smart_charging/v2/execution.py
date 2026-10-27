@@ -176,7 +176,10 @@ class NativeChargeWriter:
                 if self._closed or not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:
                     return "WRITER_CLOSED_OR_SAFETY_HOLD"
                 current_controller = catalog(self.hass)[2].get(self.controller_uid)
-                if current_controller is None or not current_controller.physical_enabled:
+                if (
+                    current_controller is None
+                    or not current_controller.physical_enabled
+                ):
                     return "CONTROLLER_CONTROL_DISABLED"
                 if not self._acquire():
                     return "ANOTHER_CONTROLLER_OWNS_NATIVE_TARGET"
