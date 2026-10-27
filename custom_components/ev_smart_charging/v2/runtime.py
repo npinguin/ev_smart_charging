@@ -16,6 +16,7 @@ from ..controller import safety
 from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory, parse_tariff_slots
 from .group_facts import group_facts
+from ..controller.costs import ActualCostLedger
 from .soc_estimation import SocEstimator
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -134,7 +135,15 @@ def read_inputs(hass, chargers, vehicles):
             tariff.attributes.get("currency") if tariff else None,
             tariff.attributes.get("unit_of_measurement") if tariff else None,
         )
+        energy_state = (
+            hass.states.get(charger.energy_entity)
+            if charger.energy_entity else None
+        )
         result[charger.uid] = {
+            "energy_observed_at": (
+                getattr(energy_state, "last_reported", None)
+                or getattr(energy_state, "last_updated", None)
+            ) if energy_state is not None else None,
             "soc": soc,
             "oem_soc": _number(soc_state, 0, 100),
             "oem_at": getattr(soc_state, "last_changed", None),
@@ -237,6 +246,16 @@ class V2ControllerRuntime:
         self._peak_recovery_since = None
         self._soc_store = Store(hass, 1, f"{DOMAIN}.v2_soc_{entry.data['uid']}")
         self._soc_estimator = SocEstimator()
+        self._cost_store = Store(
+            hass, 1, f"{DOMAIN}.v2_actual_cost_{entry.data['uid']}"
+        )
+        self._cost_ledgers = {}
+
+    def _cost_payload(self):
+        return {
+            uid: ledger.to_storage()
+            for uid, ledger in self._cost_ledgers.items()
+        }
 
     @callback
     def subscribe(self, fn):
@@ -253,6 +272,12 @@ class V2ControllerRuntime:
             return
         restored = await self._soc_store.async_load()
         self._soc_estimator = SocEstimator(restored)
+        stored_costs = await self._cost_store.async_load()
+        self._cost_ledgers = {
+            uid: ActualCostLedger.from_storage(state)
+            for uid, state in (stored_costs or {}).items()
+            if isinstance(uid, str)
+        }
         if self._unsub is None:
             self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
@@ -316,6 +341,39 @@ class V2ControllerRuntime:
                     dt.utcnow(),
                     self.hass.config.time_zone,
                 )
+                # Actual costs use verified time-aligned meter increments,
+                # never projected kWh multiplied by planned rates.
+                cost_changed = False
+                for uid, charger in chargers.items():
+                    item = observed[uid]
+                    ledger = self._cost_ledgers.setdefault(
+                        uid, ActualCostLedger()
+                    )
+                    previous = ledger.to_storage()
+                    meter = item.get("energy_kwh")
+                    stamp = item.get("energy_observed_at")
+                    if (
+                        charger.energy_source_kind
+                        in ("session", "total_increasing")
+                        and charger.energy_entity
+                        and meter is not None
+                        and stamp is not None
+                        and item.get("tariff_quality") == "VALID"
+                    ):
+                        ledger.observe(
+                            stamp, meter, charger.energy_entity,
+                            item.get("prices", []),
+                        )
+                    elif ledger.day is not None:
+                        ledger.complete = False
+                    cost_changed |= previous != ledger.to_storage()
+                if cost_changed:
+                    self._cost_store.async_delay_save(self._cost_payload, 30)
+                result["actual_cost_per_charger"] = {
+                    uid: ledger.summary()
+                    for uid, ledger in self._cost_ledgers.items()
+                    if uid in chargers
+                }
                 result["vehicle_sources"] = {
                     charger.vehicle_uid: {
                         "effective_soc": observed[uid]["soc"],
@@ -325,7 +383,9 @@ class V2ControllerRuntime:
                     if charger.vehicle_uid
                 }
                 result["group"] = group_facts(
-                    result, chargers, observed, dt.utcnow(), self.hass.config.time_zone
+                    result, chargers, observed, dt.utcnow(),
+                    self.hass.config.time_zone,
+                    cost_reports=result["actual_cost_per_charger"],
                 )
                 # V2 physical execution is an explicit per-Controller choice.
                 # Original Local Coordinated remains locked independently.
@@ -468,6 +528,7 @@ class V2ControllerRuntime:
         # HA Store's delayed save is normally enough, but explicit flush
         # prevents losing a charging interval on integration reload.
         await self._soc_store.async_save(self._soc_estimator.snapshot())
+        await self._cost_store.async_save(self._cost_payload())
         task = self._tick_task
         self._stopped = True
         if task is not None and not task.done():
