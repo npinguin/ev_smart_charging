@@ -763,14 +763,16 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
             for e in v2_entries(self.hass, V2_VEHICLE)
             if e.data.get("imported_from_intermediate") == source.entry_id
         }
-        missing = [uid for uid in profiles if uid not in imported]
-        if not controllers or missing:
+        missing = (["Controller"] if not controllers else []) + [
+            uid for uid in profiles if uid not in imported
+        ]
+        if missing:
             return self.async_show_form(
                 step_id="retire_to_v2",
                 data_schema=vol.Schema({}),
                 errors={"base": "intermediate_import_incomplete"},
                 description_placeholders={
-                    "missing": ", ".join(missing) if missing else "Controller",
+                    "missing": ", ".join(missing),
                 },
             )
         if user_input is not None and user_input.get("confirm") is True:
