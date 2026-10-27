@@ -225,8 +225,8 @@ class EVSmartChargingSensorStatus(EVSmartChargingSensor):
         self.update_ha_state()
 
 
-# New read-only facts belong to the original EVSC device. The legacy charging
-# and status sensor unique IDs, state, and scheduling are not modified.
+# Historical RC-only per-Charger fact entities are no longer registered on V1.
+# Retained temporarily for compatibility tests; V2 owns new public facts.
 INDIVIDUAL_FACT_SENSORS = (
     ("current_charging_power", "Current charging power", SensorDeviceClass.POWER, "kW"),
     ("battery_capacity", "Usable battery capacity", SensorDeviceClass.ENERGY, "kWh"),

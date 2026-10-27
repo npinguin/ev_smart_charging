@@ -231,6 +231,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+    # Remove only RC-only extensions previously registered on this classic
+    # Local device. All upstream entity unique IDs remain untouched.
+    from .legacy_surface import cleanup_legacy_extension_entities
+
+    cleanup_legacy_extension_entities(hass, entry)
+
     # If the name of the integration (config_entry.title) has changed,
     # update the device name.
     entity_registry: EntityRegistry = async_entity_registry_get(hass)
