@@ -1029,9 +1029,8 @@ class EVSmartChargingCoordinator:
         # The first source change must remain visible on the next HA task
         # drain (legacy Local contract). A synchronous burst of events shares
         # this single task. Feedback arriving while it runs is timer-throttled.
-        if (
-            self._source_refresh_unsub is None
-            and (self._source_refresh_task is None or self._source_refresh_task.done())
+        if self._source_refresh_unsub is None and (
+            self._source_refresh_task is None or self._source_refresh_task.done()
         ):
             self._source_refresh_task = self.hass.async_create_task(
                 self._drain_source_updates()
