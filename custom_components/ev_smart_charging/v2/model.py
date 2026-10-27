@@ -69,8 +69,7 @@ class Vehicle:
             if self.charge_efficiency is None:
                 raise ConfigurationError("soc_compensation_requires_efficiency")
         if self.charge_efficiency is not None and (
-            not isfinite(self.charge_efficiency)
-            or not 0 < self.charge_efficiency <= 1
+            not isfinite(self.charge_efficiency) or not 0 < self.charge_efficiency <= 1
         ):
             raise ConfigurationError("invalid_charge_efficiency")
         if self.phase_count not in (None, 1, 2, 3):

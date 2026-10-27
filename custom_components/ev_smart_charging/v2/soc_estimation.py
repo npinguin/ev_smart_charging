@@ -36,8 +36,15 @@ class SocEstimator:
         return self.anchors
 
     def resolve(
-        self, charger_uid, vehicle, *, oem_soc, oem_at, energy_kwh,
-        energy_kind, now,
+        self,
+        charger_uid,
+        vehicle,
+        *,
+        oem_soc,
+        oem_at,
+        energy_kwh,
+        energy_kind,
+        now,
     ):
         if vehicle.soc_source_mode == "manual":
             return vehicle.manual_soc, "MANUAL"
@@ -57,17 +64,18 @@ class SocEstimator:
             return None, "METER_UNAVAILABLE"
         if now.tzinfo is None:
             return None, "CLOCK_UNAVAILABLE"
-        stamp = oem_at.astimezone(timezone.utc) if (
-            oem_at is not None and oem_at.tzinfo is not None
-        ) else None
+        stamp = (
+            oem_at.astimezone(timezone.utc)
+            if (oem_at is not None and oem_at.tzinfo is not None)
+            else None
+        )
         key = charger_uid
         anchor = self.anchors.get(key)
         # A meter reset is sticky until the OEM source actually supplies
         # a fresh observation. Otherwise next-minute refresh would silently
         # re-anchor the same stale OEM value at the reset counter.
         quarantined = (
-            isinstance(anchor, dict)
-            and anchor.get("invalidated_oem_at") is not None
+            isinstance(anchor, dict) and anchor.get("invalidated_oem_at") is not None
         )
         if quarantined and (
             stamp is None or stamp.isoformat() == anchor["invalidated_oem_at"]
@@ -127,8 +135,8 @@ class SocEstimator:
             self.dirty = True
         estimated = min(
             100.0,
-            baseline_soc + 100.0 * gained * vehicle.charge_efficiency
-            / vehicle.battery_kwh,
+            baseline_soc
+            + 100.0 * gained * vehicle.charge_efficiency / vehicle.battery_kwh,
         )
         if gained > 0:
             return round(estimated, 3), "ESTIMATED"

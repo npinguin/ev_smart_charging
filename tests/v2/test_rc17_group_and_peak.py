@@ -174,20 +174,25 @@ def test_controller_group_facts_have_complete_and_partial_data_quality():
     )
 
 
-
 async def test_peak_runtime_rejects_site_overload_and_unknown_meter(hass):
     """Actual net import is a safety gate even without any active plan."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from custom_components.ev_smart_charging.const import DOMAIN
     from custom_components.ev_smart_charging.v2 import (
-        ENTRY_CHARGER, ENTRY_CONTROLLER, MARKER,
+        ENTRY_CHARGER,
+        ENTRY_CONTROLLER,
+        MARKER,
     )
     from custom_components.ev_smart_charging.v2.runtime import V2ControllerRuntime
 
     controller = MockConfigEntry(
-        domain=DOMAIN, entry_id="peak_real_controller", version=8,
+        domain=DOMAIN,
+        entry_id="peak_real_controller",
+        version=8,
         data={
-            MARKER: ENTRY_CONTROLLER, "uid": "peak", "name": "Peak",
+            MARKER: ENTRY_CONTROLLER,
+            "uid": "peak",
+            "name": "Peak",
             "physical_enabled": True,
             "peak_shaving_enabled": True,
             "site_power_entity": "sensor.whole_home",
@@ -196,29 +201,32 @@ async def test_peak_runtime_rejects_site_overload_and_unknown_meter(hass):
         },
     )
     charger = MockConfigEntry(
-        domain=DOMAIN, entry_id="peak_utility", version=8,
+        domain=DOMAIN,
+        entry_id="peak_utility",
+        version=8,
         data={
-            MARKER: ENTRY_CHARGER, "uid": "utility", "name": "Utility",
+            MARKER: ENTRY_CHARGER,
+            "uid": "utility",
+            "name": "Utility",
             "controller_uid": "peak",
             "power_entity": "sensor.utility_power",
-            "max_ac_kw": 2.0, "connection_source": "manual",
+            "max_ac_kw": 2.0,
+            "connection_source": "manual",
             "requested_grid_kwh": 1.0,
         },
     )
     controller.add_to_hass(hass)
     charger.add_to_hass(hass)
-    hass.states.async_set(
-        "sensor.whole_home", "9000", {"unit_of_measurement": "W"}
-    )
-    hass.states.async_set(
-        "sensor.utility_power", "0", {"unit_of_measurement": "kW"}
-    )
+    hass.states.async_set("sensor.whole_home", "9000", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.utility_power", "0", {"unit_of_measurement": "kW"})
     runtime = V2ControllerRuntime(hass, controller)
     try:
         result = {"controller_uid": "peak", "loads": {}}
         from custom_components.ev_smart_charging.v2.catalog import catalog
+
         _, chargers, controllers = catalog(hass)
         from custom_components.ev_smart_charging.v2.runtime import read_inputs
+
         observed = read_inputs(hass, chargers, {})
         outcome = await runtime._apply_native_plan(
             controllers["peak"], chargers, observed, result
@@ -229,7 +237,8 @@ async def test_peak_runtime_rejects_site_overload_and_unknown_meter(hass):
         assert runtime._peak_latched is True
 
         hass.states.async_set(
-            "sensor.whole_home", "unavailable",
+            "sensor.whole_home",
+            "unavailable",
             {"unit_of_measurement": "W"},
         )
         result = {"controller_uid": "peak", "loads": {}}

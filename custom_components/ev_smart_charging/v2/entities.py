@@ -64,12 +64,11 @@ class V2Fact(SensorEntity):
                 self.async_on_remove(manager.subscribe(self._source_changed))
             return
         obj = model(self.entry)
-        if (
-            self.kind == ENTRY_VEHICLE
-            and self.key in (
-                "effective_soc", "soc_quality", "source_quality",
-                "required_battery_kwh",
-            )
+        if self.kind == ENTRY_VEHICLE and self.key in (
+            "effective_soc",
+            "soc_quality",
+            "source_quality",
+            "required_battery_kwh",
         ):
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -236,8 +235,12 @@ def sensors_for_entry(entry):
         return [
             V2Fact(entry, kind, "soc", "OEM SoC", SensorDeviceClass.BATTERY, "%"),
             V2Fact(
-                entry, kind, "effective_soc", "Effective SoC",
-                SensorDeviceClass.BATTERY, "%",
+                entry,
+                kind,
+                "effective_soc",
+                "Effective SoC",
+                SensorDeviceClass.BATTERY,
+                "%",
             ),
             V2Fact(entry, kind, "soc_quality", "SoC basis"),
             V2Fact(

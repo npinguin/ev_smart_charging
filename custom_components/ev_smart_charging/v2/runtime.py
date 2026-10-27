@@ -235,9 +235,7 @@ class V2ControllerRuntime:
         self._writers = {}
         self._peak_latched = False
         self._peak_recovery_since = None
-        self._soc_store = Store(
-            hass, 1, f"{DOMAIN}.v2_soc_{entry.data['uid']}"
-        )
+        self._soc_store = Store(hass, 1, f"{DOMAIN}.v2_soc_{entry.data['uid']}")
         self._soc_estimator = SocEstimator()
 
     @callback
@@ -291,8 +289,11 @@ class V2ControllerRuntime:
                     item = observed[uid]
                     if vehicle.soc_source_mode == "meter_compensated":
                         soc, quality = self._soc_estimator.resolve(
-                            uid, vehicle, oem_soc=item["oem_soc"],
-                            oem_at=item["oem_at"], energy_kwh=item["energy_kwh"],
+                            uid,
+                            vehicle,
+                            oem_soc=item["oem_soc"],
+                            oem_at=item["oem_at"],
+                            energy_kwh=item["energy_kwh"],
                             energy_kind=charger.energy_source_kind,
                             now=observed_at,
                         )
@@ -304,9 +305,7 @@ class V2ControllerRuntime:
                     item["soc"] = soc
                     item["soc_quality"] = quality
                 if self._soc_estimator.dirty:
-                    self._soc_store.async_delay_save(
-                        self._soc_estimator.snapshot, 30
-                    )
+                    self._soc_store.async_delay_save(self._soc_estimator.snapshot, 30)
                     self._soc_estimator.dirty = False
                 result = await self.hass.async_add_executor_job(
                     compile_advisory,
@@ -378,9 +377,7 @@ class V2ControllerRuntime:
             if not self._stopped:
                 self.snapshot = result
                 self._notify()
-                async_dispatcher_send(
-                    self.hass, f"{DOMAIN}_v2_vehicle_sources"
-                )
+                async_dispatcher_send(self.hass, f"{DOMAIN}_v2_vehicle_sources")
 
     async def _apply_native_plan(self, controller, chargers, observed, result):
         """One physically serialized writer per owned Charger, not per event."""
