@@ -194,12 +194,16 @@ def test_legacy_custom_daily_ready_time_is_respected_without_mutating_original(h
     assert legacy_ready_suggestion(hass, legacy)["mode"] is None
     assert legacy_ready_suggestion(hass, legacy)["time"] is None
 
+
 async def test_migration_reuses_existing_charger_without_creating_duplicate(hass):
     legacy = _local(hass)
     _v2(hass, ENTRY_CONTROLLER, "main")
     existing = _v2(
-        hass, ENTRY_CHARGER, "existing",
-        controller_uid="main", control_entity="switch.peblar",
+        hass,
+        ENTRY_CHARGER,
+        "existing",
+        controller_uid="main",
+        control_entity="switch.peblar",
     )
     before = (dict(legacy.data), dict(legacy.options))
     start = await hass.config_entries.flow.async_init(
@@ -225,7 +229,13 @@ async def test_migration_reuses_existing_charger_without_creating_duplicate(hass
     assert existing.options["power_entity"] == "sensor.peblar_power"
     assert (dict(legacy.data), dict(legacy.options)) == before
     assert discover(hass)[0]["mapped"] is True
-    assert len([
-        entry for entry in hass.config_entries.async_entries(DOMAIN)
-        if entry.data.get(MARKER) == ENTRY_CHARGER
-    ]) == 1
+    assert (
+        len(
+            [
+                entry
+                for entry in hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(MARKER) == ENTRY_CHARGER
+            ]
+        )
+        == 1
+    )

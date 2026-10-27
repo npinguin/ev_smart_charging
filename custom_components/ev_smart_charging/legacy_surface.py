@@ -11,17 +11,18 @@ from homeassistant.helpers.entity_registry import (
 
 from .const import DOMAIN
 
-
 # Exact unique IDs used by prerelease-only entities on original Local Devices.
-_RC_SENSOR_KEYS = frozenset({
-    "current_charging_power",
-    "battery_capacity",
-    "battery_energy_current",
-    "battery_energy_target",
-    "charging_required",
-    "indicative_charging_cost",
-    "actual_charging_cost",
-})
+_RC_SENSOR_KEYS = frozenset(
+    {
+        "current_charging_power",
+        "battery_capacity",
+        "battery_energy_current",
+        "battery_energy_target",
+        "charging_required",
+        "indicative_charging_cost",
+        "actual_charging_cost",
+    }
+)
 
 
 def extension_unique_ids(entry_id):

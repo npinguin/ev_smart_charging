@@ -167,9 +167,13 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_migrate_bindings()
         return self.async_show_form(
             step_id="v2_migrate_target",
-            data_schema=vol.Schema({
-                vol.Required("existing_charger_uid", default=""): vol.In(destinations),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("existing_charger_uid", default=""): vol.In(
+                        destinations
+                    ),
+                }
+            ),
         )
 
     async def async_step_v2_migrate_existing_confirm(self, user_input=None):
@@ -181,7 +185,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_v2_migration_source")
         source_id = selected["legacy_entry_id"]
         targets = {
-            e.data["uid"]: e for e in v2_entries(self.hass, V2_CHARGER)
+            e.data["uid"]: e
+            for e in v2_entries(self.hass, V2_CHARGER)
             if not v2_details(e).get("legacy_entry_id")
         }
         target = targets.get(selected["existing_charger_uid"])
@@ -195,7 +200,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="v2_existing_charger_control_conflict")
         if user_input is not None and user_input.get("confirmed"):
             if source_id not in {
-                row["legacy_entry_id"] for row in discover_legacy(self.hass)
+                row["legacy_entry_id"]
+                for row in discover_legacy(self.hass)
                 if not row["mapped"]
             }:
                 return self.async_abort(reason="already_migrated")
@@ -203,8 +209,12 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Fill missing technical bindings only. Never overwrite a
             # user-maintained existing V2 physical source or assignment.
             for key in (
-                "control_entity", "charging_entity", "power_entity",
-                "energy_entity", "tariff_entity", "max_ac_kw",
+                "control_entity",
+                "charging_entity",
+                "power_entity",
+                "energy_entity",
+                "tariff_entity",
+                "max_ac_kw",
             ):
                 if not v2_details(target).get(key) and proposed.get(key):
                     changes[key] = proposed[key]
@@ -215,17 +225,19 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except (ValueError, KeyError, TypeError):
                 return self.async_show_form(
                     step_id="v2_migrate_existing_confirm",
-                    data_schema=vol.Schema({
-                        vol.Required("confirmed", default=False): cv.boolean
-                    }),
+                    data_schema=vol.Schema(
+                        {vol.Required("confirmed", default=False): cv.boolean}
+                    ),
                     errors={"base": "invalid_v2_configuration"},
                 )
             return self.async_abort(reason="v2_existing_charger_linked")
         return self.async_show_form(
             step_id="v2_migrate_existing_confirm",
-            data_schema=vol.Schema({
-                vol.Required("confirmed", default=False): cv.boolean,
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirmed", default=False): cv.boolean,
+                }
+            ),
             description_placeholders={
                 "legacy_name": original.title,
                 "v2_name": v2_details(target)["name"],
