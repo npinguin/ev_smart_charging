@@ -132,6 +132,10 @@ class Controller:
     price_cap_eur_kwh: float | None = None
     cost_budget_eur: float | None = None
     physical_enabled: bool = False
+    peak_shaving_enabled: bool = False
+    site_power_entity: str = ""
+    peak_target_kw: float | None = None
+    peak_reserve_kw: float = 0.0
 
     def __post_init__(self):
         if not self.uid or not self.name.strip():
@@ -144,6 +148,14 @@ class Controller:
             raise ConfigurationError("horizon_out_of_range")
         optional_positive(self.power_budget_kw, "power_budget")
         optional_positive(self.cost_budget_eur, "cost_budget")
+        if self.peak_shaving_enabled:
+            if not self.site_power_entity:
+                raise ConfigurationError("peak_site_meter_required")
+            if self.peak_target_kw is None:
+                raise ConfigurationError("peak_target_required")
+            optional_positive(self.peak_target_kw, "peak_target")
+        if not isfinite(self.peak_reserve_kw) or self.peak_reserve_kw < 0:
+            raise ConfigurationError("peak_reserve_invalid")
         if self.price_cap_eur_kwh is not None and not isfinite(self.price_cap_eur_kwh):
             raise ConfigurationError("price_cap_invalid")
 

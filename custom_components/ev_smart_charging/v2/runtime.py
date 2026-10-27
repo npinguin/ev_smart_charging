@@ -64,6 +64,35 @@ def _meter(state, quantity):
     return round(value * factor, 6) if value is not None else None
 
 
+def _site_meter(state):
+    """Site net import can be signed (export below zero); never assume 0."""
+    state = _fresh_state(state, max_age=timedelta(minutes=2))
+    if state is None:
+        return None
+    unit = state.attributes.get("unit_of_measurement")
+    factor = {"W": 0.001, "kW": 1.0}.get(unit)
+    if factor is None:
+        return None
+    try:
+        value = float(state.state)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    return round(value * factor, 5) if isfinite(value) else None
+
+
+def peak_headroom(controller, observed, site_power_kw):
+    """Maximum allowed current EV load from the real whole-site import."""
+    if not controller.peak_shaving_enabled:
+        return None
+    powers = [item.get("power_kw") for item in observed.values()]
+    if site_power_kw is None or not all(power is not None for power in powers):
+        return None
+    baseline = site_power_kw - sum(powers)
+    return max(
+        0.0, round(controller.peak_target_kw - controller.peak_reserve_kw - baseline, 4)
+    )
+
+
 def _connected(state):
     if state is None:
         return None
@@ -137,12 +166,16 @@ def read_inputs(hass, chargers, vehicles):
     return result
 
 
-def _group_admissions(controller, chargers, observed, plan, when):
+def _group_admissions(
+    controller, chargers, observed, plan, when, *, peak_limit_kw=None
+):
     """Reserve real worst-case power before issuing any new Start.
 
     One deterministic pass; no second planner, state cache, or extra task.
     Active measured loads get priority so a new Start cannot displace them.
     """
+    if controller.peak_shaving_enabled and peak_limit_kw is None:
+        return set()
     if any(observed.get(uid, {}).get("power_kw") is None for uid in chargers):
         return set()
     total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
@@ -160,9 +193,16 @@ def _group_admissions(controller, chargers, observed, plan, when):
         extra_kw = max(0.0, ceiling - measured)
         if not running and active >= controller.max_parallel:
             continue
+        effective_budget_kw = (
+            min(controller.power_budget_kw, peak_limit_kw)
+            if controller.power_budget_kw is not None and peak_limit_kw is not None
+            else controller.power_budget_kw
+            if peak_limit_kw is None
+            else peak_limit_kw
+        )
         if (
-            controller.power_budget_kw is not None
-            and total_kw + extra_kw > controller.power_budget_kw + 1e-9
+            effective_budget_kw is not None
+            and total_kw + extra_kw > effective_budget_kw + 1e-9
         ):
             continue
         admitted.add(uid)
@@ -190,6 +230,8 @@ class V2ControllerRuntime:
         self._lock = asyncio.Lock()
         self._stopped = False
         self._writers = {}
+        self._peak_latched = False
+        self._peak_recovery_since = None
 
     @callback
     def subscribe(self, fn):
@@ -310,7 +352,51 @@ class V2ControllerRuntime:
         # Single conservative reservation pass across the entire Controller.
         # Independent per-Charger checks can over-allocate a shared budget.
         when = dt.utcnow()
-        admitted = _group_admissions(controller, chargers, observed, result, when)
+        site_kw = _site_meter(
+            self.hass.states.get(controller.site_power_entity)
+            if controller.site_power_entity else None
+        )
+        headroom = peak_headroom(controller, observed, site_kw)
+        result["peak_status"] = "disabled"
+        result["available_ev_power_kw"] = None
+        if controller.peak_shaving_enabled:
+            result["available_ev_power_kw"] = headroom
+            if headroom is None:
+                result["peak_status"] = "meter_unavailable"
+                self._peak_latched = True
+                self._peak_recovery_since = None
+            else:
+                actual_load = sum(
+                    observed[uid]["power_kw"] or 0 for uid in chargers
+                )
+                if actual_load > headroom + 1e-9:
+                    self._peak_latched = True
+                    self._peak_recovery_since = None
+                if self._peak_latched:
+                    # Avoid chatter: allow restart only after one minute of
+                    # stable headroom for a whole Charger at verified max power.
+                    expected = [
+                        ch.max_ac_kw for ch in chargers.values()
+                        if ch.max_ac_kw is not None
+                    ]
+                    minimum = min(expected) if expected else None
+                    if (
+                        minimum is None
+                        or headroom < minimum + 0.2
+                    ):
+                        self._peak_recovery_since = None
+                    elif self._peak_recovery_since is None:
+                        self._peak_recovery_since = when
+                    elif when - self._peak_recovery_since >= timedelta(minutes=1):
+                        self._peak_latched = False
+                        self._peak_recovery_since = None
+                result["peak_status"] = (
+                    "paused" if self._peak_latched else "active"
+                )
+        limit = 0.0 if self._peak_latched else headroom
+        admitted = _group_admissions(
+            controller, chargers, observed, result, when, peak_limit_kw=limit
+        )
         native_results = {}
         for uid, charger in sorted(chargers.items()):
             if self._stopped or not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:

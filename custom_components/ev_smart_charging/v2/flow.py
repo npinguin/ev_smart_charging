@@ -29,6 +29,7 @@ _STEPS = {
 # Do not enforce device_class: valid OCPP/template sensors often lack one.
 _ENTITY_BINDINGS = {
     ENTRY_VEHICLE: ("soc_entity",),
+    ENTRY_CONTROLLER: ("site_power_entity",),
     ENTRY_CHARGER: (
         "control_entity",
         "connected_entity",
@@ -180,6 +181,12 @@ async def _schema(hass, kind, old):
         )
     elif kind == ENTRY_CONTROLLER:
         fields[
+            vol.Required(
+                "peak_shaving_enabled",
+                default=old.get("peak_shaving_enabled", False),
+            )
+        ] = selector.BooleanSelector()
+        fields[
             vol.Required("physical_enabled", default=old.get("physical_enabled", False))
         ] = selector.BooleanSelector()
         fields.update(
@@ -200,6 +207,16 @@ async def _schema(hass, kind, old):
                         vol.All(vol.Coerce(float), vol.Range(min=0.01)),
                     ),
                     opt("price_cap_eur_kwh", vol.Coerce(float)),
+                    opt("site_power_entity", _entity("sensor")),
+                    opt(
+                        "peak_target_kw",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.01)),
+                    ),
+                    opt(
+                        "peak_reserve_kw",
+                        vol.All(vol.Coerce(float), vol.Range(min=0)),
+                        0,
+                    ),
                     opt(
                         "cost_budget_eur",
                         vol.All(vol.Coerce(float), vol.Range(min=0.01)),

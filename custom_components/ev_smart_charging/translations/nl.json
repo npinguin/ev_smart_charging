@@ -92,10 +92,18 @@
           "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
           "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
           "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)",
-          "physical_enabled": "Fysieke V2-laadsturing inschakelen (vereist afzonderlijke ownership)"
+          "physical_enabled": "Fysieke V2-laadsturing inschakelen (vereist afzonderlijke ownership)",
+          "peak_shaving_enabled": "Piekbewaking inschakelen",
+          "site_power_entity": "Huismeter netto netvermogen (W/kW)",
+          "peak_target_kw": "Maximaal netvermogen (kW)",
+          "peak_reserve_kw": "Veiligheidsreserve (kW)"
         },
         "data_description": {
-          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen."
+          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen.",
+          "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
+          "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
+          "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW."
         }
       },
       "v2_migrate": {
@@ -305,7 +313,11 @@
           "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
           "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
           "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
-          "energy_source_kind": "Energiemeter type"
+          "energy_source_kind": "Energiemeter type",
+          "peak_shaving_enabled": "Piekbewaking inschakelen",
+          "site_power_entity": "Huismeter netto netvermogen (W/kW)",
+          "peak_target_kw": "Maximaal netvermogen (kW)",
+          "peak_reserve_kw": "Veiligheidsreserve (kW)"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -320,7 +332,11 @@
           "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
           "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
           "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
-          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter."
+          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter.",
+          "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
+          "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
+          "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW."
         }
       }
     },
