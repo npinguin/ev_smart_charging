@@ -210,6 +210,10 @@ def sensors_for_entry(entry):
                 SensorDeviceClass.ENERGY,
                 "kWh",
             ),
+            V2Fact(
+                entry, kind, "requested_grid_kwh", "Requested grid energy",
+                SensorDeviceClass.ENERGY, "kWh",
+            ),
             V2Fact(entry, kind, "source_quality", "Source quality"),
             V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
             V2Fact(

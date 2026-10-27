@@ -222,6 +222,12 @@ def compile_advisory(
         )
         loads[req.id] = {
             "vehicle_uid": chargers[req.id].vehicle_uid,
+            "demand_basis": (
+                "battery_soc" if req.current_soc is not None
+                else "explicit_grid_kwh" if req.requested_grid_kwh is not None
+                else "explicit_quarters"
+            ),
+            "requested_grid_kwh": req.requested_grid_kwh,
             "next_ready_by": req.ready_by.isoformat(),
             "required_battery_kwh": req.required_battery_kwh,
             "demand_status": planning_results[req.id].status,
