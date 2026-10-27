@@ -1,11 +1,11 @@
-name: HACS guarded V1 parity and V2 config test prerelease
+name: HACS V1-parity / V2 end-to-end RC17 field-test prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - fix/v1-upstream-v2-migration-ux
+      - feature/rc17-consolidated-v2
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -24,12 +24,12 @@ jobs:
     needs: full_ci_gate
     # Operator explicitly requested another HACS build. P0 stays OPEN:
     # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/fix/v1-upstream-v2-migration-ux' }}
+    if: ${{ github.ref == 'refs/heads/feature/rc17-consolidated-v2' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.16
+      VERSION: 2.6.0-rc.17
     steps:
       - uses: actions/checkout@v7
 
@@ -196,6 +196,35 @@ jobs:
           assert "_check_source_feedback" in registry
           assert "COORDINATED_ACTUATION_ENABLED = False" in safety
           assert "async_add_executor_job(" in runtime
+          # RC17 functionality cannot be declared complete based on old
+          # rc.16 smoke alone. Every promised capability has a source test.
+          init_code = Path("custom_components/ev_smart_charging/__init__.py").read_text()
+          assert "_ensure_controller(" not in init_code
+          for file in (
+            "custom_components/ev_smart_charging/v2/manual_connection.py",
+            "custom_components/ev_smart_charging/v2/session_progress.py",
+            "custom_components/ev_smart_charging/v2/soc_estimation.py",
+            "custom_components/ev_smart_charging/v2/source_discovery.py",
+            "custom_components/ev_smart_charging/v2/group_facts.py",
+            "custom_components/ev_smart_charging/v2/tariffs.py",
+            "custom_components/ev_smart_charging/v2/budget.py",
+            "custom_components/ev_smart_charging/v2/intermediate_conversion.py",
+            "tests/v2/test_rc17_smart_plug_and_explicit_demand.py",
+            "tests/v2/test_rc17_soc_compensation.py",
+            "tests/v2/test_rc17_actual_cost_reporting.py",
+            "tests/v2/test_rc17_intermediate_conversion.py",
+            "tests/v2/test_rc17_intermediate_ha_flows.py",
+        ):
+            assert Path(file).is_file(), f"RC17 missing source/acceptance: {file}"
+          assert "Connected (manual)" in Path(
+              "custom_components/ev_smart_charging/switch.py"
+          ).read_text()
+          assert "CostBudgetGuard" in Path(
+              "custom_components/ev_smart_charging/v2/runtime.py"
+          ).read_text()
+          assert "actual_cost_today" in Path(
+              "custom_components/ev_smart_charging/v2/group_facts.py"
+          ).read_text()
           print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
           PY
 
@@ -213,7 +242,7 @@ jobs:
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-guarded-rc16-control-semantics-manual-zip
+          name: evsc-rc17-v1-parity-v2-native-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -237,5 +266,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — V1 upstream parity / V2 setup test" \
-            --notes "EVSC $tag: HACS FIELD-TEST PRERELEASE, not stable. Source commit: $GITHUB_SHA. Original V1 Local devices and Ready By preserved, per-device V2 Vehicle/Charger/Controller native HA Config and Options, searchable HA entity pickers and non-destructive migration to new/existing V2 Charger. Independent V2 native physical control is NOW OPERATOR-OPT-IN through V2 Controller Configure and remains blocked for any EVSE still physically owned by Local. It requires a fresh validated plan, valid effective EUR/kWh price slots, live cable and power sensors, supported physical HA switch, verified readback, exclusive ownership and current capability limits. The previous LEGACY Coordinated mode remains quarantined after Peblar HA hang #5. No implicit physical cutover. Existing physical P0 remains unclosed until field tests on real chargers; first test one EVSE with HA backup and OEM control available. Cost budget EUR restriction is only advisory unless a certified actual spend ledger is available, so configuring a cost budget denies V2 physical Start. Full automatic 1-to-3 Config Entry migration remains unavailable. No stable promotion, no fake data. Roll back to v2.6.0-rc.15 if needed; restore HA backup for registry reversal."
+            --title "EV Smart Charging $tag — consolidated V1/V2 field test" \
+            --notes "EVSC $tag — V2 CONFIGURATION AND PHYSICAL FIELD TEST ONLY. Immutable tested SHA: $GITHUB_SHA. Original upstream Local V1 remains unchanged including next-day 08:00 and native Local actuation. V2 now provides independent Vehicle/Charger/Controller Config Entries, device-assisted source suggestions, searchable native HA selectors, manual smart-plug Connected Yes/No, real on/off + feedback, no-SoC grid-kWh/duration planning, daily/weekly/once Ready By, timestamped OEM/manual/meter-compensated SoC with explicit quality, persisted charging-session progress, measured session cost and conservative cost ceilings, multi-day Controller totals and whole-house power peak shedding. Old intermediate Controller and Vehicle profiles can be reviewed and imported into independent V2 Config Entries without mutating V1; physical control starts disabled. You MUST separately retire historical intermediate entries after verifying their profiles and Charger links. Original Local and V2 must never concurrently control the same physical device. Previous Local Coordinated remains quarantined; V2 physical control is deliberate per-Controller opt-in, one Charger at a time with native readback. Real Peblar/Wallbox/smart-plug OEM field acceptance is NOT proven by CI and P0 #5 remains open until physical evidence exists. Test with a complete Home Assistant backup, start read-only, verify data quality/pricing, only then disable a given original Local writer and enable that V2 Controller. This is not stable; do not assume that HA-only budget limits can cut off charging if the HA host itself hangs or loses power. Restore the HA backup plus v2.6.0-rc.16 for rollback."
