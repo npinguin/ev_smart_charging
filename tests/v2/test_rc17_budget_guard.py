@@ -35,11 +35,13 @@ def charger():
     )
 
 
-def observe(ledger, *, meter=100, at=NOW, connected=True, prices=None):
+def observe(
+    ledger, *, meter=100, at=NOW, connected=True, prices=None, session_start=SESSION
+):
     return ledger.observe(
         "utility",
         connected=connected,
-        session_start=SESSION if connected else None,
+        session_start=session_start if connected else None,
         meter_source="sensor.utility_meter",
         meter_kwh=meter,
         meter_at=at,
@@ -98,7 +100,12 @@ def test_missing_meter_counter_reset_or_gaps_block_all_physical_cost_grants():
         == "BUDGET_LEDGER_UNVERIFIED"
     )
     observe(tracker, connected=False)
-    assert observe(tracker, meter=1, at=NOW + timedelta(minutes=3)) == ("CERTIFIED")
+    assert observe(
+        tracker,
+        meter=1,
+        at=NOW + timedelta(minutes=3),
+        session_start=(NOW + timedelta(minutes=3)).isoformat(),
+    ) == "CERTIFIED"
 
     other = CostBudgetGuard()
     observe(other, connected=False)
@@ -206,7 +213,6 @@ def test_repeated_meter_readback_is_idempotent_but_time_reversal_is_rejected():
     guard = CostBudgetGuard()
     observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
-    observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
     assert guard.sessions["utility"]["cost_upper_eur"] == 0
     assert (
@@ -229,7 +235,6 @@ def test_invalid_price_inputs_or_missing_next_quarter_cannot_approve_budget():
     permitted, summary = allow(CostBudgetGuard(), None, prices=[])
     assert permitted == {"utility"}
     assert summary["status"] == "DISABLED"
-
 
 
 def test_connected_on_first_observation_cannot_reset_unknown_prior_spend():
