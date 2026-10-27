@@ -161,6 +161,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         return True
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        if entry.options.get("retired_to_v2") is True:
+            # Historical data retained, but no old second planner is started.
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+            return True
         from .vehicle_sensors import cleanup_orphan_vehicle_registry
 
         cleanup_orphan_vehicle_registry(hass, entry)
@@ -267,11 +271,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return unloaded
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        manager = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if not isinstance(manager, ChargeSupervisor):
+            hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+            return True
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
         )
         if unloaded:
-            manager = hass.data[DOMAIN][entry.entry_id]
             manager.async_stop()
             await manager.async_flush_costs()
             hass.data[DOMAIN].pop(entry.entry_id, None)
