@@ -517,7 +517,13 @@ class V2ControllerRuntime:
                 or writer.charger.control_entity != current.control_entity
                 or writer.controller_uid != controller.uid
             ):
-                await writer.async_close()
+                stop_status = await writer.async_shutdown()
+                if stop_status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                    _LOGGER.error(
+                        "V2 Charger %s transfer OFF not verified: %s",
+                        uid,
+                        stop_status,
+                    )
                 self._writers.pop(uid, None)
 
         # Single conservative reservation pass across the entire Controller.
@@ -601,20 +607,33 @@ class V2ControllerRuntime:
         return native_results
 
     async def async_stop(self):
-        """HA unload must wait for any native-service critical section."""
-        # HA Store's delayed save is normally enough, but explicit flush
-        # prevents losing a charging interval on integration reload.
-        await self._soc_store.async_save(self._soc_estimator.snapshot())
-        await self._cost_store.async_save(self._cost_payload())
-        await self._session_store.async_save(self._session_progress.snapshot())
-        await self._budget_store.async_save(self._budget_guard.snapshot())
-        task = self._tick_task
+        """Stop executing, persist evidence, then safely release owned EVSEs.
+
+        Never drop physical ownership while the last V2 command may still be
+        ON. Existing Local/manual targets not owned by V2 are not touched.
+        """
         self._stopped = True
+        task = self._tick_task
         if task is not None and not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-        for writer in tuple(self._writers.values()):
-            await writer.async_close()
+        # Operator-initiated refreshes may not be the timer task. Wait for
+        # their critical section before saving and stopping physical writers.
+        async with self._lock:
+            await self._soc_store.async_save(self._soc_estimator.snapshot())
+            await self._cost_store.async_save(self._cost_payload())
+            await self._session_store.async_save(self._session_progress.snapshot())
+            await self._budget_store.async_save(self._budget_guard.snapshot())
+            for uid, writer in tuple(self._writers.items()):
+                status = await writer.async_shutdown()
+                if status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                    _LOGGER.error(
+                        "V2 Controller unload: physical OFF not verified "
+                        "for %s (%s); check OEM/EVSE immediately",
+                        uid,
+                        status,
+                    )
+            self._writers.clear()
         self.stop()
 
     @callback

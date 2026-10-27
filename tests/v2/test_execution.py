@@ -574,3 +574,63 @@ async def test_manual_connected_no_rechecked_at_native_command_boundary(
         assert calls == ["off"]
     finally:
         await writer.async_close()
+
+
+
+async def test_v2_controller_unload_stops_a_proven_owned_evse(
+    hass, charger
+):
+    """Turning off V2 Controller must not strand the last native switch ON."""
+    seen = []
+
+    async def stop(call):
+        seen.append(call.data.get("entity_id"))
+        hass.states.async_set("switch.native_charger", "off")
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    ready = await writer.async_reconcile(
+        _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+        group_capacity_certified=True,
+    )
+    assert ready == "ALREADY_AT_TARGET"
+    assert await writer.async_shutdown() == "VERIFIED_OFF"
+    assert seen == ["switch.native_charger"]
+    assert hass.states.get("switch.native_charger").state == "off"
+    assert not hass.data.get(f"{DOMAIN}.v2_native_writers")
+
+
+async def test_shutdown_does_not_touch_an_unowned_on_switch(hass, charger):
+    """V2 must never operate a switch only manually switched ON by OEM."""
+    seen = []
+
+    async def stop(call):
+        seen.append(call.data.get("entity_id"))
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    assert await writer.async_shutdown() == "NOT_OWNED"
+    assert seen == []
+    assert hass.states.get("switch.native_charger").state == "on"
+
+
+async def test_failed_owned_shutdown_retains_v2_claim_and_exposes_error(
+    hass, charger
+):
+    """Never imply OFF or transfer the EVSE if native Stop failed."""
+    async def fail(call):
+        raise RuntimeError("offline OEM")
+
+    hass.services.async_register("switch", "turn_off", fail)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    assert await writer.async_reconcile(
+        _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+        group_capacity_certified=True,
+    ) == "ALREADY_AT_TARGET"
+    assert await writer.async_shutdown() == "STOP_FAILED_OR_TIMED_OUT"
+    assert hass.data[f"{DOMAIN}.v2_native_writers"][
+        "switch.native_charger"
+    ] == ("main", "ch")

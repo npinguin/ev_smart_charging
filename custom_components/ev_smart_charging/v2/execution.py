@@ -98,6 +98,43 @@ class NativeChargeWriter:
         async with self._lock:
             self.close()
 
+    async def async_shutdown(self) -> str:
+        """Fail-safe OFF before releasing an EVSE actually owned by this V2 writer.
+
+        Controller disable, unload or target reassignment must not abandon an
+        energised EVSE. Never touch an unowned control or the original Local
+        writer. Failed/uncertain OFF deliberately retains the V2 owner claim,
+        preventing another V2 Controller from silently taking over.
+        """
+        self._closed = True
+        target = self.charger.control_entity
+        async with self._lock:
+            async with control_lock(self.hass, self.charger.uid):
+                current_owner = self.hass.data.get(_WRITERS_KEY, {}).get(target)
+                if current_owner != self._owner():
+                    return "NOT_OWNED"
+                if original_local_writer_active(self.hass, target):
+                    return "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER"
+                if self._port is None or not self._port.supports(target):
+                    return "STOP_PORT_UNAVAILABLE"
+                if self._port.readback(self.hass, target) is False:
+                    self.close()
+                    return "VERIFIED_OFF"
+                try:
+                    # An OFF command is idempotent for a proven V2-owned target.
+                    # A stale readback may never be taken as proof of OFF.
+                    await asyncio.wait_for(
+                        self._port.async_set_enabled(self.hass, target, False),
+                        timeout=8.0,
+                    )
+                except Exception:
+                    _LOGGER.exception("V2 shutdown OFF failed for %s", target)
+                    return "STOP_FAILED_OR_TIMED_OUT"
+                if self._port.readback(self.hass, target) is False:
+                    self.close()
+                    return "VERIFIED_OFF"
+                return "STOP_SENT_AWAITING_READBACK"
+
     def close(self):
         self._closed = True
         registered = self.hass.data.get(_WRITERS_KEY, {})
