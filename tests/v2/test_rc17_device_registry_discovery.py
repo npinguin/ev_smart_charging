@@ -2,6 +2,7 @@
 
 from homeassistant.helpers.device_registry import async_get as device_registry
 from homeassistant.helpers.entity_registry import async_get as entity_registry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.v2.source_discovery import (
     suggest_device_bindings,
@@ -11,6 +12,12 @@ SOURCE = "test_ev_source"
 
 
 def add_device(hass, name):
+    # A real HA Device registry row always belongs to an existing Config Entry.
+    if hass.config_entries.async_get_entry("source-config-entry") is None:
+        MockConfigEntry(
+            domain=SOURCE,
+            entry_id="source-config-entry",
+        ).add_to_hass(hass)
     return device_registry(hass).async_get_or_create(
         config_entry_id="source-config-entry",
         identifiers={(SOURCE, name)},
@@ -82,16 +89,21 @@ def test_persistent_schema_manual_connected_and_explicit_demand(hass):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from custom_components.ev_smart_charging.const import DOMAIN
     from custom_components.ev_smart_charging.v2 import (
-        ENTRY_CHARGER, ENTRY_CONTROLLER, MARKER,
+        ENTRY_CHARGER,
+        ENTRY_CONTROLLER,
+        MARKER,
     )
     from custom_components.ev_smart_charging.v2.catalog import catalog, model
 
     parent = MockConfigEntry(
-        domain=DOMAIN, entry_id="new_controller",
-        data={MARKER: ENTRY_CONTROLLER, "uid": "main", "name": "Home"}, version=8,
+        domain=DOMAIN,
+        entry_id="new_controller",
+        data={MARKER: ENTRY_CONTROLLER, "uid": "main", "name": "Home"},
+        version=8,
     )
     plug = MockConfigEntry(
-        domain=DOMAIN, entry_id="utility_charger",
+        domain=DOMAIN,
+        entry_id="utility_charger",
         data={
             MARKER: ENTRY_CHARGER,
             "uid": "utility",
@@ -115,3 +127,60 @@ def test_persistent_schema_manual_connected_and_explicit_demand(hass):
     assert model(plug).requested_grid_kwh == 2.0
     assert chargers["utility"].connection_source == "manual"
     assert chargers["utility"].energy_source_kind == "total_increasing"
+
+
+async def test_manual_smart_plug_connection_switch_never_infers_physical_charging(
+    hass, monkeypatch
+):
+    from types import SimpleNamespace
+    from custom_components.ev_smart_charging.v2.manual_connection import (
+        manual_connected, manual_states,
+    )
+    from custom_components.ev_smart_charging.switch import V2ManualConnected
+    from custom_components.ev_smart_charging.v2.model import Charger
+
+    charger = Charger(
+        uid="utility", name="Utility plug", controller_uid="home",
+        connection_source="manual", control_entity="switch.real_utility",
+        control_semantics="power_relay", max_ac_kw=2.0,
+    )
+    states = manual_states(hass)
+    connected = V2ManualConnected(
+        SimpleNamespace(entry_id="charger"), charger, states
+    )
+    connected.hass = hass
+    monkeypatch.setattr(connected, "async_write_ha_state", lambda: None)
+    assert manual_connected(hass, "utility") is False
+    hass.states.async_set("switch.real_utility", "on")
+    assert manual_connected(hass, "utility") is False
+
+    await connected.async_turn_on()
+    assert manual_connected(hass, "utility") is True
+    assert connected.is_on is True
+    await connected.async_turn_off()
+    assert manual_connected(hass, "utility") is False
+    assert connected.is_on is False
+
+
+def test_manual_charger_source_reader_uses_explicit_boolean_not_switch(hass):
+    from custom_components.ev_smart_charging.v2.model import Charger
+    from custom_components.ev_smart_charging.v2.runtime import read_inputs
+    from custom_components.ev_smart_charging.v2.manual_connection import manual_states
+
+    charger = Charger(
+        uid="utility", name="Utility", controller_uid="home",
+        connection_source="manual",
+        control_entity="switch.physical_utility",
+        power_entity="sensor.utility_power",
+        max_ac_kw=2.0,
+    )
+    hass.states.async_set("switch.physical_utility", "on")
+    hass.states.async_set(
+        "sensor.utility_power", "1500", {"unit_of_measurement": "W"}
+    )
+    source = read_inputs(hass, {"utility": charger}, {})
+    assert source["utility"]["connected"] is False
+    assert source["utility"]["power_kw"] == 1.5
+    manual_states(hass)["utility"] = True
+    source = read_inputs(hass, {"utility": charger}, {})
+    assert source["utility"]["connected"] is True
