@@ -19,6 +19,10 @@ def _label(entity):
         str(part or "")
         for part in (
             entity.entity_id,
+            # Some newer HA versions derive the entity_id only from the
+            # parent Device name (e.g. sensor.audi_q8). Retain the source
+            # integration's stable unique_id for semantic suggestions.
+            getattr(entity, "unique_id", None),
             getattr(entity, "original_name", None),
             getattr(entity, "translation_key", None),
         )
