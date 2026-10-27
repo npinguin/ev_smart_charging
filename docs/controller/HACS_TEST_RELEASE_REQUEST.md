@@ -52,3 +52,9 @@ If a previously-owned native control adapter becomes unavailable, shutdown
 must not claim verified OFF or release the V2 owner reservation. These cases
 are tested by `tests/v2/test_execution.py` and included in the full CI gate;
 they do not substitute for physical OEM feedback in the installation.
+
+## Final packaging validation
+Format the new physical-ownership assertions with the repository's Black
+formatting gate, without changing any safety behavior or coverage threshold.
+The exact release SHA must pass both the reusable release workflow CI and
+the Pull Request CI before the immutable RC18 tag can be published.
