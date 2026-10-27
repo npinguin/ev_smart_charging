@@ -732,9 +732,12 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Simple navigation, without an extra device or configuration layer."""
+        if self.config_entry.options.get("retired_to_v2"):
+            return self.async_abort(reason="intermediate_controller_retired")
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "retire_to_v2",
                 "policy",
                 "link_chargers",
                 "add_vehicle",
@@ -742,6 +745,45 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 "delete_vehicle",
                 "assign_vehicle",
             ],
+        )
+
+    async def async_step_retire_to_v2(self, user_input=None):
+        """Stop old Controller only after useful V2 config has been imported."""
+        source = self.config_entry
+        controllers = [
+            e for e in v2_entries(self.hass, V2_CONTROLLER)
+            if e.data.get("imported_from_intermediate") == source.entry_id
+        ]
+        profiles = source.options.get(VEHICLES) or {}
+        if not isinstance(profiles, dict):
+            return self.async_abort(reason="intermediate_profiles_invalid")
+        imported = {
+            e.data.get("imported_intermediate_vehicle_id")
+            for e in v2_entries(self.hass, V2_VEHICLE)
+            if e.data.get("imported_from_intermediate") == source.entry_id
+        }
+        missing = [uid for uid in profiles if uid not in imported]
+        if not controllers or missing:
+            return self.async_show_form(
+                step_id="retire_to_v2",
+                data_schema=vol.Schema({}),
+                errors={"base": "intermediate_import_incomplete"},
+                description_placeholders={
+                    "missing": ", ".join(missing) if missing else "Controller",
+                },
+            )
+        if user_input is not None and user_input.get("confirm") is True:
+            options = dict(source.options)
+            options["retired_to_v2"] = True
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="retire_to_v2",
+            data_schema=vol.Schema({
+                vol.Required("confirm", default=False):
+                    selector.BooleanSelector(),
+            }),
+            description_placeholders={"missing": "None"},
+            errors={"base": "confirm_required"} if user_input is not None else {},
         )
 
     async def async_step_link_chargers(self, user_input=None):
