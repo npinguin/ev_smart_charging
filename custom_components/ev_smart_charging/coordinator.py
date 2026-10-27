@@ -1145,8 +1145,10 @@ class EVSmartChargingCoordinator:
             # To handle non-live SOC
             # Update self.ev_soc_last if new price and ready_quarter == None
             if self.tomorrow_valid and not self.tomorrow_valid_previous:
-                if self.ready_quarter_local == READY_QUARTER_NONE:
-                    self.ev_soc_before_last_charging = -1
+                # The original daily Ready By can be tomorrow morning. Once
+                # tomorrow's prices arrive we must rebuild even when the car
+                # has not reported a new SoC value since the previous plan.
+                self.ev_soc_before_last_charging = -1
             self.tomorrow_valid_previous = self.tomorrow_valid
         else:
             # If the problem occured directly after midnight, ignore it.
