@@ -134,20 +134,23 @@ async def test_manual_smart_plug_connection_switch_never_infers_physical_chargin
 ):
     from types import SimpleNamespace
     from custom_components.ev_smart_charging.v2.manual_connection import (
-        manual_connected, manual_states,
+        manual_connected,
+        manual_states,
     )
     from custom_components.ev_smart_charging.switch import V2ManualConnected
     from custom_components.ev_smart_charging.v2.model import Charger
 
     charger = Charger(
-        uid="utility", name="Utility plug", controller_uid="home",
-        connection_source="manual", control_entity="switch.real_utility",
-        control_semantics="power_relay", max_ac_kw=2.0,
+        uid="utility",
+        name="Utility plug",
+        controller_uid="home",
+        connection_source="manual",
+        control_entity="switch.real_utility",
+        control_semantics="power_relay",
+        max_ac_kw=2.0,
     )
     states = manual_states(hass)
-    connected = V2ManualConnected(
-        SimpleNamespace(entry_id="charger"), charger, states
-    )
+    connected = V2ManualConnected(SimpleNamespace(entry_id="charger"), charger, states)
     connected.hass = hass
     monkeypatch.setattr(connected, "async_write_ha_state", lambda: None)
     assert manual_connected(hass, "utility") is False
@@ -168,16 +171,16 @@ def test_manual_charger_source_reader_uses_explicit_boolean_not_switch(hass):
     from custom_components.ev_smart_charging.v2.manual_connection import manual_states
 
     charger = Charger(
-        uid="utility", name="Utility", controller_uid="home",
+        uid="utility",
+        name="Utility",
+        controller_uid="home",
         connection_source="manual",
         control_entity="switch.physical_utility",
         power_entity="sensor.utility_power",
         max_ac_kw=2.0,
     )
     hass.states.async_set("switch.physical_utility", "on")
-    hass.states.async_set(
-        "sensor.utility_power", "1500", {"unit_of_measurement": "W"}
-    )
+    hass.states.async_set("sensor.utility_power", "1500", {"unit_of_measurement": "W"})
     source = read_inputs(hass, {"utility": charger}, {})
     assert source["utility"]["connected"] is False
     assert source["utility"]["power_kw"] == 1.5
