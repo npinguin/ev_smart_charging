@@ -1,4 +1,5 @@
 """The unchanged Local device surface is separate from all V2 objects."""
+
 from unittest.mock import AsyncMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -10,8 +11,11 @@ from custom_components.ev_smart_charging import sensor, select, button
 
 async def test_local_platforms_are_exact_upstream_v1():
     assert PLATFORMS == [
-        Platform.SENSOR, Platform.NUMBER, Platform.SWITCH,
-        Platform.BUTTON, Platform.SELECT,
+        Platform.SENSOR,
+        Platform.NUMBER,
+        Platform.SWITCH,
+        Platform.BUTTON,
+        Platform.SELECT,
     ]
 
 
@@ -22,7 +26,8 @@ async def test_local_sensor_registration_is_exact_upstream(hass):
     captured = []
     await sensor.async_setup_entry(hass, entry, captured.extend)
     assert [type(x).__name__ for x in captured] == [
-        "EVSmartChargingSensorCharging", "EVSmartChargingSensorStatus",
+        "EVSmartChargingSensorCharging",
+        "EVSmartChargingSensorStatus",
     ]
     coordinator.add_sensor.assert_awaited_once_with(captured)
 
@@ -46,7 +51,8 @@ async def test_local_button_registration_and_stop_do_not_touch_controller(hass):
     captured = []
     await button.async_setup_entry(hass, entry, captured.extend)
     assert [type(x).__name__ for x in captured] == [
-        "EVSmartChargingButtonStart", "EVSmartChargingButtonStop",
+        "EVSmartChargingButtonStart",
+        "EVSmartChargingButtonStop",
     ]
     await captured[-1].async_press()
     coordinator.turn_off_charging.assert_awaited_once()

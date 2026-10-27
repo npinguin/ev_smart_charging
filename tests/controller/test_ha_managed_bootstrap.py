@@ -58,7 +58,11 @@ async def test_managed_local_setup_imports_only_one_controller(
         assert not any(
             entity.unique_id.startswith(f"{charger.entry_id}.sensor.")
             and entity.unique_id.endswith(
-                (".battery_capacity", ".current_charging_power", ".actual_charging_cost")
+                (
+                    ".battery_capacity",
+                    ".current_charging_power",
+                    ".actual_charging_cost",
+                )
             )
             for entity in native_entities
         )

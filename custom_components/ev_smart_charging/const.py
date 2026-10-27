@@ -26,7 +26,13 @@ BUTTON = Platform.BUTTON
 NUMBER = Platform.NUMBER
 SELECT = Platform.SELECT
 DATETIME = Platform.DATETIME
-PLATFORMS = [SENSOR, NUMBER, SWITCH, BUTTON, SELECT]  # Exact upstream V1 public platforms
+PLATFORMS = [
+    SENSOR,
+    NUMBER,
+    SWITCH,
+    BUTTON,
+    SELECT,
+]  # Exact upstream V1 public platforms
 PLATFORM_NORDPOOL = "nordpool"
 PLATFORM_ENERGIDATASERVICE = "energidataservice"
 PLATFORM_ENTSOE = "entsoe"
