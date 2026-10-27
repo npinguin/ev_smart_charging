@@ -224,3 +224,31 @@ async def test_unbound_ev_charger_config_does_not_require_soc(hass):
         EVSmartChargingCoordinator.validate_input_sensors(fake)
         == "Input sensors not ready."
     )
+
+
+async def test_upstream_local_options_save_preserves_hidden_pre_migration_state(
+    hass, bypass_validate_step_user
+):
+    """Changing a V1 input must not erase stored schedules or source evidence."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="retain_legacy_hidden",
+        data=MOCK_CONFIG_ALL,
+        options={
+            "ready_quarter": "08:00",
+            "maximum_price": 0.30,
+            "evsc_actual_power_entity": "sensor.previous_rc_meter",
+        },
+        version=8,
+    )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    assert form["type"] == FlowResultType.FORM
+    saved = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input=MOCK_CONFIG_USER
+    )
+    assert saved["type"] == FlowResultType.CREATE_ENTRY
+    assert saved["data"]["evsc_actual_power_entity"] == "sensor.previous_rc_meter"
+    assert saved["data"]["ready_quarter"] == "08:00"
+    assert saved["data"]["maximum_price"] == 0.30
+    assert entry.version == 8

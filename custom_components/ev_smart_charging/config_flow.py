@@ -482,8 +482,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self._errors[error[0]] = error[1]
 
             if not self._errors:
+                # Keep previously stored V1/RC settings that are not displayed
+                # in the upstream Options form. Dropping them silently on Save
+                # would lose original schedules or pre-migration source evidence.
+                # Only the upstream-visible keys can be edited here.
+                preserved = dict(self.config_entry.options)
+                preserved.update(user_input)
                 return self.async_create_entry(
-                    title=self.config_entry.title, data=user_input
+                    title=self.config_entry.title, data=preserved
                 )
 
         user_schema = {
