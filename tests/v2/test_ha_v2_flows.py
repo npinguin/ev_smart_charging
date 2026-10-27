@@ -48,9 +48,15 @@ async def start(hass, choice):
     )
     assert group["type"] == FlowResultType.MENU
     assert choice in group["menu_options"]
-    return await hass.config_entries.flow.async_configure(
+    started = await hass.config_entries.flow.async_configure(
         group["flow_id"], {"next_step_id": choice}
     )
+    if choice in ("v2_charger", "v2_vehicle"):
+        assert started["step_id"] == f"{choice}_source"
+        return await hass.config_entries.flow.async_configure(
+            started["flow_id"], {}
+        )
+    return started
 
 
 async def test_new_controller_is_a_separate_entry_with_its_own_planner(hass):

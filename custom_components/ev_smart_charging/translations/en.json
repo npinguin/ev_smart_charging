@@ -155,6 +155,20 @@
         "data": {
           "confirmed": "Confirm link"
         }
+      },
+      "v2_vehicle_source": {
+        "title": "Select existing HA vehicle device",
+        "description": "Optionally select a native Home Assistant device. Only uniquely matching source entities are suggested; review each mapping. Leave blank for manual configuration.",
+        "data": {
+          "source_device_id": "Existing Home Assistant device (optional)"
+        }
+      },
+      "v2_charger_source": {
+        "title": "Select existing HA charger device",
+        "description": "Optionally select a native Home Assistant device. Only uniquely matching source entities are suggested; review each mapping. Leave blank for manual configuration.",
+        "data": {
+          "source_device_id": "Existing Home Assistant device (optional)"
+        }
       }
     },
     "error": {

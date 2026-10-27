@@ -107,10 +107,57 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await create_v2(self, V2_CONTROLLER, user_input)
 
     async def async_step_v2_vehicle(self, user_input=None):
-        return await create_v2(self, V2_VEHICLE, user_input)
+        if not getattr(self, "_v2_vehicle_source_selected", False):
+            return await self.async_step_v2_vehicle_source()
+        return await create_v2(
+            self, V2_VEHICLE, user_input,
+            defaults=getattr(self, "_v2_vehicle_defaults", {}),
+        )
+
+    async def async_step_v2_vehicle_source(self, user_input=None):
+        """Choose an HA Device for suggestions or proceed fully manually."""
+        return await self._v2_select_source("vehicle", user_input)
 
     async def async_step_v2_charger(self, user_input=None):
-        return await create_v2(self, V2_CHARGER, user_input)
+        if not getattr(self, "_v2_charger_source_selected", False):
+            return await self.async_step_v2_charger_source()
+        return await create_v2(
+            self, V2_CHARGER, user_input,
+            defaults=getattr(self, "_v2_charger_defaults", {}),
+        )
+
+    async def async_step_v2_charger_source(self, user_input=None):
+        """Choose existing physical Charger/Plug Device, or manual mode."""
+        return await self._v2_select_source("charger", user_input)
+
+    async def _v2_select_source(self, kind, user_input):
+        from .v2.source_discovery import suggest_device_bindings
+
+        if user_input is not None:
+            defaults = {}
+            device = user_input.get("source_device_id")
+            if device:
+                try:
+                    defaults, _review = suggest_device_bindings(
+                        self.hass, device, kind
+                    )
+                except ValueError:
+                    return self.async_show_form(
+                        step_id=f"v2_{kind}_source",
+                        data_schema=vol.Schema({
+                            vol.Optional("source_device_id"): selector.DeviceSelector()
+                        }),
+                        errors={"base": "invalid_v2_configuration"},
+                    )
+            setattr(self, f"_v2_{kind}_defaults", defaults)
+            setattr(self, f"_v2_{kind}_source_selected", True)
+            return await getattr(self, f"async_step_v2_{kind}")()
+        return self.async_show_form(
+            step_id=f"v2_{kind}_source",
+            data_schema=vol.Schema({
+                vol.Optional("source_device_id"): selector.DeviceSelector()
+            }),
+        )
 
     async def async_step_v2_migrate(self, user_input=None):
         """Choose only the original source; no V1 setting is ever written."""

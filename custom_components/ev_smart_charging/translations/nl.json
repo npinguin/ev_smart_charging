@@ -155,6 +155,20 @@
         "data": {
           "confirmed": "Koppeling bevestigen"
         }
+      },
+      "v2_vehicle_source": {
+        "title": "Kies bestaand HA-device (vehicle)",
+        "description": "Selecteer optioneel een bestaand Home Assistant-device. We stellen alleen passende entiteiten voor; controleer elke voorgestelde koppeling. Laat leeg om alles manueel te kiezen.",
+        "data": {
+          "source_device_id": "Bestaand Home Assistant-device (optioneel)"
+        }
+      },
+      "v2_charger_source": {
+        "title": "Kies bestaand HA-device (charger)",
+        "description": "Selecteer optioneel een bestaand Home Assistant-device. We stellen alleen passende entiteiten voor; controleer elke voorgestelde koppeling. Laat leeg om alles manueel te kiezen.",
+        "data": {
+          "source_device_id": "Bestaand Home Assistant-device (optioneel)"
+        }
       }
     },
     "error": {

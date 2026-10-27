@@ -248,7 +248,7 @@ def _normalize_vehicle_form(values, timezone_name, *, original=None):
     return changed
 
 
-async def create(flow, kind, user_input=None):
+async def create(flow, kind, user_input=None, defaults=None):
     if kind == ENTRY_CHARGER and not entries_of(flow.hass, ENTRY_CONTROLLER):
         return flow.async_abort(reason="create_controller_first")
     if user_input is not None:
@@ -268,7 +268,7 @@ async def create(flow, kind, user_input=None):
         return flow.async_create_entry(title=data["name"], data=data)
     return flow.async_show_form(
         step_id=_STEPS[kind],
-        data_schema=await _schema(flow.hass, kind, {}),
+        data_schema=await _schema(flow.hass, kind, defaults or {}),
     )
 
 
