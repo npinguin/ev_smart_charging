@@ -254,9 +254,7 @@ class V2ControllerRuntime:
         self._cost_ledgers = {}
         self._session_store = Store(hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}")
         self._session_progress = SessionProgress()
-        self._budget_store = Store(
-            hass, 1, f"{DOMAIN}.v2_budget_{entry.data['uid']}"
-        )
+        self._budget_store = Store(hass, 1, f"{DOMAIN}.v2_budget_{entry.data['uid']}")
         self._budget_guard = CostBudgetGuard()
 
     def _cost_payload(self):
@@ -354,21 +352,19 @@ class V2ControllerRuntime:
                 if controller.cost_budget_eur is not None:
                     for uid, charger in chargers.items():
                         item = observed[uid]
-                        item["budget_observation_quality"] = (
-                            self._budget_guard.observe(
-                                uid,
-                                connected=item.get("connected"),
-                                session_start=item.get("session_start"),
-                                meter_source=(
-                                    charger.energy_entity
-                                    if charger.energy_source_kind
-                                    in ("session", "total_increasing")
-                                    else ""
-                                ),
-                                meter_kwh=item.get("energy_kwh"),
-                                meter_at=item.get("energy_observed_at"),
-                                prices=item.get("prices", []),
-                            )
+                        item["budget_observation_quality"] = self._budget_guard.observe(
+                            uid,
+                            connected=item.get("connected"),
+                            session_start=item.get("session_start"),
+                            meter_source=(
+                                charger.energy_entity
+                                if charger.energy_source_kind
+                                in ("session", "total_increasing")
+                                else ""
+                            ),
+                            meter_kwh=item.get("energy_kwh"),
+                            meter_at=item.get("energy_observed_at"),
+                            prices=item.get("prices", []),
                         )
                     if self._budget_guard.dirty:
                         self._budget_store.async_delay_save(
@@ -564,7 +560,10 @@ class V2ControllerRuntime:
         )
         budget_allowed, budget_summary = self._budget_guard.admit(
             controller.cost_budget_eur,
-            chargers, observed, admitted, when,
+            chargers,
+            observed,
+            admitted,
+            when,
         )
         result["budget"] = budget_summary
         native_results = {}

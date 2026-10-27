@@ -11,7 +11,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from math import isfinite
 
-
 QUARTER = timedelta(minutes=15)
 
 
@@ -59,8 +58,15 @@ class CostBudgetGuard:
         return self.sessions
 
     def observe(
-        self, uid, *, connected, session_start, meter_source,
-        meter_kwh, meter_at, prices,
+        self,
+        uid,
+        *,
+        connected,
+        session_start,
+        meter_source,
+        meter_kwh,
+        meter_at,
+        prices,
     ):
         if connected is False:
             if uid in self.sessions:
@@ -71,7 +77,9 @@ class CostBudgetGuard:
             return "SESSION_UNVERIFIED"
         meter = _number(meter_kwh)
         if (
-            not meter_source or meter is None or meter_at is None
+            not meter_source
+            or meter is None
+            or meter_at is None
             or meter_at.tzinfo is None
         ):
             state = self.sessions.get(uid)
@@ -109,11 +117,7 @@ class CostBudgetGuard:
             return "LEDGER_INVALID"
         if stamp == prior_at and meter == prior:
             return "CERTIFIED"
-        if (
-            stamp <= prior_at
-            or stamp - prior_at > QUARTER
-            or meter < prior
-        ):
+        if stamp <= prior_at or stamp - prior_at > QUARTER or meter < prior:
             previous["certified"] = False
             self.dirty = True
             return "METER_GAP_OR_RESET"
@@ -132,19 +136,20 @@ class CostBudgetGuard:
         """All connected meter sources must be certified for a hard cap."""
         if limit is None:
             return set(selected), {
-                "status": "DISABLED", "spent_upper_eur": None,
+                "status": "DISABLED",
+                "spent_upper_eur": None,
                 "remaining_eur": None,
             }
         connected = [
-            uid for uid in chargers
-            if observed.get(uid, {}).get("connected") is True
+            uid for uid in chargers if observed.get(uid, {}).get("connected") is True
         ]
         active = [self.sessions.get(uid) for uid in connected]
         if not active or not all(
             isinstance(s, dict) and s.get("certified") for s in active
         ):
             return set(), {
-                "status": "UNVERIFIED", "spent_upper_eur": None,
+                "status": "UNVERIFIED",
+                "spent_upper_eur": None,
                 "remaining_eur": None,
             }
         spent = sum(s["cost_upper_eur"] for s in active)
@@ -154,7 +159,8 @@ class CostBudgetGuard:
             charger = chargers[uid]
             rate = price_upper_bound(
                 observed.get(uid, {}).get("prices", []),
-                at, at + QUARTER,
+                at,
+                at + QUARTER,
             )
             if rate is None or charger.max_ac_kw is None:
                 return set(), {

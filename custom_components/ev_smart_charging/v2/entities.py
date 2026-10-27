@@ -266,12 +266,8 @@ class V2Fact(SensorEntity):
                 "indicative_cost": snap.get("total_indicative_eur"),
                 "peak_status": snap.get("peak_status", "disabled"),
                 "budget_status": snap.get("budget", {}).get("status"),
-                "budget_spent_upper_eur": snap.get("budget", {}).get(
-                    "spent_upper_eur"
-                ),
-                "budget_remaining_eur": snap.get("budget", {}).get(
-                    "remaining_eur"
-                ),
+                "budget_spent_upper_eur": snap.get("budget", {}).get("spent_upper_eur"),
+                "budget_remaining_eur": snap.get("budget", {}).get("remaining_eur"),
                 "available_ev_power_kw": snap.get("available_ev_power_kw"),
             }
             return (
@@ -408,14 +404,20 @@ def sensors_for_entry(entry):
             V2Fact(entry, kind, "peak_status", "Peak shaving status"),
             V2Fact(entry, kind, "budget_status", "Cost budget status"),
             V2Fact(
-                entry, kind, "budget_spent_upper_eur",
+                entry,
+                kind,
+                "budget_spent_upper_eur",
                 "Budget spent (conservative maximum)",
-                SensorDeviceClass.MONETARY, "EUR",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
-                entry, kind, "budget_remaining_eur",
+                entry,
+                kind,
+                "budget_remaining_eur",
                 "Cost budget remaining",
-                SensorDeviceClass.MONETARY, "EUR",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(
                 entry,
