@@ -24,7 +24,7 @@
       "v2_vehicle": {
         "title": "Add Vehicle",
         "data": {
-          "name": "Vehicle name",
+          "name": "Vehicle name (required)",
           "soc_entity": "State of charge sensor",
           "target_soc": "Target SoC (%)",
           "battery_kwh": "Usable battery capacity (kWh)",
@@ -47,23 +47,24 @@
         },
         "data_description": {
           "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline.",
-          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
+          "soc_entity": "Optional for manual or kWh/time charging. Required for OEM SoC planning: choose the existing vehicle percentage sensor, e.g. sensor.audi_soc.",
           "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
           "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
-          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified."
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified.",
+          "battery_kwh": "Required for SoC-driven planning: usable battery capacity in kWh, e.g. 20 kWh. Do not guess gross capacity."
         }
       },
       "v2_charger": {
         "title": "Add Charger",
         "data": {
-          "name": "Charger name",
+          "name": "Charger name (required)",
           "controller_uid": "Charge Controller (required)",
           "vehicle_uid": "Assigned Vehicle (optional)",
-          "control_entity": "Native control switch (observation only during P0)",
+          "control_entity": "Native charging control entity (required for Start/Stop)",
           "connected_entity": "Physical cable connected sensor",
           "charging_entity": "Physical charging status sensor",
           "power_entity": "Measured charging power sensor",
-          "energy_entity": "Session energy sensor",
+          "energy_entity": "Energy meter source (session or cumulative)",
           "tariff_entity": "Validated effective EUR/kWh tariff sensor",
           "max_ac_kw": "Maximum charger AC power (kW)",
           "phase_count": "Number of charging phases",
@@ -79,31 +80,33 @@
           "price_vat_percent": "VAT on electricity price (%)"
         },
         "data_description": {
-          "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
-          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor).",
+          "control_entity": "Required for physical charging: select the original EVSE or EV-rated smart-plug switch/input_boolean. V2 only commands with an explicitly enabled Controller, exclusive ownership and actual readback.",
+          "connected_entity": "Required when Connected source = Sensor. Pick the native cable/vehicle-connected entity. Manual mode instead gives a separate Connected Yes/No switch.",
           "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
-          "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
-          "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
-          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff.",
+          "power_entity": "Required for physical control: real Charger power entity in W/kW, e.g. sensor.peblar_charge_power. Not total household power.",
+          "energy_entity": "For actual session kWh and costs: select the real kWh/Wh meter of this charging point, including total-increasing meters. The meter kind below controls safe per-connection accounting.",
+          "tariff_entity": "Required for price-based planning: an entity with a verified future effective EUR/kWh curve or market curve plus explicit costs. A scalar current spot price is not enough.",
           "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
           "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
           "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
           "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00.",
-          "energy_source_kind": "Select Session only when the source resets for each charging session; Total increasing means lifetime meter. Only Session is used directly for session energy totals.",
+          "energy_source_kind": "Session resets each session. Total increasing is a lifetime meter; V2 uses only witnessed increments since the operator-declared connection. Unknown meter kinds never produce invented session energy.",
           "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
           "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
-          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT."
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT.",
+          "max_ac_kw": "Required for physical execution and SoC-free planning: known continuous charger rating, e.g. 2.0 kW for an EV-rated smart plug. Never infer a rating from present idle power.",
+          "controller_uid": "Required: choose the existing V2 Charge Controller responsible for this Charger's planning and electrical budget."
         }
       },
       "v2_controller": {
         "title": "Add Charge Controller (one planner)",
         "data": {
-          "name": "Controller name",
+          "name": "Controller name (required)",
           "max_parallel": "Maximum simultaneous chargers",
           "horizon_days": "Planning horizon (days)",
           "power_budget_kw": "Maximum total charging power (kW)",
           "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
-          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "cost_budget_eur": "Hard cost cap per active connection (€) — optional",
           "physical_enabled": "Enable real V2 charging control (requires exclusive EVSE ownership)",
           "peak_shaving_enabled": "Enable peak shaving",
           "site_power_entity": "Site net import power sensor (W/kW)",
@@ -111,12 +114,12 @@
           "peak_reserve_kw": "Site power safety reserve (kW)"
         },
         "data_description": {
-          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands.",
+          "physical_enabled": "Optional, off by default. Enable only once V1 Local no longer commands this EVSE and connected/power, effective prices, native control and Start/Stop readback are verified.",
           "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
           "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
           "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
           "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
-          "cost_budget_eur": "Hard EUR cap across the currently connected charging sessions, including a conservative next-quarter reservation. Requires real power/energy readings and complete effective price coverage. Any gap, meter reset or uncertainty prevents physical Start. Leave empty for no cap."
+          "cost_budget_eur": "Applies across currently connected charging sessions, not an automatic daily budget. V2 measures energy and effective tariff, reserving the next 15 minutes conservatively. Missing meter/price coverage blocks physical Start. Leave empty for no cap."
         }
       },
       "v2_migrate": {
@@ -371,7 +374,7 @@
           "horizon_days": "Planning horizon (days)",
           "power_budget_kw": "Maximum total charging power (kW)",
           "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
-          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "cost_budget_eur": "Hard cost cap per active connection (€) — optional",
           "soc_entity": "State of charge sensor",
           "target_soc": "Target SoC (%)",
           "battery_kwh": "Usable battery capacity (kWh)",
@@ -381,11 +384,11 @@
           "user_id": "Associated Home Assistant user (optional)",
           "controller_uid": "Charge Controller (required)",
           "vehicle_uid": "Assigned Vehicle (optional)",
-          "control_entity": "Native control switch (observation only during P0)",
+          "control_entity": "Native charging control entity (required for Start/Stop)",
           "connected_entity": "Physical cable connected sensor",
           "charging_entity": "Physical charging status sensor",
           "power_entity": "Measured charging power sensor",
-          "energy_entity": "Session energy sensor",
+          "energy_entity": "Energy meter source (session or cumulative)",
           "tariff_entity": "Validated effective EUR/kWh tariff sensor",
           "max_current_a": "Maximum charging current (A)",
           "ready_mode": "Ready By pattern",
@@ -416,19 +419,19 @@
           "price_vat_percent": "VAT on electricity price (%)"
         },
         "data_description": {
-          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
-          "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
-          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor).",
+          "soc_entity": "Optional for manual or kWh/time charging. Required for OEM SoC planning: choose the existing vehicle percentage sensor, e.g. sensor.audi_soc.",
+          "control_entity": "Required for physical charging: select the original EVSE or EV-rated smart-plug switch/input_boolean. V2 only commands with an explicitly enabled Controller, exclusive ownership and actual readback.",
+          "connected_entity": "Required when Connected source = Sensor. Pick the native cable/vehicle-connected entity. Manual mode instead gives a separate Connected Yes/No switch.",
           "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
-          "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
-          "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
-          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff.",
-          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands.",
+          "power_entity": "Required for physical control: real Charger power entity in W/kW, e.g. sensor.peblar_charge_power. Not total household power.",
+          "energy_entity": "For actual session kWh and costs: select the real kWh/Wh meter of this charging point, including total-increasing meters. The meter kind below controls safe per-connection accounting.",
+          "tariff_entity": "Required for price-based planning: an entity with a verified future effective EUR/kWh curve or market curve plus explicit costs. A scalar current spot price is not enough.",
+          "physical_enabled": "Optional, off by default. Enable only once V1 Local no longer commands this EVSE and connected/power, effective prices, native control and Start/Stop readback are verified.",
           "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
           "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
           "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
           "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00.",
-          "energy_source_kind": "Select Session only when the source resets for each charging session; Total increasing means lifetime meter. Only Session is used directly for session energy totals.",
+          "energy_source_kind": "Session resets each session. Total increasing is a lifetime meter; V2 uses only witnessed increments since the operator-declared connection. Unknown meter kinds never produce invented session energy.",
           "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
           "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
           "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
@@ -439,7 +442,10 @@
           "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
           "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
           "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT.",
-          "cost_budget_eur": "Hard EUR cap across the currently connected charging sessions, including a conservative next-quarter reservation. Requires real power/energy readings and complete effective price coverage. Any gap, meter reset or uncertainty prevents physical Start. Leave empty for no cap."
+          "cost_budget_eur": "Applies across currently connected charging sessions, not an automatic daily budget. V2 measures energy and effective tariff, reserving the next 15 minutes conservatively. Missing meter/price coverage blocks physical Start. Leave empty for no cap.",
+          "max_ac_kw": "Required for physical execution and SoC-free planning: known continuous charger rating, e.g. 2.0 kW for an EV-rated smart plug. Never infer a rating from present idle power.",
+          "battery_kwh": "Required for SoC-driven planning: usable battery capacity in kWh, e.g. 20 kWh. Do not guess gross capacity.",
+          "controller_uid": "Required: choose the existing V2 Charge Controller responsible for this Charger's planning and electrical budget."
         }
       }
     },
