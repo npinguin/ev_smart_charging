@@ -275,7 +275,10 @@ async def test_optional_create_new_charger_even_when_existing_is_available(hass)
     original = _local(hass)
     _v2(hass, ENTRY_CONTROLLER, "main")
     existing = _v2(
-        hass, ENTRY_CHARGER, "other", controller_uid="main",
+        hass,
+        ENTRY_CHARGER,
+        "other",
+        controller_uid="main",
         control_entity="switch.other",
     )
     choice = await _begin_legacy_migration(hass, original)
@@ -292,7 +295,10 @@ async def test_existing_charger_rejects_conflicting_physical_target(hass):
     original = _local(hass)
     _v2(hass, ENTRY_CONTROLLER, "main")
     existing = _v2(
-        hass, ENTRY_CHARGER, "other", controller_uid="main",
+        hass,
+        ENTRY_CHARGER,
+        "other",
+        controller_uid="main",
         control_entity="switch.not_the_peblar",
     )
     choice = await _begin_legacy_migration(hass, original)
@@ -310,8 +316,12 @@ async def test_existing_charger_preserves_operator_sources_and_vehicle(hass):
     _v2(hass, ENTRY_CONTROLLER, "main")
     _v2(hass, ENTRY_VEHICLE, "car")
     existing = _v2(
-        hass, ENTRY_CHARGER, "other", controller_uid="main",
-        vehicle_uid="car", power_entity="sensor.operator_meter",
+        hass,
+        ENTRY_CHARGER,
+        "other",
+        controller_uid="main",
+        vehicle_uid="car",
+        power_entity="sensor.operator_meter",
     )
     choice = await _begin_legacy_migration(hass, original)
     preview = await hass.config_entries.flow.async_configure(
@@ -323,7 +333,9 @@ async def test_existing_charger_preserves_operator_sources_and_vehicle(hass):
     )
     assert result["reason"] == "v2_existing_charger_linked"
     assert existing.options["legacy_entry_id"] == original.entry_id
-    assert existing.options["power_entity"] == "sensor.operator_meter"
+    # The operator source remains in immutable Config Entry data, not a copy.
+    assert existing.data["power_entity"] == "sensor.operator_meter"
+    assert "power_entity" not in existing.options
     assert existing.data["vehicle_uid"] == "car"
 
 
@@ -351,8 +363,11 @@ async def test_migration_skips_already_mapped_original(hass):
     original = _local(hass)
     _v2(hass, ENTRY_CONTROLLER, "main")
     _v2(
-        hass, ENTRY_CHARGER, "already",
-        controller_uid="main", legacy_entry_id=original.entry_id,
+        hass,
+        ENTRY_CHARGER,
+        "already",
+        controller_uid="main",
+        legacy_entry_id=original.entry_id,
     )
     start = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
