@@ -20,6 +20,7 @@ from .group_facts import group_facts
 from ..controller.costs import ActualCostLedger
 from .soc_estimation import SocEstimator
 from .session_progress import SessionProgress
+from .budget import CostBudgetGuard
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from ..const import DOMAIN
@@ -253,6 +254,10 @@ class V2ControllerRuntime:
         self._cost_ledgers = {}
         self._session_store = Store(hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}")
         self._session_progress = SessionProgress()
+        self._budget_store = Store(
+            hass, 1, f"{DOMAIN}.v2_budget_{entry.data['uid']}"
+        )
+        self._budget_guard = CostBudgetGuard()
 
     def _cost_payload(self):
         return {uid: ledger.to_storage() for uid, ledger in self._cost_ledgers.items()}
@@ -273,6 +278,7 @@ class V2ControllerRuntime:
         restored = await self._soc_store.async_load()
         self._soc_estimator = SocEstimator(restored)
         self._session_progress = SessionProgress(await self._session_store.async_load())
+        self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
         stored_costs = await self._cost_store.async_load()
         self._cost_ledgers = {
             uid: ActualCostLedger.from_storage(state)
@@ -319,6 +325,7 @@ class V2ControllerRuntime:
                         power_kw=item.get("power_kw"),
                         now=observed_at,
                     )
+                    item["session_start"] = progress["started"]
                     item["session_grid_kwh"] = progress["delivered_kwh"]
                     item["session_elapsed_seconds"] = progress["elapsed_seconds"]
                     item["session_meter_quality"] = progress["meter_quality"]
@@ -344,6 +351,30 @@ class V2ControllerRuntime:
                         quality = "OEM" if soc is not None else "STALE"
                     item["soc"] = soc
                     item["soc_quality"] = quality
+                if controller.cost_budget_eur is not None:
+                    for uid, charger in chargers.items():
+                        item = observed[uid]
+                        item["budget_observation_quality"] = (
+                            self._budget_guard.observe(
+                                uid,
+                                connected=item.get("connected"),
+                                session_start=item.get("session_start"),
+                                meter_source=(
+                                    charger.energy_entity
+                                    if charger.energy_source_kind
+                                    in ("session", "total_increasing")
+                                    else ""
+                                ),
+                                meter_kwh=item.get("energy_kwh"),
+                                meter_at=item.get("energy_observed_at"),
+                                prices=item.get("prices", []),
+                            )
+                        )
+                    if self._budget_guard.dirty:
+                        self._budget_store.async_delay_save(
+                            self._budget_guard.snapshot, 30
+                        )
+                        self._budget_guard.dirty = False
                 if self._session_progress.dirty:
                     self._session_store.async_delay_save(
                         self._session_progress.snapshot, 30
@@ -531,6 +562,11 @@ class V2ControllerRuntime:
         admitted = _group_admissions(
             controller, chargers, observed, result, when, peak_limit_kw=limit
         )
+        budget_allowed, budget_summary = self._budget_guard.admit(
+            controller.cost_budget_eur,
+            chargers, observed, admitted, when,
+        )
+        result["budget"] = budget_summary
         native_results = {}
         for uid, charger in sorted(chargers.items()):
             if self._stopped or not safety.V2_PHYSICAL_EXECUTION_AVAILABLE:
@@ -546,7 +582,7 @@ class V2ControllerRuntime:
                 when,
                 connected=observed.get(uid, {}).get("connected"),
                 measured_power_kw=observed.get(uid, {}).get("power_kw"),
-                actual_budget_certified=controller.cost_budget_eur is None,
+                actual_budget_certified=uid in budget_allowed,
                 group_capacity_certified=uid in admitted,
             )
             native_results[uid] = status
@@ -561,6 +597,7 @@ class V2ControllerRuntime:
         await self._soc_store.async_save(self._soc_estimator.snapshot())
         await self._cost_store.async_save(self._cost_payload())
         await self._session_store.async_save(self._session_progress.snapshot())
+        await self._budget_store.async_save(self._budget_guard.snapshot())
         task = self._tick_task
         self._stopped = True
         if task is not None and not task.done():
