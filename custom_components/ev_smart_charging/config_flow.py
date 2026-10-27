@@ -170,7 +170,10 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         choices = {}
         for entry in historical_entries(self.hass):
-            for profile_id, profile in entry.options.get("vehicles", {}).items():
+            profiles = entry.options.get("vehicles") or {}
+            if not isinstance(profiles, dict):
+                continue
+            for profile_id, profile in profiles.items():
                 if not isinstance(profile, dict):
                     continue
                 key = f"{entry.entry_id}:{profile_id}"
