@@ -523,3 +523,54 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
         await asyncio.gather(a, *([b] if b is not None else []), return_exceptions=True)
         await writer_a.async_close()
         await writer_b.async_close()
+
+
+
+async def test_manual_connected_no_rechecked_at_native_command_boundary(
+    hass, charger
+):
+    """A stale planned Yes may never override the operator's latest No."""
+    from custom_components.ev_smart_charging.v2.manual_connection import (
+        manual_states,
+    )
+
+    entry = next(
+        item for item in hass.config_entries.async_entries(DOMAIN)
+        if item.data.get("uid") == "ch"
+    )
+    hass.config_entries.async_update_entry(
+        entry, options={"connection_source": "manual"}
+    )
+    manual_states(hass)["ch"] = False
+    calls = []
+
+    async def on(call):
+        calls.append("on")
+        hass.states.async_set("switch.native_charger", "on")
+
+    async def off(call):
+        calls.append("off")
+        hass.states.async_set("switch.native_charger", "off")
+
+    hass.services.async_register("switch", "turn_on", on)
+    hass.services.async_register("switch", "turn_off", off)
+    hass.states.async_set("switch.native_charger", "off")
+    # Intentionally stale cached Charger instance; must consult authoritative
+    # Config Entry and manual state before crossing native service boundary.
+    writer = NativeChargeWriter(hass, charger, "main")
+    try:
+        denied = await writer.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            group_capacity_certified=True,
+        )
+        assert denied == "PHYSICAL_CABLE_NOT_CONFIRMED"
+        assert calls == []
+        hass.states.async_set("switch.native_charger", "on")
+        stopping = await writer.async_reconcile(
+            _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        assert stopping == "SAFETY_STOP_PHYSICAL_CABLE_NOT_CONFIRMED"
+        assert calls == ["off"]
+    finally:
+        await writer.async_close()

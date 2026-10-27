@@ -256,6 +256,9 @@ class V2ControllerRuntime:
         self._session_progress = SessionProgress()
         self._budget_store = Store(hass, 1, f"{DOMAIN}.v2_budget_{entry.data['uid']}")
         self._budget_guard = CostBudgetGuard()
+        # Coalesce source/operator updates arriving during a running plan.
+        # One trailing refresh, not a task per source event.
+        self._refresh_requested = False
 
     def _cost_payload(self):
         return {uid: ledger.to_storage() for uid, ledger in self._cost_ledgers.items()}
@@ -299,7 +302,10 @@ class V2ControllerRuntime:
         self._tick_task = self.hass.async_create_task(self.async_refresh())
 
     async def async_refresh(self):
-        if self._stopped or self._lock.locked():
+        if self._stopped:
+            return
+        if self._lock.locked():
+            self._refresh_requested = True
             return
         async with self._lock:
             try:
@@ -496,6 +502,11 @@ class V2ControllerRuntime:
                 self.snapshot = result
                 self._notify()
                 async_dispatcher_send(self.hass, f"{DOMAIN}_v2_vehicle_sources")
+        if self._refresh_requested and not self._stopped:
+            self._refresh_requested = False
+            # At most one follow-up per in-flight refresh, even if multiple
+            # operator actions/sources changed during expensive planning.
+            self.hass.async_create_task(self.async_refresh())
 
     async def _apply_native_plan(self, controller, chargers, observed, result):
         """One physically serialized writer per owned Charger, not per event."""

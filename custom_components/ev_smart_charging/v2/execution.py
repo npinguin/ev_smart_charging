@@ -195,6 +195,16 @@ class NativeChargeWriter:
                 ):
                     self.close()
                     return "OWNERSHIP_CHANGED_BEFORE_COMMAND"
+                # Manual Connected is an operator authority, not a stale
+                # planner fact. It can change while executor work is queued;
+                # recheck at the last native service boundary, within the
+                # writer/ownership critical section.
+                if wants_on and current.connection_source == "manual":
+                    from .manual_connection import manual_connected
+
+                    if not manual_connected(self.hass, current.uid):
+                        wants_on = False
+                        denial = "PHYSICAL_CABLE_NOT_CONFIRMED"
                 state = self._port.readback(self.hass, self.charger.control_entity)
                 # An unknown actual native state can never be used as a Start
                 # permission. It also must not cause repeated speculative Off.
