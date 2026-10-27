@@ -48,9 +48,7 @@ async def test_updates_during_inflight_refresh_coalesce_to_one_followup(hass):
             await asyncio.wait_for(started.wait(), timeout=2)
             # Many updates while the first expensive planner is running:
             # no extra executor task, but there must be one trailing refresh.
-            await asyncio.gather(
-                *[runtime.async_refresh() for _ in range(8)]
-            )
+            await asyncio.gather(*[runtime.async_refresh() for _ in range(8)])
             assert len(calls) == 1
             release.set()
             await asyncio.wait_for(first, timeout=2)

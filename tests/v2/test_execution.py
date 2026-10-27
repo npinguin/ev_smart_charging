@@ -525,17 +525,15 @@ async def test_slow_charger_does_not_delay_unrelated_native_charger(
         await writer_b.async_close()
 
 
-
-async def test_manual_connected_no_rechecked_at_native_command_boundary(
-    hass, charger
-):
+async def test_manual_connected_no_rechecked_at_native_command_boundary(hass, charger):
     """A stale planned Yes may never override the operator's latest No."""
     from custom_components.ev_smart_charging.v2.manual_connection import (
         manual_states,
     )
 
     entry = next(
-        item for item in hass.config_entries.async_entries(DOMAIN)
+        item
+        for item in hass.config_entries.async_entries(DOMAIN)
         if item.data.get("uid") == "ch"
     )
     hass.config_entries.async_update_entry(
@@ -560,14 +558,20 @@ async def test_manual_connected_no_rechecked_at_native_command_boundary(
     writer = NativeChargeWriter(hass, charger, "main")
     try:
         denied = await writer.async_reconcile(
-            _snapshot(), NOW, connected=True, measured_power_kw=0,
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=0,
             group_capacity_certified=True,
         )
         assert denied == "PHYSICAL_CABLE_NOT_CONFIRMED"
         assert calls == []
         hass.states.async_set("switch.native_charger", "on")
         stopping = await writer.async_reconcile(
-            _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=7.4,
             group_capacity_certified=True,
         )
         assert stopping == "SAFETY_STOP_PHYSICAL_CABLE_NOT_CONFIRMED"
@@ -576,10 +580,7 @@ async def test_manual_connected_no_rechecked_at_native_command_boundary(
         await writer.async_close()
 
 
-
-async def test_v2_controller_unload_stops_a_proven_owned_evse(
-    hass, charger
-):
+async def test_v2_controller_unload_stops_a_proven_owned_evse(hass, charger):
     """Turning off V2 Controller must not strand the last native switch ON."""
     seen = []
 
@@ -591,7 +592,10 @@ async def test_v2_controller_unload_stops_a_proven_owned_evse(
     hass.states.async_set("switch.native_charger", "on")
     writer = NativeChargeWriter(hass, charger, "main")
     ready = await writer.async_reconcile(
-        _snapshot(), NOW, connected=True, measured_power_kw=7.4,
+        _snapshot(),
+        NOW,
+        connected=True,
+        measured_power_kw=7.4,
         group_capacity_certified=True,
     )
     assert ready == "ALREADY_AT_TARGET"
@@ -616,21 +620,27 @@ async def test_shutdown_does_not_touch_an_unowned_on_switch(hass, charger):
     assert hass.states.get("switch.native_charger").state == "on"
 
 
-async def test_failed_owned_shutdown_retains_v2_claim_and_exposes_error(
-    hass, charger
-):
+async def test_failed_owned_shutdown_retains_v2_claim_and_exposes_error(hass, charger):
     """Never imply OFF or transfer the EVSE if native Stop failed."""
+
     async def fail(call):
         raise RuntimeError("offline OEM")
 
     hass.services.async_register("switch", "turn_off", fail)
     hass.states.async_set("switch.native_charger", "on")
     writer = NativeChargeWriter(hass, charger, "main")
-    assert await writer.async_reconcile(
-        _snapshot(), NOW, connected=True, measured_power_kw=7.4,
-        group_capacity_certified=True,
-    ) == "ALREADY_AT_TARGET"
+    assert (
+        await writer.async_reconcile(
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        == "ALREADY_AT_TARGET"
+    )
     assert await writer.async_shutdown() == "STOP_FAILED_OR_TIMED_OUT"
-    assert hass.data[f"{DOMAIN}.v2_native_writers"][
-        "switch.native_charger"
-    ] == ("main", "ch")
+    assert hass.data[f"{DOMAIN}.v2_native_writers"]["switch.native_charger"] == (
+        "main",
+        "ch",
+    )
