@@ -251,15 +251,22 @@ class V2ControllerRuntime:
                     result["native_execution"] = await self._apply_native_plan(
                         controller, chargers, observed, result
                     )
-                    result["execution_status"] = "ACTIVE_WITH_NATIVE_ADMISSION"
-                    result["advisory_only"] = False
-                    result["physical_actuation_authorized"] = any(
+                    # Never advertise live physical control when all native
+                    # writers actually rejected the command or no Chargers exist.
+                    authorized = any(
                         state
                         in (
                             "ALREADY_AT_TARGET",
                             "COMMAND_SENT_AWAITING_READBACK",
                         )
                         for state in result["native_execution"].values()
+                    )
+                    result["physical_actuation_authorized"] = authorized
+                    result["advisory_only"] = not authorized
+                    result["execution_status"] = (
+                        "ACTIVE_WITH_NATIVE_ADMISSION"
+                        if authorized
+                        else "WAITING_FOR_VALIDATED_PHYSICAL_SOURCES"
                     )
             except asyncio.CancelledError:
                 raise
