@@ -24,9 +24,7 @@ from tests.helpers.helpers import (
 from tests.price import PRICE_20220930, PRICE_20221001
 
 
-async def test_daily_0800_after_afternoon_is_next_day(
-    hass, set_cet_timezone, freezer
-):
+async def test_daily_0800_after_afternoon_is_next_day(hass, set_cet_timezone, freezer):
     freezer.move_to("2022-09-30T15:10:00+02:00")
     assert get_ready_quarter_utc(8 * 4) == datetime(
         2022, 10, 1, 8, 0, tzinfo=dt_util.get_time_zone("Europe/Stockholm")
@@ -70,11 +68,13 @@ async def test_legacy_next_morning_0800_replans_when_tomorrow_prices_arrive(
         plan = Raw(local._charging_schedule)
         assert plan.number_of_nonzero() == 12 * 4
         charged_tomorrow = [
-            row for row in local._charging_schedule
+            row
+            for row in local._charging_schedule
             if row["value"] not in (0, None)
-            and row["start"].astimezone(
-                dt_util.get_time_zone("Europe/Stockholm")
-            ).date() == datetime(2022, 10, 1).date()
+            and row["start"]
+            .astimezone(dt_util.get_time_zone("Europe/Stockholm"))
+            .date()
+            == datetime(2022, 10, 1).date()
         ]
         assert charged_tomorrow
     finally:
