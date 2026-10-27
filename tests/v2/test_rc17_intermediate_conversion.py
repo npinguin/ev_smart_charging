@@ -32,7 +32,8 @@ def test_preview_is_read_only_and_stable_no_native_writer():
         "linked_chargers": ["v1_local_peblar"],
         "vehicles": {
             "audi": {
-                "name": "Audi Q8", "target_soc": 80,
+                "name": "Audi Q8",
+                "target_soc": 80,
                 "soc_entity": "sensor.audi_soc",
                 "usable_battery_kwh": 20,
                 "ready_by": "2026-10-28T08:00:00+01:00",
@@ -53,9 +54,10 @@ def test_preview_is_read_only_and_stable_no_native_writer():
     assert plan["controller"]["physical_enabled"] is False
     assert plan["vehicles"][0]["ready_mode"] == "once"
     assert plan["vehicles"][0]["battery_kwh"] == 20
-    assert plan["legacy_local_assignments"]["v1_local_peblar"] == plan[
-        "vehicles"
-    ][0]["uid"]
+    assert (
+        plan["legacy_local_assignments"]["v1_local_peblar"]
+        == plan["vehicles"][0]["uid"]
+    )
     assert plan["physical_cutover_permitted"] is False
     assert plan["destructive_changes"] is False
     assert not any(k in plan["controller"] for k in ("participants", "control_entity"))
@@ -71,9 +73,7 @@ def test_incomplete_peak_does_not_invent_source_or_limit():
 
 
 def test_unknown_vehicle_ready_never_silently_becomes_tomorrow_0800():
-    plan = preview_intermediate(
-        interim({"vehicles": {"guest": {"name": "Guest"}}})
-    )
+    plan = preview_intermediate(interim({"vehicles": {"guest": {"name": "Guest"}}}))
     vehicle = plan["vehicles"][0]
     assert "ready_by" not in vehicle
     assert "ready_mode" not in vehicle
@@ -91,10 +91,12 @@ def test_malformed_profile_is_rejected_without_partial_side_effects():
 
 def test_existing_v1_source_cannot_become_v2_physical_charger_implicitly():
     plan = preview_intermediate(
-        interim({
-            "linked_chargers": ["classic_v1"],
-            "participants": ["classic_v1"],
-        })
+        interim(
+            {
+                "linked_chargers": ["classic_v1"],
+                "participants": ["classic_v1"],
+            }
+        )
     )
     assert plan["legacy_linked_chargers"] == ["classic_v1"]
     assert "chargers" not in plan

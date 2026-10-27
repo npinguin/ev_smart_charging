@@ -62,10 +62,12 @@ def preview_intermediate(entry):
     site = options.get("site_power_sensor")
     if options.get("peak_shaving_enabled"):
         if site and controller.get("peak_target_kw"):
-            controller.update({
-                "site_power_entity": site,
-                "peak_shaving_enabled": True,
-            })
+            controller.update(
+                {
+                    "site_power_entity": site,
+                    "peak_shaving_enabled": True,
+                }
+            )
         else:
             warnings.append(
                 "Peak shaving requested, but site sensor/target incomplete; "
@@ -108,19 +110,19 @@ def preview_intermediate(entry):
                 ready = datetime.fromisoformat(raw_ready)
                 if ready.tzinfo is None or ready.utcoffset() is None:
                     raise ValueError("timezone missing")
-                candidate.update({
-                    "ready_mode": "once",
-                    "ready_by": ready.isoformat(),
-                })
+                candidate.update(
+                    {
+                        "ready_mode": "once",
+                        "ready_by": ready.isoformat(),
+                    }
+                )
             except (TypeError, ValueError):
                 warnings.append(
                     f"Vehicle {old_id}: invalid absolute Ready By; review required"
                 )
         else:
             # No old schedule: do not silently create a 08:00 commitment.
-            warnings.append(
-                f"Vehicle {old_id}: no Ready By; configure in V2"
-            )
+            warnings.append(f"Vehicle {old_id}: no Ready By; configure in V2")
         try:
             Vehicle(
                 uid=candidate["uid"],
@@ -141,9 +143,7 @@ def preview_intermediate(entry):
     try:
         Controller(**controller)
     except (ValueError, TypeError, ConfigurationError) as exc:
-        raise ConfigurationError(
-            "intermediate_controller_requires_review"
-        ) from exc
+        raise ConfigurationError("intermediate_controller_requires_review") from exc
     requested = options.get("vehicle_assignments") or {}
     if not isinstance(requested, dict):
         raise ConfigurationError("invalid_intermediate_assignments")
