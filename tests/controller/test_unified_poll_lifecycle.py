@@ -147,22 +147,32 @@ async def test_options_reloads_do_not_accumulate_config_entry_listeners(
         version=8,
     )
     charger.add_to_hass(hass)
-    controller_id = None
+    from custom_components.ev_smart_charging.v2 import ENTRY_CONTROLLER, MARKER
+    from custom_components.ev_smart_charging.v2.runtime import V2ControllerRuntime
+
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        data={MARKER: ENTRY_CONTROLLER, "uid": "main", "name": "Home"},
+        entry_id="v2_options_lifecycle_controller",
+        version=8,
+    )
+    controller.add_to_hass(hass)
+    controller_id = controller.entry_id
     try:
         assert await hass.config_entries.async_setup(charger.entry_id)
         await hass.async_block_till_done()
-        controllers = [
+        assert not [
             entry
             for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
-        assert len(controllers) == 1
-        controller = controllers[0]
-        controller_id = controller.entry_id
+        assert await hass.config_entries.async_setup(controller_id)
+        await hass.async_block_till_done()
         assert len(controller.update_listeners) == 1
 
         for revision in range(6):
             previous = hass.data[DOMAIN][controller_id]
+            assert isinstance(previous, V2ControllerRuntime)
             hass.config_entries.async_update_entry(
                 controller, options={**controller.options, "test_revision": revision}
             )

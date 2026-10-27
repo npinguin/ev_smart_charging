@@ -20,7 +20,7 @@ from tests.const import MOCK_CONFIG_ALL
 async def test_all_five_entry_and_device_downloads_are_available_and_private(
     hass, bypass_validate_input_and_control
 ):
-    """The existing four Local chargers and singleton all expose diagnostics."""
+    """Four untouched Local Chargers need no singleton; old entries remain readable."""
     originals = []
     for index in range(4):
         entry = MockConfigEntry(
@@ -48,9 +48,22 @@ async def test_all_five_entry_and_device_downloads_are_available_and_private(
             for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
-        assert len(controllers) == 1
-        controller = controllers[0]
+        # Local V1 setup must not manufacture the intermediate Controller.
+        assert controllers == []
+        # Historical configuration remains available for explicit conversion,
+        # so also test its privacy-safe diagnostics without auto-provisioning.
+        controller = MockConfigEntry(
+            domain=DOMAIN,
+            data={"__evsc_entry_type": "charge_controller"},
+            options={},
+            title="Historical Controller",
+            entry_id="historical_controller",
+            version=8,
+        )
+        controller.add_to_hass(hass)
         controller_id = controller.entry_id
+        assert await hass.config_entries.async_setup(controller_id)
+        await hass.async_block_till_done()
 
         result = await async_get_config_entry_diagnostics(hass, controller)
         assert result["entry_type"] == "charge_controller"
