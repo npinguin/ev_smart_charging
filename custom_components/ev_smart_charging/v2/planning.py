@@ -104,6 +104,41 @@ def compile_advisory(
         has_soc_demand = (
             vehicle is not None and soc is not None and vehicle.battery_kwh is not None
         )
+        # The configured kWh/duration is a per-connection objective, NOT a
+        # new complete demand on every one-minute planning refresh.
+        remaining_grid_kwh = charger.requested_grid_kwh
+        remaining_quarters = charger.requested_duration_quarters
+        if not has_soc_demand and charger.requested_grid_kwh is not None:
+            if (
+                inputs.get("session_meter_quality") != "VALID"
+                or inputs.get("session_grid_kwh") is None
+            ):
+                excluded[charger.uid] = "SESSION_METER_UNVERIFIED"
+                continue
+            remaining_grid_kwh = max(
+                0.0, charger.requested_grid_kwh - inputs["session_grid_kwh"]
+            )
+            if remaining_grid_kwh <= 0.000001:
+                excluded[charger.uid] = "DEMAND_COMPLETE"
+                continue
+        elif not has_soc_demand and charger.requested_duration_quarters is not None:
+            if (
+                inputs.get("session_duration_quality") != "VALID"
+                or inputs.get("session_elapsed_seconds") is None
+            ):
+                excluded[charger.uid] = "SESSION_DURATION_UNVERIFIED"
+                continue
+            remaining_seconds = max(
+                0.0,
+                900 * charger.requested_duration_quarters
+                - inputs["session_elapsed_seconds"],
+            )
+            if remaining_seconds <= 0:
+                excluded[charger.uid] = "DEMAND_COMPLETE"
+                continue
+            remaining_quarters = max(
+                1, int((remaining_seconds + 899.999999) // 900)
+            )
         if not has_soc_demand and not explicit:
             excluded[charger.uid] = (
                 "BATTERY_DEMAND_UNKNOWN" if vehicle else "NO_EXPLICIT_DEMAND"
@@ -146,10 +181,10 @@ def compile_advisory(
             # Demand in explicit mode is GRID kWh/quarters, not battery kWh.
             efficiency=0.90 if has_soc_demand else 1.0,
             requested_grid_kwh=(
-                charger.requested_grid_kwh if not has_soc_demand else None
+                remaining_grid_kwh if not has_soc_demand else None
             ),
             requested_duration_quarters=(
-                charger.requested_duration_quarters if not has_soc_demand else None
+                remaining_quarters if not has_soc_demand else None
             ),
         )
         requests.append(req)
