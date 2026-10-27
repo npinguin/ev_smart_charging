@@ -112,7 +112,17 @@ jobs:
           assert "availability_enable" in observation and "power_relay" in observation
           assert '"physical_observation": observation' in diagnostics
           assert '"reconciliation_status": (' in diagnostics
-          assert "evsc_control_semantics" in config_code
+          # The original Local Config Flow no longer owns V2 fields.
+          v2_flow = Path("custom_components/ev_smart_charging/v2/flow.py").read_text()
+          assert "control_semantics" in v2_flow
+          assert "physical_enabled" in v2_flow
+          assert "V2_PHYSICAL_EXECUTION_AVAILABLE = True" in safety
+          assert "CONTROLLER_CONTROL_DISABLED" in Path(
+              "custom_components/ev_smart_charging/v2/execution.py"
+          ).read_text()
+          assert "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER" in Path(
+              "custom_components/ev_smart_charging/v2/execution.py"
+          ).read_text()
           assert Path("docs/controller/RC11_CONTROL_SEMANTICS_AND_RUNTIME.md").exists()
           assert '"multi_day_planning": multi_day' in diagnostics
           assert '"vehicle_profiles": vehicles' in diagnostics
@@ -228,4 +238,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — V1 upstream parity / V2 setup test" \
-            --notes "EVSC $tag: GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. V1 original Local Chargers retain original device/entity surface and Options; rc.15 next-day 08:00 Ready By, performance, and native Local controls remain. Known prerelease-only Local registry entities are cleaned by exact unique ID. Setup: HA-native separated Vehicle, Charger and Controller entries, searchable HA entity pickers, independent Options screens, source selectors and clearing/unlinking. Non-destructive migration supports new or existing V2 Charger with an existing Controller and optional Vehicle. Full automatic 1-to-3 Config Entry creation and physical cutover are NOT supported. PHYSICAL V2 ACTUATION LOCKED by open Peblar P0 #5; actual metered cost budget also NOT hard-enforced. Test on a backed-up Home Assistant instance, start with existing Local charging without migrating, then exercise V2 setup and association. No stable promotion. Roll back to immutable v2.6.0-rc.15 if needed."
+            --notes "EVSC $tag: HACS FIELD-TEST PRERELEASE, not stable. Source commit: $GITHUB_SHA. Original V1 Local devices and Ready By preserved, per-device V2 Vehicle/Charger/Controller native HA Config and Options, searchable HA entity pickers and non-destructive migration to new/existing V2 Charger. Independent V2 native physical control is NOW OPERATOR-OPT-IN through V2 Controller Configure and remains blocked for any EVSE still physically owned by Local. It requires a fresh validated plan, valid effective EUR/kWh price slots, live cable and power sensors, supported physical HA switch, verified readback, exclusive ownership and current capability limits. The previous LEGACY Coordinated mode remains quarantined after Peblar HA hang #5. No implicit physical cutover. Existing physical P0 remains unclosed until field tests on real chargers; first test one EVSE with HA backup and OEM control available. Cost budget EUR restriction is only advisory unless a certified actual spend ledger is available, so configuring a cost budget denies V2 physical Start. Full automatic 1-to-3 Config Entry migration remains unavailable. No stable promotion, no fake data. Roll back to v2.6.0-rc.15 if needed; restore HA backup for registry reversal."
