@@ -30,8 +30,12 @@ _STEPS = {
 _ENTITY_BINDINGS = {
     ENTRY_VEHICLE: ("soc_entity",),
     ENTRY_CHARGER: (
-        "control_entity", "connected_entity", "charging_entity",
-        "power_entity", "energy_entity", "tariff_entity",
+        "control_entity",
+        "connected_entity",
+        "charging_entity",
+        "power_entity",
+        "energy_entity",
+        "tariff_entity",
     ),
 }
 

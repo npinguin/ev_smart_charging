@@ -387,7 +387,8 @@ async def test_migrate_connected_sensor_uses_ha_entity_selector(hass):
     form = await _begin_legacy_migration(hass, original)
     assert form["step_id"] == "v2_migrate_confirm"
     connected = next(
-        value for key, value in form["data_schema"].schema.items()
+        value
+        for key, value in form["data_schema"].schema.items()
         if key.schema == "connected_entity"
     )
     assert isinstance(connected, selector.EntitySelector)
