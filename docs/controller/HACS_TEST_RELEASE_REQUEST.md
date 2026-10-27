@@ -26,3 +26,7 @@ Earlier Python 3.12–3.14 logs exposed test timeouts caused by an HA-tracked de
 The full CI gate additionally checks there is no `await asyncio.sleep` in the Local source-drain coroutine. A release is forbidden if any Python test, source-feedback regression, formatting check or HA validation is queued, failed or unverified.
 
 **This exact request commit supersedes prior queued rc.14 build requests. Do not manually publish an older PR source SHA.**
+
+## Final guarded release invocation — 27 October 2026
+
+The Local source refresh loop and timer regression is fixed and the exact Black correction is applied. This file update explicitly requests a fresh **workflow_call** full matrix on this commit, followed by rc.14 prerelease publication only if its nine jobs are green. No manual bypass, no physical Coordinated start/stop enablement, and no changes to rc.13 or main.
