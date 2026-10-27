@@ -130,6 +130,7 @@ class SessionProgress:
     @staticmethod
     def _unknown(reason):
         return {
+            "started": None,
             "delivered_kwh": None,
             "elapsed_seconds": None,
             "meter_quality": reason,
@@ -139,6 +140,7 @@ class SessionProgress:
     @staticmethod
     def _facts(session):
         return {
+            "started": session.get("started"),
             "delivered_kwh": (
                 round(session["delivered_kwh"], 5)
                 if session.get("meter_quality") == "VALID"
