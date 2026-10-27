@@ -16,7 +16,7 @@ from homeassistant.util import dt
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE
 from .catalog import details, model
-from .runtime import _connected, _number, _meter
+from .runtime import _connected, _number, _meter, _fresh_state
 from .ready_schedule import next_ready_deadline, normalized_mode
 
 
@@ -85,6 +85,8 @@ class V2Fact(SensorEntity):
         source = None
         if self.kind == ENTRY_VEHICLE and self.key in (
             "soc",
+            "effective_soc",
+            "soc_quality",
             "required_battery_kwh",
             "source_quality",
         ):
@@ -157,8 +159,15 @@ class V2Fact(SensorEntity):
     def native_value(self):
         obj = model(self.entry)
         if self.kind == ENTRY_VEHICLE:
+            # A cached OEM number is not a current SoC observation.
             soc = _number(
-                self.hass.states.get(obj.soc_entity) if obj.soc_entity else None,
+                _fresh_state(
+                    (
+                        self.hass.states.get(obj.soc_entity)
+                        if obj.soc_entity else None
+                    ),
+                    max_age=timedelta(hours=2),
+                ),
                 0,
                 100,
             )
@@ -167,6 +176,19 @@ class V2Fact(SensorEntity):
             if self.key == "ready_mode":
                 return normalized_mode(obj)
             source = self._vehicle_observed()
+            if source is None:
+                # Vehicles are standalone HA Config Entries. An unassigned
+                # Vehicle must still expose its explicitly configured manual
+                # SoC or current OEM SoC, not a fictional Controller reading.
+                if obj.soc_source_mode == "manual":
+                    source = {
+                        "effective_soc": obj.manual_soc,
+                        "soc_quality": "MANUAL",
+                    }
+                elif soc is not None:
+                    source = {"effective_soc": soc, "soc_quality": "OEM"}
+                else:
+                    source = {"effective_soc": None, "soc_quality": "STALE"}
             if self.key == "soc":
                 return soc
             if self.key == "effective_soc":
