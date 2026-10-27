@@ -150,6 +150,7 @@ jobs:
           for required in (
             "tests/controller/test_stability_budget.py",
             "tests/controller/test_local_event_coalescing.py",
+            "tests/controller/test_legacy_next_day_ready.py",
             "tests/v2/test_source_feedback.py",
           ):
             assert Path(required).is_file(), f"Stability test missing: {required}"
@@ -169,6 +170,13 @@ jobs:
           assert "MAX_EFFECTIVE_PRICE_QUARTERS" in runtime
           assert "async_delay_save(" in runtime
           assert "async_flush_costs" in runtime
+          # The old daily Local Ready By must keep tomorrow 08:00 working.
+          old_select = Path("custom_components/ev_smart_charging/select.py").read_text()
+          old_helper = Path("custom_components/ev_smart_charging/helpers/coordinator.py").read_text()
+          assert "get_ready_quarter_utc" in old_helper
+          assert "absolute.clear()" in old_select
+          assert "self.ev_soc_before_last_charging = -1" in local
+          assert "eager_start=False" in local, "Local source event storm must coalesce"
           assert "_check_source_feedback" in registry
           assert "COORDINATED_ACTUATION_ENABLED = False" in safety
           assert "async_add_executor_job(" in runtime
@@ -214,4 +222,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "EV Smart Charging $tag — guarded Mobility Light drop-in test" \
-            --notes "EV Smart Charging V2 rc.14 — GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. Includes all rc.13 Ready By once/daily/weekly calendar, multi-Controller and exclusive ownership features plus stability hardening: bounded legacy tariff expansion, light five-second state fingerprints, coalesced Local event worker, relevant-only source sensor subscriptions, V2 cyclic source validation, periodic buffered cost writes with unload flush, CI bounded workers and 2000-event storm regressions. Legacy Local Config Entries and existing native commands are preserved. Physical V2 Coordinated actuation remains locked due to unresolved field P0 #5; live hardware qualification and metered session cost enforcement are NOT complete. Test only on a backed-up HA instance. Roll back to v2.6.0-rc.13 if needed. Do not promote to stable or merge automatically."
+            --notes "EV Smart Charging V2 rc.14 — GUARDED HACS TEST PRERELEASE. Source commit: $GITHUB_SHA. Includes all rc.13 Ready By once/daily/weekly calendar, multi-Controller and exclusive ownership features plus original Legacy daily 08:00 next-day Ready By repair and stability hardening: bounded legacy tariff expansion, light five-second state fingerprints, coalesced Local event worker, relevant-only source sensor subscriptions, V2 cyclic source validation, periodic buffered cost writes with unload flush, CI bounded workers and 2000-event storm regressions. Legacy Local Config Entries and existing native commands are preserved. Physical V2 Coordinated actuation remains locked due to unresolved field P0 #5; live hardware qualification and metered session cost enforcement are NOT complete. Test only on a backed-up HA instance. Roll back to v2.6.0-rc.13 if needed. Do not promote to stable or merge automatically."
