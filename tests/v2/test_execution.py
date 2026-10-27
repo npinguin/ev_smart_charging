@@ -646,7 +646,6 @@ async def test_failed_owned_shutdown_retains_v2_claim_and_exposes_error(hass, ch
     )
 
 
-
 async def test_shutdown_requires_real_off_readback_not_service_ack(hass, charger):
     """An accepted HA service call is not proof that hardware stopped."""
     received = []
@@ -654,20 +653,22 @@ async def test_shutdown_requires_real_off_readback_not_service_ack(hass, charger
     async def accepted_without_state_change(call):
         received.append(call.data.get("entity_id"))
 
-    hass.services.async_register(
-        "switch", "turn_off", accepted_without_state_change
-    )
+    hass.services.async_register("switch", "turn_off", accepted_without_state_change)
     hass.states.async_set("switch.native_charger", "on")
     writer = NativeChargeWriter(hass, charger, "main")
-    assert await writer.async_reconcile(
-        _snapshot(),
-        NOW,
-        connected=True,
-        measured_power_kw=7.4,
-        group_capacity_certified=True,
-    ) == "ALREADY_AT_TARGET"
+    assert (
+        await writer.async_reconcile(
+            _snapshot(),
+            NOW,
+            connected=True,
+            measured_power_kw=7.4,
+            group_capacity_certified=True,
+        )
+        == "ALREADY_AT_TARGET"
+    )
     assert await writer.async_shutdown() == "STOP_SENT_AWAITING_READBACK"
     assert received == ["switch.native_charger"]
-    assert hass.data[f"{DOMAIN}.v2_native_writers"][
-        "switch.native_charger"
-    ] == ("main", "ch")
+    assert hass.data[f"{DOMAIN}.v2_native_writers"]["switch.native_charger"] == (
+        "main",
+        "ch",
+    )
