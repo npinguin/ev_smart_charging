@@ -12,20 +12,19 @@ def test_persistent_manual_stop_latch_is_checked_before_writer():
     assert "def pause_supervised" in runtime
     assert '"paused_chargers": sorted(paused)' in runtime
     assert 'charger_id in entry.options.get("paused_chargers", [])' in runtime
-    # Assert the real call, not the formatter's choice of line wrapping.
-    calls = [
-        node
-        for node in ast.walk(ast.parse(button))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "pause_supervised"
+    # The original upstream Local STOP must never be repurposed as a
+    # Controller pause command. V2 physical STOP is a separate owner action.
+    methods = [
+        node for node in ast.walk(ast.parse(button))
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "async_press"
     ]
     assert any(
-        len(call.args) >= 2
-        and ast.unparse(call.args[0]) == "self.coordinator.hass"
-        and ast.unparse(call.args[1]) == "self.coordinator.config_entry.entry_id"
-        for call in calls
+        any(isinstance(call, ast.Call)
+            and ast.unparse(call.func) == "self.coordinator.turn_off_charging"
+            for call in ast.walk(method))
+        for method in methods
     )
+    assert "pause_supervised(" not in button
 
 
 def test_controller_options_allow_explicit_resume():

@@ -40,10 +40,18 @@ def test_original_ha_charger_config_entry_version_and_options_remain():
         and node.args[0].value == "participants"
         for node in ast.walk(controller_options)
     )
-    # Per-charger source mappings live in EVSC Options; the controller
-    # retains legacy mappings read-only until explicit user migration.
-    assert '"evsc_actual_power_entity"' in flow
-    assert '"evsc_capacity_kwh"' in flow
+    # Extra per-Charger source mappings no longer belong on original Local
+    # Options. They are explicitly migrated to the independent V2 Charger.
+    original_options = next(
+        node for node in module.body
+        if isinstance(node, ast.ClassDef) and node.name == "OptionsFlowHandler"
+    )
+    assert not any(
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith("evsc_")
+        for node in ast.walk(original_options)
+    )
     assert '"chargers"' not in flow.split("class ControllerOptionsFlow", 1)[-1]
 
 

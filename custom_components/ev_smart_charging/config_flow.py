@@ -118,11 +118,8 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await create_v2(self, V2_CHARGER, user_input)
 
     async def async_step_v2_migrate(self, user_input=None):
-        """Select an original Local Charger and new V2 Controller to map."""
-        controllers = {
-            item.data["uid"]: v2_details(item)["name"]
-            for item in v2_entries(self.hass, V2_CONTROLLER)
-        }
+        """Choose only the original source; no V1 setting is ever written."""
+        controllers = v2_entries(self.hass, V2_CONTROLLER)
         candidates = {
             row["legacy_entry_id"]: row["name"]
             for row in discover_legacy(self.hass)
@@ -132,132 +129,139 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="create_controller_first")
         if not candidates:
             return self.async_abort(reason="no_legacy_chargers_to_migrate")
-        vehicles = {
-            "": "None",
-            **{
-                item.data["uid"]: v2_details(item)["name"]
-                for item in v2_entries(self.hass, V2_VEHICLE)
-            },
-        }
         if user_input is not None:
-            if (
-                user_input.get("legacy_entry_id") not in candidates
-                or user_input.get("controller_uid") not in controllers
-                or user_input.get("vehicle_uid", "") not in vehicles
-            ):
+            source = user_input.get("legacy_entry_id")
+            if source not in candidates:
                 return self.async_abort(reason="invalid_v2_migration_source")
-            self._v2_migrate_selection = dict(user_input)
-            return await self.async_step_v2_migrate_confirm()
+            self._v2_migrate_selection = {"legacy_entry_id": source}
+            return await self.async_step_v2_migrate_bindings()
         return self.async_show_form(
             step_id="v2_migrate",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("legacy_entry_id"): vol.In(candidates),
-                    vol.Required("controller_uid"): vol.In(controllers),
-                    vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
-                }
-            ),
+            data_schema=vol.Schema({
+                vol.Required("legacy_entry_id"): vol.In(candidates),
+            }),
         )
 
-    async def async_step_v2_migrate_confirm(self, user_input=None):
-        """Operator confirms mapped fields; original Local stays unchanged."""
+    async def async_step_v2_migrate_bindings(self, user_input=None):
+        """Reuse existing logical devices; never attach Vehicle to two Chargers."""
         selected = self._v2_migrate_selection
         if not selected:
             return self.async_abort(reason="invalid_v2_migration_source")
+        controllers = {
+            entry.data["uid"]: v2_details(entry)["name"]
+            for entry in v2_entries(self.hass, V2_CONTROLLER)
+        }
+        assigned = {
+            v2_details(entry).get("vehicle_uid")
+            for entry in v2_entries(self.hass, V2_CHARGER)
+            if v2_details(entry).get("vehicle_uid")
+        }
+        vehicles = {"": "None"}
+        vehicles.update({
+            entry.data["uid"]: v2_details(entry)["name"]
+            for entry in v2_entries(self.hass, V2_VEHICLE)
+            if entry.data["uid"] not in assigned
+        })
+        if not controllers:
+            return self.async_abort(reason="create_controller_first")
+        # Common installation: one Controller and no eligible Vehicle.
+        # Do not force another screen just to confirm two obvious defaults.
+        if user_input is None and len(controllers) == 1 and len(vehicles) == 1:
+            selected.update({
+                "controller_uid": next(iter(controllers)),
+                "vehicle_uid": "",
+            })
+            return await self.async_step_v2_migrate_confirm()
+        if user_input is not None:
+            if (user_input.get("controller_uid") not in controllers
+                    or user_input.get("vehicle_uid", "") not in vehicles):
+                return self.async_show_form(
+                    step_id="v2_migrate_bindings",
+                    data_schema=vol.Schema({
+                        vol.Required("controller_uid"): vol.In(controllers),
+                        vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+                    }),
+                    errors={"base": "invalid_v2_configuration"},
+                )
+            selected.update(user_input)
+            return await self.async_step_v2_migrate_confirm()
+        return self.async_show_form(
+            step_id="v2_migrate_bindings",
+            data_schema=vol.Schema({
+                vol.Required("controller_uid"): vol.In(controllers),
+                vol.Optional("vehicle_uid", default=""): vol.In(vehicles),
+            }),
+        )
+
+    async def async_step_v2_migrate_confirm(self, user_input=None):
+        """Short, non-actuating preview. Advanced mapping lives in V2 Options."""
+        selected = self._v2_migrate_selection
+        if not selected or "controller_uid" not in selected:
+            return self.async_abort(reason="invalid_v2_migration_source")
         source_id = selected["legacy_entry_id"]
-        if source_id not in {
-            row["legacy_entry_id"]
-            for row in discover_legacy(self.hass)
-            if not row["mapped"]
-        }:
+        rows = {row["legacy_entry_id"]: row for row in discover_legacy(self.hass)}
+        row = rows.get(source_id)
+        if row is None or row["mapped"]:
             return self.async_abort(reason="already_migrated")
+        source = by_legacy_id(self.hass, source_id)
         candidate = proposed_charger(
-            by_legacy_id(self.hass, source_id),
-            selected["controller_uid"],
+            source, selected["controller_uid"],
             vehicle_uid=selected.get("vehicle_uid", ""),
         )
-        ready_preview = next(
-            row["vehicle_ready_by_suggestion"]
-            for row in discover_legacy(self.hass)
-            if row["legacy_entry_id"] == source_id
-        )
-        ready_label = (
-            f'{ready_preview["time"]} ({ready_preview["source"]})'
-            if ready_preview["mode"] == "daily"
-            else "No verified daily deadline"
-        )
-        placeholders = {"legacy_ready_by": ready_label}
-        defaults = {
-            "name": candidate["name"],
-            "control_entity": candidate.get("control_entity", ""),
-            "control_semantics": candidate.get("control_semantics", "unspecified"),
-            "connected_entity": candidate.get("connected_entity", ""),
-            "charging_entity": candidate.get("charging_entity", ""),
-            "tariff_entity": candidate.get("tariff_entity", ""),
-            "power_entity": candidate.get("power_entity", ""),
-            "energy_entity": candidate.get("energy_entity", ""),
-            "max_ac_kw": candidate.get("max_ac_kw") or 0,
-            "phase_count": 0,
-            "max_current_a": 0,
-            "nominal_phase_voltage_v": 0,
-        }
         if user_input is not None and user_input.get("confirmed"):
             changes = {
-                key: value
-                for key, value in user_input.items()
-                if key in defaults and value not in (None, "", 0)
+                key: value for key, value in user_input.items()
+                if key in ("name", "connected_entity", "max_ac_kw")
+                and value not in (None, "", 0)
             }
             candidate = proposed_charger(
-                by_legacy_id(self.hass, source_id),
-                selected["controller_uid"],
+                source, selected["controller_uid"],
                 vehicle_uid=selected.get("vehicle_uid", ""),
                 overrides=changes,
             )
+            # Validation protects existing Controller/Vehicle ownership and
+            # prevents a second migration for the same original Config Entry.
+            if (source_id not in {
+                item["legacy_entry_id"] for item in discover_legacy(self.hass)
+                if not item["mapped"]
+            }):
+                return self.async_abort(reason="already_migrated")
             try:
                 v2_validate(self.hass, V2_CHARGER, candidate)
             except (ValueError, KeyError, TypeError):
                 return self.async_show_form(
                     step_id="v2_migrate_confirm",
-                    data_schema=vol.Schema(
-                        {
-                            vol.Required("confirmed", default=False): cv.boolean,
-                        }
-                    ),
+                    data_schema=vol.Schema({
+                        vol.Required("confirmed", default=False): cv.boolean,
+                        vol.Required("name", default=candidate["name"]): cv.string,
+                    }),
                     errors={"base": "invalid_v2_configuration"},
                 )
             return self.async_create_entry(title=candidate["name"], data=candidate)
-        data_schema = {
-            vol.Required("confirmed", default=False): cv.boolean,
-            vol.Required("name", default=defaults["name"]): cv.string,
-        }
-        for field in (
-            "control_entity",
-            "connected_entity",
-            "charging_entity",
-            "power_entity",
-            "energy_entity",
-            "tariff_entity",
-        ):
-            data_schema[vol.Optional(field, default=defaults[field])] = cv.string
-        data_schema[
-            vol.Optional("control_semantics", default=defaults["control_semantics"])
-        ] = vol.In(
-            ["unspecified", "charge_request", "availability_enable", "power_relay"]
-        )
-        data_schema[vol.Optional("max_ac_kw", default=defaults["max_ac_kw"])] = vol.All(
-            vol.Coerce(float), vol.Range(min=0, max=1000)
-        )
-        data_schema[vol.Optional("phase_count", default=0)] = vol.In([0, 1, 2, 3])
-        data_schema[vol.Optional("max_current_a", default=0)] = vol.All(
-            vol.Coerce(float), vol.Range(min=0, max=500)
-        )
-        data_schema[vol.Optional("nominal_phase_voltage_v", default=0)] = vol.All(
-            vol.Coerce(float), vol.Range(min=0, max=1000)
+        ready = row["vehicle_ready_by_suggestion"]
+        label = (
+            f'{ready["time"]} ({ready["source"]})'
+            if ready["mode"] == "daily" else "Unverified"
         )
         return self.async_show_form(
             step_id="v2_migrate_confirm",
-            data_schema=vol.Schema(data_schema),
-            description_placeholders=placeholders,
+            data_schema=vol.Schema({
+                vol.Required("name", default=candidate["name"]): cv.string,
+                vol.Optional(
+                    "connected_entity",
+                    default=candidate.get("connected_entity", ""),
+                ): cv.string,
+                vol.Optional(
+                    "max_ac_kw", default=candidate.get("max_ac_kw") or 0,
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+                vol.Required("confirmed", default=False): cv.boolean,
+            }),
+            description_placeholders={
+                "legacy_name": row["name"],
+                "legacy_ready_by": label,
+                "missing_sources": ", ".join(row["requires_operator_mapping"]) or "none",
+            },
+            last_step=True,
         )
 
     async def async_step_legacy_local(self, user_input=None):

@@ -124,13 +124,14 @@ async def test_complete_migration_wizard_creates_v2_without_mutating_original(ha
     )
     assert form["type"] == FlowResultType.FORM
     assert form["step_id"] == "v2_migrate"
+    bindings = await hass.config_entries.flow.async_configure(
+        form["flow_id"], {"legacy_entry_id": legacy.entry_id}
+    )
+    assert bindings["type"] == FlowResultType.FORM
+    assert bindings["step_id"] == "v2_migrate_bindings"
     confirm = await hass.config_entries.flow.async_configure(
-        form["flow_id"],
-        {
-            "legacy_entry_id": legacy.entry_id,
-            "controller_uid": "main",
-            "vehicle_uid": "guest",
-        },
+        bindings["flow_id"],
+        {"controller_uid": "main", "vehicle_uid": "guest"},
     )
     assert confirm["type"] == FlowResultType.FORM
     assert confirm["step_id"] == "v2_migrate_confirm"
@@ -141,8 +142,6 @@ async def test_complete_migration_wizard_creates_v2_without_mutating_original(ha
             "name": "Peblar V2",
             "connected_entity": "binary_sensor.peblar_cable",
             "max_ac_kw": 11,
-            "phase_count": 3,
-            "max_current_a": 16,
         },
     )
     assert created["type"] == FlowResultType.CREATE_ENTRY

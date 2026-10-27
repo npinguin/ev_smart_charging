@@ -76,33 +76,21 @@
         }
       },
       "v2_migrate": {
-        "title": "Select original Local Charger and Controller",
+        "title": "Step 1 · Choose the original charger",
         "data": {
-          "legacy_entry_id": "Existing Local Charger",
-          "controller_uid": "New Charge Controller",
-          "vehicle_uid": "Assign Vehicle (optional)"
-        }
+          "legacy_entry_id": "Existing Local charger"
+        },
+        "description": "The original charger and its configuration will remain unchanged."
       },
       "v2_migrate_confirm": {
-        "title": "Review and confirm non-destructive V2 mapping",
+        "title": "Step 3 · Review and create V2 Charger",
+        "description": "Source: {legacy_name}. Original Ready By: {legacy_ready_by} (Vehicle suggestion only). Missing mappings: {missing_sources}. Only a new logical V2 Charger is created. Original Local charging remains active and V2 physical actuation stays disabled. Configure remaining mappings later in V2 Charger Options.",
         "data": {
-          "legacy_entry_id": "Existing Local Charger",
-          "controller_uid": "New Charge Controller",
-          "vehicle_uid": "Assign Vehicle (optional)",
-          "confirmed": "Create new V2 Charger (original Local stays active)",
-          "name": "New V2 Charger name",
-          "control_entity": "Existing native control entity",
-          "connected_entity": "Physical cable connected source",
-          "charging_entity": "Physical charging-state source",
-          "tariff_entity": "Effective validated EUR/kWh tariff",
-          "power_entity": "Charging power source",
-          "energy_entity": "Session energy source",
-          "max_ac_kw": "Known maximum AC power (kW)",
-          "phase_count": "Known charging phase count",
-          "max_current_a": "Known maximum charging current (A)",
-          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
-        },
-        "description": "Original Local daily Ready By: {legacy_ready_by}. This is a suggestion for the Vehicle profile only. Verify its schedule before switching charging ownership; the existing Local configuration is not modified."
+          "name": "V2 Charger name",
+          "connected_entity": "Cable/connected sensor (optional)",
+          "max_ac_kw": "Maximum AC charging power (kW)",
+          "confirmed": "Confirm non-physical mapping"
+        }
       },
       "v2_setup": {
         "title": "Add V2 devices",
@@ -110,6 +98,14 @@
           "v2_controller": "Add Charge Controller",
           "v2_vehicle": "Add Vehicle",
           "v2_charger": "Add Charger"
+        }
+      },
+      "v2_migrate_bindings": {
+        "title": "Step 2 · Link existing V2 devices",
+        "description": "Select an existing Charge Controller and optionally an available Vehicle. Create new ones through Add V2 devices.",
+        "data": {
+          "controller_uid": "Charge Controller",
+          "vehicle_uid": "Vehicle (optional)"
         }
       }
     },

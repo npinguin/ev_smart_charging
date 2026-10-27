@@ -76,33 +76,21 @@
         }
       },
       "v2_migrate": {
-        "title": "Selecteer de oorspronkelijke Local-lader en laadcontroller",
+        "title": "Stap 1 · Kies de bestaande laadpaal",
         "data": {
-          "legacy_entry_id": "Bestaande Local-lader",
-          "controller_uid": "Nieuwe laadcontroller",
-          "vehicle_uid": "Voertuig toewijzen (optioneel)"
-        }
+          "legacy_entry_id": "Bestaande Local Charger"
+        },
+        "description": "De oorspronkelijke laadpaal en configuratie blijven behouden."
       },
       "v2_migrate_confirm": {
-        "title": "Controleer en bevestig V2-mapping zonder de Local-lader te wijzigen",
+        "title": "Stap 3 · Controleer en maak de V2 Charger",
+        "description": "Bron: {legacy_name}. Oorspronkelijke Ready By: {legacy_ready_by} (alleen voorstel voor Vehicle). Nog in te stellen: {missing_sources}. Er wordt enkel een nieuw logisch V2-apparaat aangemaakt. De originele laadsturing blijft actief; fysieke V2-besturing blijft uitgeschakeld. Overige mappings kan je nadien bij de V2 Charger instellen.",
         "data": {
-          "legacy_entry_id": "Bestaande Local-lader",
-          "controller_uid": "Nieuwe laadcontroller",
-          "vehicle_uid": "Voertuig toewijzen (optioneel)",
-          "confirmed": "Nieuwe V2-lader aanmaken (Local blijft actief)",
-          "name": "Nieuwe V2-ladernaam",
-          "control_entity": "Bestaande fysieke bediening",
-          "connected_entity": "Bron kabelverbinding",
-          "charging_entity": "Bron werkelijk laden",
-          "tariff_entity": "Gevalideerd effectief EUR/kWh tarief",
-          "power_entity": "Gemeten laadvermogen",
-          "energy_entity": "Sessiemeter energie",
-          "max_ac_kw": "Bekend maximaal AC-vermogen (kW)",
-          "phase_count": "Bekend aantal laadfasen",
-          "max_current_a": "Bekende maximale laadstroom (A)",
-          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
-        },
-        "description": "Oorspronkelijke Local gereed-tijd (dagelijks): {legacy_ready_by}. Dit is enkel een voorstel voor het Vehicle-profiel. Controleer het laadpatroon vóór de overdracht; de bestaande Local-configuratie wordt niet gewijzigd."
+          "name": "V2 Charger name",
+          "connected_entity": "Cable/connected sensor (optional)",
+          "max_ac_kw": "Maximum AC charging power (kW)",
+          "confirmed": "Confirm non-physical mapping"
+        }
       },
       "v2_setup": {
         "title": "V2-apparaten toevoegen",
@@ -110,6 +98,14 @@
           "v2_controller": "Charge Controller toevoegen",
           "v2_vehicle": "Vehicle toevoegen",
           "v2_charger": "Charger toevoegen"
+        }
+      },
+      "v2_migrate_bindings": {
+        "title": "Stap 2 · Koppel aan V2",
+        "description": "Kies een bestaande Charge Controller en optioneel een beschikbaar Vehicle. Nieuwe apparaten maak je via V2-apparaten toevoegen.",
+        "data": {
+          "controller_uid": "Charge Controller",
+          "vehicle_uid": "Vehicle (optional)"
         }
       }
     },
