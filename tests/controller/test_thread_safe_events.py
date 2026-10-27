@@ -5,14 +5,11 @@ executor. That previously raised RuntimeError for hass.async_create_task.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
-from homeassistant.core import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.helpers.event import async_track_state_change_event
 
-from custom_components.ev_smart_charging import _queue_controller_bootstrap
 from custom_components.ev_smart_charging.controller.runtime import ChargeSupervisor
-from custom_components.ev_smart_charging.const import DOMAIN
 
 
 async def test_native_source_state_event_schedules_refresh_on_loop(hass):
@@ -53,18 +50,9 @@ async def test_peak_meter_state_event_schedules_refresh_on_loop(hass):
         unsub()
 
 
-async def test_startup_bootstrap_event_does_not_run_in_executor(hass):
-    """Original setup-before-start event remains safe on HA 2026+."""
+def test_original_v1_does_not_expose_transitional_controller_bootstrap():
+    """The V1/V2-only product must not offer the third-generation singleton."""
     from custom_components import ev_smart_charging
 
-    with patch.object(
-        ev_smart_charging, "_ensure_controller", new_callable=AsyncMock
-    ) as create:
-        _queue_controller_bootstrap(hass)
-        if not hass.is_running:
-            hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
-            await hass.async_block_till_done()
-        else:
-            await hass.async_block_till_done()
-        create.assert_awaited_once_with(hass)
-        assert hass.data[f"{DOMAIN}_controller_bootstrap_queued"] is True
+    assert not hasattr(ev_smart_charging, "_queue_controller_bootstrap")
+    assert not hasattr(ev_smart_charging, "_ensure_controller")
