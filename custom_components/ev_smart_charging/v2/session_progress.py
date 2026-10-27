@@ -46,8 +46,11 @@ class SessionProgress:
         now = now.astimezone(timezone.utc)
         existing = self.sessions.get(uid)
         if connected is False:
-            if existing is not None and existing.get("connected") is not False:
-                existing["connected"] = False
+            if not isinstance(existing, dict) or existing.get("connected") is not False:
+                # A persisted false observation proves the next No->Yes
+                # transition. Without it a pre-existing charge session can
+                # have delivered energy before HA began watching.
+                self.sessions[uid] = {"connected": False}
                 self.dirty = True
             return self._unknown("DISCONNECTED")
         if connected is not True:
@@ -60,6 +63,9 @@ class SessionProgress:
             and meter is not None
         )
         if not isinstance(existing, dict) or not existing.get("connected"):
+            witnessed = (
+                isinstance(existing, dict) and existing.get("connected") is False
+            )
             existing = {
                 "connected": True,
                 "started": now.isoformat(),
@@ -70,9 +76,15 @@ class SessionProgress:
                 "delivered_kwh": 0.0,
                 "elapsed_seconds": 0.0,
                 "last_power_kw": power,
-                "meter_quality": "VALID" if has_meter else "METER_UNAVAILABLE",
+                "meter_quality": (
+                    "VALID" if has_meter and witnessed else
+                    "SESSION_START_UNVERIFIED" if not witnessed else
+                    "METER_UNAVAILABLE"
+                ),
                 "duration_quality": (
-                    "VALID" if power is not None else "POWER_UNAVAILABLE"
+                    "VALID" if power is not None and witnessed else
+                    "SESSION_START_UNVERIFIED" if not witnessed else
+                    "POWER_UNAVAILABLE"
                 ),
             }
             self.sessions[uid] = existing
