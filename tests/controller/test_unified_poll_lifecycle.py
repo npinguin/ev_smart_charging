@@ -166,7 +166,14 @@ async def test_options_reloads_do_not_accumulate_config_entry_listeners(
             for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
-        assert await hass.config_entries.async_setup(controller_id)
+        from homeassistant.config_entries import ConfigEntryState
+
+        # HA may already have loaded this independent V2 entry when the
+        # integration domain was set up by the original Local Charger.
+        if controller.state == ConfigEntryState.NOT_LOADED:
+            assert await hass.config_entries.async_setup(controller_id)
+        else:
+            assert controller.state == ConfigEntryState.LOADED
         await hass.async_block_till_done()
         assert len(controller.update_listeners) == 1
 
