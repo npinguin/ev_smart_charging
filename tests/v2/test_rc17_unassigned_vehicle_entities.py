@@ -24,10 +24,12 @@ def make_fact(hass, *, mode, manual=None, source=""):
         version=8,
     )
     entry.add_to_hass(hass)
+
     def sensor(name):
         result = V2Fact(entry, ENTRY_VEHICLE, name, name)
         result.hass = hass
         return result
+
     return sensor
 
 
@@ -40,9 +42,7 @@ def test_manual_vehicle_does_not_require_a_controller_or_physical_charger(hass):
 
 
 def test_unassigned_oem_vehicle_uses_current_real_ha_sensor(hass):
-    hass.states.async_set(
-        "sensor.audi_soc", "44", {"unit_of_measurement": "%"}
-    )
+    hass.states.async_set("sensor.audi_soc", "44", {"unit_of_measurement": "%"})
     fact = make_fact(hass, mode="oem", source="sensor.audi_soc")
     assert fact("effective_soc").native_value == 44
     assert fact("soc_quality").native_value == "OEM"

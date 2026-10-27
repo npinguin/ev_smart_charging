@@ -162,10 +162,7 @@ class V2Fact(SensorEntity):
             # A cached OEM number is not a current SoC observation.
             soc = _number(
                 _fresh_state(
-                    (
-                        self.hass.states.get(obj.soc_entity)
-                        if obj.soc_entity else None
-                    ),
+                    (self.hass.states.get(obj.soc_entity) if obj.soc_entity else None),
                     max_age=timedelta(hours=2),
                 ),
                 0,
