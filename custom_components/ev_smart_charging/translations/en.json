@@ -293,7 +293,8 @@
           "edit_vehicle": "Edit Vehicle",
           "assign_vehicle": "Assign Vehicles to Chargers",
           "delete_vehicle": "Delete Vehicle",
-          "link_chargers": "Link Chargers to Controller"
+          "link_chargers": "Link Chargers to Controller",
+          "retire_to_v2": "Retire interim Controller"
         }
       },
       "charger": {
@@ -478,6 +479,13 @@
           "battery_kwh": "Required for SoC-driven planning: usable battery capacity in kWh, e.g. 20 kWh. Do not guess gross capacity.",
           "controller_uid": "Required: choose the existing V2 Charge Controller responsible for this Charger's planning and electrical budget."
         }
+      },
+      "retire_to_v2": {
+        "title": "Retire interim Controller",
+        "description": "First import the interim Controller policy and every Vehicle profile through V2 Setup. Still missing: {missing}. Confirming keeps historical configuration for rollback but stops its parallel planner. Original V1 Local stays functional.",
+        "data": {
+          "confirm": "Confirm retirement"
+        }
       }
     },
     "error": {
@@ -499,10 +507,13 @@
       "invalid_charger_link": "Unknown Charger",
       "unlink_coordinated_first": "Return Charger to Local before unlinking",
       "charger_not_linked": "Link Charger to Controller first",
-      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
+      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment.",
+      "intermediate_import_incomplete": "The Controller policy or Vehicle profiles have not all been imported to V2."
     },
     "abort": {
-      "no_vehicles": "No Vehicles configured. Add a Vehicle first."
+      "no_vehicles": "No Vehicles configured. Add a Vehicle first.",
+      "intermediate_controller_retired": "This interim Controller is already retired.",
+      "intermediate_profiles_invalid": "Historical Vehicle profiles are invalid."
     }
   },
   "entity": {
