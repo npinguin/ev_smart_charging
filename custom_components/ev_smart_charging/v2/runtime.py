@@ -410,7 +410,13 @@ class V2ControllerRuntime:
                 self._peak_recovery_since = None
             else:
                 actual_load = sum(observed[uid]["power_kw"] or 0 for uid in chargers)
-                if actual_load > headroom + 1e-9:
+                if (
+                    site_kw > controller.peak_target_kw
+                    - controller.peak_reserve_kw + 1e-9
+                    or actual_load > headroom + 1e-9
+                ):
+                    # House-only overload is still overload. If no EV is
+                    # charging, admission must not claim peak control "active".
                     self._peak_latched = True
                     self._peak_recovery_since = None
                 if self._peak_latched:
