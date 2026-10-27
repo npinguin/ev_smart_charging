@@ -115,7 +115,8 @@
           "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
           "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
           "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
-          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW."
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
+          "cost_budget_eur": "Harde EUR-limiet over de huidige aangesloten laadsessies, inclusief reserve voor het volgende kwartier. Vereist echte vermogen-/energiemetingen en volledige effectieve prijsdekking. Bij een lacune, meterreset of onzekerheid geen fysieke Start. Leeg laten voor geen limiet."
         }
       },
       "v2_migrate": {
@@ -374,7 +375,8 @@
           "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd.",
           "price_mode": "Effective slots: bron biedt geverifieerde EUR/kWh-slots. Spot with fees: Nord Pool/Frank/ENTSO-e marktprijzen worden pas bruikbaar na expliciete kosten en BTW.",
           "spot_markup_eur_kwh": "Verplicht bij spot: bekende variabele leveranciers-, net- en heffingskosten per kWh samen, negatief indien korting. Geen fictief nultarief.",
-          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten."
+          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten.",
+          "cost_budget_eur": "Harde EUR-limiet over de huidige aangesloten laadsessies, inclusief reserve voor het volgende kwartier. Vereist echte vermogen-/energiemetingen en volledige effectieve prijsdekking. Bij een lacune, meterreset of onzekerheid geen fysieke Start. Leeg laten voor geen limiet."
         }
       }
     },
