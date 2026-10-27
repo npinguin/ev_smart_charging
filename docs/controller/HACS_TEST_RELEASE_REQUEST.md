@@ -1,47 +1,19 @@
-# HACS guarded software stability prerelease — v2.6.0-rc.14
+# Explicit HACS guarded prerelease request — v2.6.0-rc.15
 
-Product owner requested continuing from rc.13 to a new HACS build with the deep-dive eventloop, source-event, polling and storage fixes. This is an **explicit test prerelease request**, not automatic stable promotion.
+The previous `v2.6.0-rc.14` tag is already published at commit `3dae1d3a...` and must NEVER be modified or moved. It lacks the restored original Local next-day 08:00 behavior. The product owner explicitly requested that issue to be fixed and a fresh release.
 
-## Release contract (must pass on this exact commit)
+## Exact-commit release gate
 
-Run the repository's full test workflow through `.github/workflows/hacs-test-prerelease.yml`. Create exactly one GitHub prerelease tag `v2.6.0-rc.14` **only if every job passes**:
+Run the nine-job workflow defined by `.github/workflows/pull.yml` against the **current exact commit of `fix/rc13-ha-eventloop-stability`**. Publish `v2.6.0-rc.15` as a HACS **prerelease only** after all tests succeed: Python 3.11–3.14 with coverage >=90%, HACS/Hassfest, Python compilation, Black, unchanged native Local smoke tests, Controller regressions, upstream compatibility, all V2 once/daily/weekly Ready By tests, and all HA performance/stability tests.
 
-- HACS, Hassfest, complete Python compile, Black.
-- Controller behavior, legacy Local and upstream baseline regressions.
-- Full pytest Python 3.11, 3.12, 3.13 and 3.14 with >=90% coverage.
-- Storm/stability regressions: 2,000 Local source events, bounded huge tariff feed, 30s non-starving cost persistence, reload/unload, native HA source isolation and prevention of V2 self-feedback.
-- V2 Vehicle Ready By once/daily/weekly and all rc.13 functionality.
-- No change to the four legacy Local Config Entries, entity IDs, charger ownership or native charging semantics.
+Specifically require:
+- `tests/controller/test_legacy_next_day_ready.py`: at 15:10 with Legacy Ready By 08:00, the scheduler resolves **tomorrow 08:00** and rebuilds the real nighttime schedule on arrival of next-day tariff data without a new SoC update.
+- `tests/test_select.py`: user selection of a recurring clock clears a stale one-time absolute override without breaking restoration of explicitly configured absolute deadlines.
+- `tests/controller/test_local_event_coalescing.py`: 2,000 events coalesce; no orphan timer, eager task feedback storm or lifecycle leak.
+- All rc.14 performance fixes: bounded tariffs, low-allocation 5s source fingerprints, 30s periodic persisted meter ledger, relevant HA entity listeners, no EVSC V2 self-source cycles.
 
-## Field contract
+Do not change the original recurring computation in `helpers/coordinator.py`; no new planner or vendor-specific logic. Keep the legacy native control fully compatible and retain the physical V2 Coordinated P0 lock. No main merge or stable promotion.
 
-Read `docs/engineering/V2_RC14_STABILITY_ACCEPTANCE.md`. Preserve all existing Local behavior. Physical V2 Coordinated start/stop remains P0 locked without live Peblar/Wallbox sign-off; CI alone cannot certify real HA eventloop latency or physical charging. Use a full backup, install only for staging and retain rc.13 rollback. No merge/main promotion or overwrite of an existing release is permitted.
+Acceptance and backup/rollback: `docs/engineering/V2_RC15_LEGACY_READY_ACCEPTANCE.md`. Roll back to immutable `v2.6.0-rc.14` if required. The prerelease alone cannot certify live Home Assistant soak performance, the physical Peblar issue, or measured physical session-euro-budget enforcement.
 
-**If any exact-head job fails or is still queued, do not create a release.**
-
-## Final fix after deep CI diagnosis
-
-Earlier Python 3.12–3.14 logs exposed test timeouts caused by an HA-tracked debounce task sleeping while Home Assistant's `async_block_till_done` awaited it. This version uses immediate single-task handling for the first Local source event, with a cancellable HA timer **only** when feedback arrives during an active refresh. It retains the original Local response semantics while bounding feedback loops.
-
-The full CI gate additionally checks there is no `await asyncio.sleep` in the Local source-drain coroutine. A release is forbidden if any Python test, source-feedback regression, formatting check or HA validation is queued, failed or unverified.
-
-**This exact request commit supersedes prior queued rc.14 build requests. Do not manually publish an older PR source SHA.**
-
-## Final guarded release invocation — 27 October 2026
-
-The Local source refresh loop and timer regression is fixed and the exact Black correction is applied. This file update explicitly requests a fresh **workflow_call** full matrix on this commit, followed by rc.14 prerelease publication only if its nine jobs are green. No manual bypass, no physical Coordinated start/stop enablement, and no changes to rc.13 or main.
-
-## Publication gate correction — 27 October 2026
-
-The protected rc.14 run completed all nine regression jobs successfully but its source-code check incorrectly rejected the intentional zero-duration `await asyncio.sleep(0)` used to coalesce same-tick Home Assistant events. That release assertion now accepts only this non-blocking yield while still rejecting timed sleeps inside the source event worker. Re-run the exact-commit protected matrix and publish only on success. This request supersedes the earlier failed publication attempt; no runtime code change or physical writer enablement.
-
-
-## Original Local Ready By regression repair (27 October 2026)
-
-The pure `get_ready_quarter_utc` and original `Scheduler` remain **unchanged**. A recurring 08:00 chosen after 08:00 is still **tomorrow at 08:00 in HA local time**. The newer absolute datetime extension was overriding the restored Local select, and the old plan could fail to rebuild when tomorrow's prices became valid without a new vehicle SoC report.
-
-Fixes: an explicit Local completion-time select clears the stale absolute-date override; startup restore does **not** automatically discard an intentionally configured absolute date; `datetime.clear()` now clears the coordinator's override; and a newly valid tomorrow price feed forces one base-plan rebuild. HA source jobs use `eager_start=False` to coalesce a synchronous burst instead of creating repeated eager updates.
-
-Required regressions: `tests/test_select.py`, `tests/controller/test_legacy_next_day_ready.py`, `tests/controller/test_local_event_coalescing.py`, and the whole existing test suite.
-
-**Do not publish rc.14 until exact-head 9/9 CI succeeds, including these tests.**
+**This is a fresh rc.15 publication request superseding all rc.14 requests. Do not publish while any job is queued, in progress, cancelled, or failed. Do not overwrite a tag.**
