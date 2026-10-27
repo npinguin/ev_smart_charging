@@ -159,9 +159,11 @@ jobs:
           drain = local.split("async def _drain_source_updates", 1)[1].split(
             "async def update_sensors", 1
           )[0]
-          assert "await asyncio.sleep(" not in drain, (
-            "A sleeping HA-tracked source task can hang async_block_till_done"
-          )
+          # A zero-duration yield batches same-tick HA events without
+          # parking a task. Only positive-delay sleeps were the hang bug.
+          assert "await asyncio.sleep(" not in drain.replace(
+            "await asyncio.sleep(0)", ""
+          ), "A timed HA-tracked source task can hang async_block_till_done"
           assert "_source_timer_fired" in local
           assert "_source_refresh_task" in local
           assert "MAX_EFFECTIVE_PRICE_QUARTERS" in runtime
