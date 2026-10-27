@@ -377,3 +377,18 @@ async def test_migration_skips_already_mapped_original(hass):
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "no_legacy_chargers_to_migrate"
+
+
+async def test_migrate_connected_sensor_uses_ha_entity_selector(hass):
+    from homeassistant.helpers import selector
+
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    form = await _begin_legacy_migration(hass, original)
+    assert form["step_id"] == "v2_migrate_confirm"
+    connected = next(
+        value for key, value in form["data_schema"].schema.items()
+        if key.schema == "connected_entity"
+    )
+    assert isinstance(connected, selector.EntitySelector)
+    assert connected.config["domain"] == ["sensor", "binary_sensor"]

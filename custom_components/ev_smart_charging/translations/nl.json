@@ -43,7 +43,8 @@
           "ready_sun": "Zondag gereed tegen (leeg = geen deadline)"
         },
         "data_description": {
-          "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline."
+          "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline.",
+          "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg."
         }
       },
       "v2_charger": {
@@ -62,6 +63,14 @@
           "phase_count": "Aantal laadfasen",
           "max_current_a": "Maximale laadstroom (A)",
           "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
+        },
+        "data_description": {
+          "control_entity": "Kies de fysieke bedieningsschakelaar (switch/input_boolean). Fysieke V2-aansturing blijft vergrendeld zolang P0 open is.",
+          "connected_entity": "Kies de sensor die een aangesloten laadkabel aangeeft (sensor of binary_sensor).",
+          "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
+          "power_entity": "Kies het gemeten laadvermogen. Ook bestaande OCPP- of templatesensoren zonder device_class zijn selecteerbaar.",
+          "energy_entity": "Kies de laadsessie-energiemeter, niet de huismeter.",
+          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is."
         }
       },
       "v2_controller": {
@@ -90,6 +99,9 @@
           "connected_entity": "Cable/connected sensor (optional)",
           "max_ac_kw": "Maximum AC charging power (kW)",
           "confirmed": "Confirm non-physical mapping"
+        },
+        "data_description": {
+          "connected_entity": "Kies de sensor die een aangesloten laadkabel aangeeft (sensor of binary_sensor)."
         }
       },
       "v2_setup": {
@@ -236,6 +248,53 @@
         "title": "Voertuig wijzigen",
         "data": {
           "ready_by": "Klaar tegen (datum en uur, optioneel)"
+        }
+      },
+      "v2_options": {
+        "title": "V2-apparaat configureren",
+        "description": "Configureer dit V2-apparaat. Kies bestaande Home Assistant-entiteiten; maak een optionele selectie leeg om de koppeling te verwijderen. Originele Local-laadsturing blijft onaangeraakt.",
+        "data": {
+          "name": "Naam laadpunt",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Native controleschakelaar (alleen observeren tijdens P0)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Sessiemeter energie",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_current_a": "Maximale laadstroom (A)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
+        },
+        "data_description": {
+          "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
+          "control_entity": "Kies de fysieke bedieningsschakelaar (switch/input_boolean). Fysieke V2-aansturing blijft vergrendeld zolang P0 open is.",
+          "connected_entity": "Kies de sensor die een aangesloten laadkabel aangeeft (sensor of binary_sensor).",
+          "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
+          "power_entity": "Kies het gemeten laadvermogen. Ook bestaande OCPP- of templatesensoren zonder device_class zijn selecteerbaar.",
+          "energy_entity": "Kies de laadsessie-energiemeter, niet de huismeter.",
+          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is."
         }
       }
     },

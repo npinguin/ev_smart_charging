@@ -43,7 +43,8 @@
           "ready_sun": "Sunday ready time (blank = no deadline)"
         },
         "data_description": {
-          "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline."
+          "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline.",
+          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available."
         }
       },
       "v2_charger": {
@@ -62,6 +63,14 @@
           "phase_count": "Number of charging phases",
           "max_current_a": "Maximum charging current (A)",
           "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
+        },
+        "data_description": {
+          "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
+          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor).",
+          "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
+          "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
+          "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
+          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff."
         }
       },
       "v2_controller": {
@@ -90,6 +99,9 @@
           "connected_entity": "Cable/connected sensor (optional)",
           "max_ac_kw": "Maximum AC charging power (kW)",
           "confirmed": "Confirm non-physical mapping"
+        },
+        "data_description": {
+          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor)."
         }
       },
       "v2_setup": {
@@ -299,6 +311,53 @@
         "description": "Link existing Chargers to the Charge Controller while retaining their native Local execution.",
         "data": {
           "linked_chargers": "Linked Chargers"
+        }
+      },
+      "v2_options": {
+        "title": "Configure V2 device",
+        "description": "Configure this V2 device. Choose existing Home Assistant entities. Clear an optional selection to unlink it. Original Local charging is unchanged.",
+        "data": {
+          "name": "Charger name",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "ready_by": "Ready by — specific date and time (one-time)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native control switch (observation only during P0)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Session energy sensor",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_current_a": "Maximum charging current (A)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
+        },
+        "data_description": {
+          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
+          "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
+          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor).",
+          "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
+          "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
+          "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
+          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff."
         }
       }
     },

@@ -232,3 +232,67 @@ def test_ha_options_clearing_one_weekday_does_not_leave_shadow_assignment():
     assert updated["ready_mon"] == ""
     assert updated["ready_tue"] == "09:00"
     assert updated["ready_wed"] == ""
+
+
+async def test_v2_options_offer_native_ha_filtered_entity_pickers(hass):
+    from homeassistant.helpers import selector
+    from custom_components.ev_smart_charging.v2.flow import _schema
+
+    entry(hass, ENTRY_CONTROLLER, "c1", "Home")
+    schema = await _schema(hass, ENTRY_CHARGER, {"controller_uid": "c1"})
+    validators = {
+        str(marker.schema): value for marker, value in schema.schema.items()
+    }
+    expected = {
+        "control_entity": ["switch", "input_boolean"],
+        "connected_entity": ["sensor", "binary_sensor"],
+        "charging_entity": ["sensor", "binary_sensor"],
+        "power_entity": "sensor",
+        "energy_entity": "sensor",
+        "tariff_entity": "sensor",
+    }
+    for key, domains in expected.items():
+        assert isinstance(validators[key], selector.EntitySelector)
+        assert validators[key].config["domain"] == domains
+    vehicle = await _schema(hass, ENTRY_VEHICLE, {})
+    soc = next(
+        value for key, value in vehicle.schema.items() if key.schema == "soc_entity"
+    )
+    assert isinstance(soc, selector.EntitySelector)
+    assert soc.config["domain"] == "sensor"
+
+
+async def test_v2_vehicle_options_unlink_soc_with_native_config_flow(hass):
+    from custom_components.ev_smart_charging.v2.catalog import details
+
+    vehicle = entry(
+        hass, ENTRY_VEHICLE, "car", "Car",
+        soc_entity="sensor.original_soc", target_soc=80,
+    )
+    form = await hass.config_entries.options.async_init(vehicle.entry_id)
+    assert form["type"] == FlowResultType.FORM
+    assert form["step_id"] == "v2_options"
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], {"name": "Car", "target_soc": 80}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert details(vehicle)["soc_entity"] == ""
+    assert vehicle.data["soc_entity"] == "sensor.original_soc"
+
+
+def test_optional_selector_clear_does_not_clear_policy():
+    from custom_components.ev_smart_charging.v2.flow import _clear_missing_bindings
+
+    old = {
+        "control_entity": "switch.charger",
+        "power_entity": "sensor.charger_power",
+        "energy_entity": "sensor.charger_energy",
+        "max_ac_kw": 11,
+    }
+    updated = _clear_missing_bindings(
+        ENTRY_CHARGER, old, {"name": "Garage", "power_entity": "sensor.new_power"}
+    )
+    assert updated["control_entity"] == ""
+    assert updated["power_entity"] == "sensor.new_power"
+    assert updated["energy_entity"] == ""
+    assert "max_ac_kw" not in updated

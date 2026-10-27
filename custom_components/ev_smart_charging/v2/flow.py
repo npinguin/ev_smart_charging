@@ -25,6 +25,27 @@ _STEPS = {
     ENTRY_CONTROLLER: "v2_controller",
 }
 
+# HA's native entity picker lists installed entities and filters by domain.
+# Do not enforce device_class: valid OCPP/template sensors often lack one.
+_ENTITY_BINDINGS = {
+    ENTRY_VEHICLE: ("soc_entity",),
+    ENTRY_CHARGER: (
+        "control_entity", "connected_entity", "charging_entity",
+        "power_entity", "energy_entity", "tariff_entity",
+    ),
+}
+
+
+def _clear_missing_bindings(kind, old, changes):
+    """An omitted optional picker value clears the old binding, not its policy."""
+    updated = dict(changes)
+    for key in _ENTITY_BINDINGS.get(kind, ()):
+        if key not in updated and old.get(key):
+            updated[key] = ""
+        elif updated.get(key) is None:
+            updated[key] = ""
+    return updated
+
 
 def _entity(domain="sensor"):
     return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
@@ -41,10 +62,11 @@ async def _users(hass):
 
 async def _schema(hass, kind, old):
     def opt(key, validator, default=None):
-        if key in old:
-            return (vol.Optional(key, default=old[key]), validator)
-        if default is not None:
-            return (vol.Optional(key, default=default), validator)
+        # Empty optional entity bindings must not inject invalid "" defaults
+        # into Home Assistant EntitySelectors.
+        value = old.get(key, default)
+        if value is not None and value != "":
+            return (vol.Optional(key, default=value), validator)
         return (vol.Optional(key), validator)
 
     minute_selector = selector.TimeSelector()
@@ -213,10 +235,15 @@ class V2OptionsFlow(config_entries.OptionsFlow):
         self._original_entry = entry
 
     async def async_step_init(self, user_input=None):
+        """Separate V2 Configure from upstream Local's original init screen."""
+        return await self.async_step_v2_options(user_input)
+
+    async def async_step_v2_options(self, user_input=None):
         entry = self._original_entry
         kind = entry.data[MARKER]
         old = details(entry)
         if user_input is not None:
+            user_input = _clear_missing_bindings(kind, old, user_input)
             proposed = {**old, **user_input}
             try:
                 if kind == ENTRY_VEHICLE:
@@ -233,7 +260,7 @@ class V2OptionsFlow(config_entries.OptionsFlow):
                 check_proposed(self.hass, kind, proposed, editing_uid=old["uid"])
             except (ValueError, TypeError, KeyError):
                 return self.async_show_form(
-                    step_id="init",
+                    step_id="v2_options",
                     data_schema=await _schema(self.hass, kind, proposed),
                     errors={"base": "invalid_v2_configuration"},
                 )
@@ -241,6 +268,6 @@ class V2OptionsFlow(config_entries.OptionsFlow):
                 title="", data={**entry.options, **user_input}
             )
         return self.async_show_form(
-            step_id="init",
+            step_id="v2_options",
             data_schema=await _schema(self.hass, kind, old),
         )

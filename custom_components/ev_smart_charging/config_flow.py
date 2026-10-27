@@ -368,10 +368,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default=candidate["name"]): cv.string,
-                    vol.Optional(
-                        "connected_entity",
-                        default=candidate.get("connected_entity", ""),
-                    ): cv.string,
+                    vol.Optional("connected_entity"): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=["sensor", "binary_sensor"]
+                        )
+                    ),
                     vol.Optional(
                         "max_ac_kw",
                         default=candidate.get("max_ac_kw") or 0,
