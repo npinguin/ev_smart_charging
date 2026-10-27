@@ -53,9 +53,7 @@ async def start(hass, choice):
     )
     if choice in ("v2_charger", "v2_vehicle"):
         assert started["step_id"] == f"{choice}_source"
-        return await hass.config_entries.flow.async_configure(
-            started["flow_id"], {}
-        )
+        return await hass.config_entries.flow.async_configure(started["flow_id"], {})
     return started
 
 

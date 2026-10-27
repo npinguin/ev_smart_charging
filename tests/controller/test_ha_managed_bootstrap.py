@@ -21,7 +21,8 @@ async def test_local_setup_creates_no_transitional_controller(
         assert await hass.config_entries.async_setup(charger.entry_id)
         await hass.async_block_till_done()
         assert not [
-            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
         assert charger.entry_id in hass.data[DOMAIN]
@@ -29,7 +30,8 @@ async def test_local_setup_creates_no_transitional_controller(
         assert await hass.config_entries.async_reload(charger.entry_id)
         await hass.async_block_till_done()
         assert not [
-            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
     finally:

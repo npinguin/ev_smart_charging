@@ -110,7 +110,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not getattr(self, "_v2_vehicle_source_selected", False):
             return await self.async_step_v2_vehicle_source()
         return await create_v2(
-            self, V2_VEHICLE, user_input,
+            self,
+            V2_VEHICLE,
+            user_input,
             defaults=getattr(self, "_v2_vehicle_defaults", {}),
         )
 
@@ -122,7 +124,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not getattr(self, "_v2_charger_source_selected", False):
             return await self.async_step_v2_charger_source()
         return await create_v2(
-            self, V2_CHARGER, user_input,
+            self,
+            V2_CHARGER,
+            user_input,
             defaults=getattr(self, "_v2_charger_defaults", {}),
         )
 
@@ -138,15 +142,17 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device = user_input.get("source_device_id")
             if device:
                 try:
-                    defaults, _review = suggest_device_bindings(
-                        self.hass, device, kind
-                    )
+                    defaults, _review = suggest_device_bindings(self.hass, device, kind)
                 except ValueError:
                     return self.async_show_form(
                         step_id=f"v2_{kind}_source",
-                        data_schema=vol.Schema({
-                            vol.Optional("source_device_id"): selector.DeviceSelector()
-                        }),
+                        data_schema=vol.Schema(
+                            {
+                                vol.Optional(
+                                    "source_device_id"
+                                ): selector.DeviceSelector()
+                            }
+                        ),
                         errors={"base": "invalid_v2_configuration"},
                     )
             setattr(self, f"_v2_{kind}_defaults", defaults)
@@ -154,9 +160,9 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await getattr(self, f"async_step_v2_{kind}")()
         return self.async_show_form(
             step_id=f"v2_{kind}_source",
-            data_schema=vol.Schema({
-                vol.Optional("source_device_id"): selector.DeviceSelector()
-            }),
+            data_schema=vol.Schema(
+                {vol.Optional("source_device_id"): selector.DeviceSelector()}
+            ),
         )
 
     async def async_step_v2_migrate(self, user_input=None):

@@ -32,44 +32,58 @@ def _score(entity, state, role):
     unit = attrs.get("unit_of_measurement", "")
     if role == "soc_entity":
         return (
-            10 if domain == "sensor" and unit == "%"
+            10
+            if domain == "sensor"
+            and unit == "%"
             and any(s in words for s in ("soc", "state_of_charge", "battery_level"))
             else 0
         )
     if role == "control_entity":
         return (
-            10 if domain in ("switch", "input_boolean")
+            10
+            if domain in ("switch", "input_boolean")
             and any(s in words for s in ("charge", "charger", "enable", "control"))
             else 6 if domain in ("switch", "input_boolean") else 0
         )
     if role == "connected_entity":
         return (
-            10 if domain in ("binary_sensor", "sensor")
-            and any(s in words for s in ("cable", "plug_connected", "vehicle_connected"))
+            10
+            if domain in ("binary_sensor", "sensor")
+            and any(
+                s in words for s in ("cable", "plug_connected", "vehicle_connected")
+            )
             else 0
         )
     if role == "charging_entity":
         return (
-            10 if domain == "binary_sensor" and any(
-                s in words for s in ("charging", "is_charging")
-            ) else 0
+            10
+            if domain == "binary_sensor"
+            and any(s in words for s in ("charging", "is_charging"))
+            else 0
         )
     if role == "power_entity":
         return (
-            10 if domain == "sensor" and unit in ("W", "kW")
+            10
+            if domain == "sensor"
+            and unit in ("W", "kW")
             and any(s in words for s in ("charging_power", "charge_power", "power"))
             else 6 if domain == "sensor" and unit in ("W", "kW") else 0
         )
     if role == "energy_entity":
         return (
-            10 if domain == "sensor" and unit in ("Wh", "kWh")
+            10
+            if domain == "sensor"
+            and unit in ("Wh", "kWh")
             and any(s in words for s in ("session_energy", "charging_energy", "energy"))
             else 6 if domain == "sensor" and unit in ("Wh", "kWh") else 0
         )
     if role == "tariff_entity":
         return (
-            10 if domain == "sensor" and unit in ("EUR/kWh", "€/kWh")
-            and state is not None and isinstance(attrs.get("price_slots"), list)
+            10
+            if domain == "sensor"
+            and unit in ("EUR/kWh", "€/kWh")
+            and state is not None
+            and isinstance(attrs.get("price_slots"), list)
             else 0
         )
     return 0
@@ -78,8 +92,12 @@ def _score(entity, state, role):
 _ROLES = {
     "vehicle": ("soc_entity",),
     "charger": (
-        "control_entity", "connected_entity", "charging_entity",
-        "power_entity", "energy_entity", "tariff_entity",
+        "control_entity",
+        "connected_entity",
+        "charging_entity",
+        "power_entity",
+        "energy_entity",
+        "tariff_entity",
     ),
 }
 
@@ -107,8 +125,10 @@ def suggest_device_bindings(hass, device_id, kind):
         ]
         scores = [(entity_id, points) for entity_id, points in scores if points > 0]
         scores.sort(key=lambda item: (-item[1], item[0]))
-        if scores and scores[0][1] >= 6 and (
-            len(scores) == 1 or scores[0][1] > scores[1][1]
+        if (
+            scores
+            and scores[0][1] >= 6
+            and (len(scores) == 1 or scores[0][1] > scores[1][1])
         ):
             suggestions[role] = scores[0][0]
             review[role] = "suggested"

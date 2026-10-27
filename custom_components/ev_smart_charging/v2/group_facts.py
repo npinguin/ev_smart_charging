@@ -60,15 +60,16 @@ def group_facts(plan, chargers, observed, now, timezone_name):
     demands = [
         load.get("required_battery_kwh") for load in plan.get("loads", {}).values()
     ]
-    demand_bases = [
-        load.get("demand_basis") for load in plan.get("loads", {}).values()
-    ]
+    demand_bases = [load.get("demand_basis") for load in plan.get("loads", {}).values()]
     requirement_complete = (
-        complete and len(demands) == count and all(item is not None for item in demands)
+        complete
+        and len(demands) == count
+        and all(item is not None for item in demands)
         and all(basis == "battery_soc" for basis in demand_bases)
     )
     grid_complete = (
-        complete and len(demand_bases) == count
+        complete
+        and len(demand_bases) == count
         and all(basis == "explicit_grid_kwh" for basis in demand_bases)
     )
     return {
@@ -95,9 +96,9 @@ def group_facts(plan, chargers, observed, now, timezone_name):
             round(sum(demands), 4) if requirement_complete else None
         ),
         "requested_grid_kwh": (
-            round(
-                sum(load["requested_grid_kwh"] for load in plan["loads"].values()), 4
-            ) if grid_complete else None
+            round(sum(load["requested_grid_kwh"] for load in plan["loads"].values()), 4)
+            if grid_complete
+            else None
         ),
         "planned_today_kwh": round(by_date[today][0], 4) if complete else None,
         "planned_tomorrow_kwh": (round(by_date[tomorrow][0], 4) if complete else None),

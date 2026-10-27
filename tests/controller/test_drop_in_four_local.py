@@ -37,7 +37,8 @@ async def test_four_existing_evsc_entries_drop_in_without_reconfiguration(
             await hass.async_block_till_done()
         assert all(entry.state == ConfigEntryState.LOADED for entry in entries)
         assert not [
-            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
             if entry.data.get("__evsc_entry_type") == "charge_controller"
         ]
         assert not any(
