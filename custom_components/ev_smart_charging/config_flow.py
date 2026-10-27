@@ -49,6 +49,8 @@ from .v2.catalog import (
     check_proposed as v2_validate,
 )
 from .v2.migration import discover as discover_legacy, by_legacy_id, proposed_charger
+from .v2.intermediate_conversion import preview_intermediate
+from .v2 import MARKER as V2_MARKER
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,9 +100,125 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_v2_setup(self, user_input=None):
         """V2 is a separate product surface, not extra fields on Local."""
-        return self.async_show_menu(
-            step_id="v2_setup",
-            menu_options=["v2_controller", "v2_vehicle", "v2_charger"],
+        menu = ["v2_controller", "v2_vehicle", "v2_charger"]
+        if self._intermediate_entries():
+            menu.extend(["v2_convert_controller", "v2_convert_vehicle"])
+        return self.async_show_menu(step_id="v2_setup", menu_options=menu)
+
+    def _intermediate_entries(self):
+        """Existing old Controller is migration source only, never a new mode."""
+        return {
+            entry.entry_id: entry
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type") == "charge_controller"
+        }
+
+    async def async_step_v2_convert_controller(self, user_input=None):
+        """Select one historical Controller for independent V2 policy import."""
+        candidates = self._intermediate_entries()
+        if not candidates:
+            return self.async_abort(reason="no_intermediate_controller")
+        if user_input is not None:
+            source = candidates.get(user_input.get("intermediate_id"))
+            if source is None:
+                return self.async_abort(reason="invalid_v2_configuration")
+            try:
+                proposal = preview_intermediate(source)
+            except ValueError:
+                return self.async_abort(reason="invalid_v2_configuration")
+            if any(
+                e.data["uid"] == proposal["controller"]["uid"]
+                for e in v2_entries(self.hass, V2_CONTROLLER)
+            ):
+                return self.async_abort(reason="already_migrated")
+            self._v2_intermediate_preview = proposal
+            return await self.async_step_v2_convert_controller_review()
+        return self.async_show_form(
+            step_id="v2_convert_controller",
+            data_schema=vol.Schema({
+                vol.Required("intermediate_id"): vol.In({
+                    key: entry.title for key, entry in candidates.items()
+                }),
+            }),
+        )
+
+    async def async_step_v2_convert_controller_review(self, user_input=None):
+        """Review actual policies, then create just one safe V2 Controller."""
+        proposal = getattr(self, "_v2_intermediate_preview", None)
+        if not proposal:
+            return self.async_abort(reason="invalid_v2_configuration")
+        old = proposal["controller"]
+        if user_input is not None and user_input.get("confirmed") is True:
+            data = {V2_MARKER: V2_CONTROLLER, **old}
+            if any(
+                e.data["uid"] == old["uid"]
+                for e in v2_entries(self.hass, V2_CONTROLLER)
+            ):
+                return self.async_abort(reason="already_migrated")
+            try:
+                v2_validate(self.hass, V2_CONTROLLER, data)
+            except (ValueError, KeyError, TypeError):
+                return self.async_abort(reason="invalid_v2_configuration")
+            return self.async_create_entry(title=old["name"], data=data)
+        return self.async_show_form(
+            step_id="v2_convert_controller_review",
+            data_schema=vol.Schema({
+                vol.Required("confirmed", default=False): cv.boolean,
+            }),
+            description_placeholders={
+                "name": old["name"],
+                "parallel": str(old["max_parallel"]),
+                "horizon": str(old["horizon_days"]),
+                "vehicles": str(len(proposal["vehicles"])),
+                "warnings": "; ".join(proposal["warnings"]) or "None",
+            },
+            last_step=True,
+        )
+
+    async def async_step_v2_convert_vehicle(self, user_input=None):
+        """Select an old profile; edit as a native independent V2 Vehicle."""
+        options = {}
+        for entry in self._intermediate_entries().values():
+            try:
+                candidate = preview_intermediate(entry)
+            except ValueError:
+                continue
+            for vehicle in candidate["vehicles"]:
+                uid = vehicle["uid"]
+                options[uid] = (candidate, vehicle)
+        if not options:
+            return self.async_abort(reason="no_intermediate_vehicle")
+        if user_input is not None:
+            chosen = options.get(user_input.get("vehicle_uid"))
+            if chosen is None:
+                return self.async_abort(reason="invalid_v2_configuration")
+            proposal, profile = chosen
+            if any(
+                e.data["uid"] == profile["uid"]
+                for e in v2_entries(self.hass, V2_VEHICLE)
+            ):
+                return self.async_abort(reason="already_migrated")
+            self._v2_vehicle_source_selected = True
+            self._v2_vehicle_import_uid = profile["uid"]
+            # Old user IDs may not be in HA anymore; do not force a broken
+            # selector or silently attach the Vehicle to a different user.
+            defaults = {
+                k: v for k, v in profile.items()
+                if k not in ("uid", "user_id")
+            }
+            if not defaults.get("ready_by"):
+                # Require an explicit Ready By choice. V2 accepts once,
+                # daily or weekly but must not silently infer recurring 08:00.
+                defaults["ready_mode"] = "once"
+            self._v2_vehicle_defaults = defaults
+            return await self.async_step_v2_vehicle()
+        return self.async_show_form(
+            step_id="v2_convert_vehicle",
+            data_schema=vol.Schema({
+                vol.Required("vehicle_uid"): vol.In({
+                    uid: profile["name"] for uid, (_, profile) in options.items()
+                }),
+            }),
         )
 
     async def async_step_v2_controller(self, user_input=None):
@@ -114,6 +232,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             V2_VEHICLE,
             user_input,
             defaults=getattr(self, "_v2_vehicle_defaults", {}),
+            fixed_uid=getattr(self, "_v2_vehicle_import_uid", None),
         )
 
     async def async_step_v2_vehicle_source(self, user_input=None):

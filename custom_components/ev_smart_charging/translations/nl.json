@@ -147,7 +147,9 @@
         "menu_options": {
           "v2_controller": "Charge Controller toevoegen",
           "v2_vehicle": "Vehicle toevoegen",
-          "v2_charger": "Charger toevoegen"
+          "v2_charger": "Charger toevoegen",
+          "v2_convert_controller": "Oude Charge Controller veilig overzetten",
+          "v2_convert_vehicle": "Voertuigprofiel uit oude Controller overzetten"
         }
       },
       "v2_migrate_bindings": {
@@ -185,6 +187,27 @@
         "data": {
           "source_device_id": "Bestaand Home Assistant-device (optioneel)"
         }
+      },
+      "v2_convert_controller": {
+        "title": "Oude Controller selecteren",
+        "description": "De oude Controller blijft ongewijzigd. We maken een nieuwe V2 Controller met gecontroleerde instellingen en fysieke besturing uitgeschakeld.",
+        "data": {
+          "intermediate_id": "Bestaande Controller"
+        }
+      },
+      "v2_convert_controller_review": {
+        "title": "Controller-conversie controleren",
+        "description": "Naam: {name}. Maximaal gelijktijdig: {parallel}. Planningshorizon: {horizon} dagen. {vehicles} bestaande voertuigen worden NIET automatisch toegevoegd; zet die afzonderlijk over. Waarschuwingen: {warnings}. De oude Controller en originele laadpunten blijven ongewijzigd.",
+        "data": {
+          "confirmed": "Nieuwe V2 Controller aanmaken"
+        }
+      },
+      "v2_convert_vehicle": {
+        "title": "Oud voertuigprofiel selecteren",
+        "description": "Gegevens worden vooraf ingevuld. Controleer Ready By, SoC-bron, capaciteit en gebruiker vóór bewaren. De oude bron blijft behouden.",
+        "data": {
+          "vehicle_uid": "Voertuig"
+        }
       }
     },
     "error": {
@@ -206,7 +229,9 @@
       "invalid_v2_migration_source": "Oorspronkelijke lader of laadcontroller ontbreekt.",
       "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld.",
       "v2_existing_charger_linked": "Bestaande V2 Charger gekoppeld; Local blijft ongewijzigd.",
-      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping."
+      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping.",
+      "no_intermediate_controller": "Geen historische Controller gevonden.",
+      "no_intermediate_vehicle": "Geen geschikte historische voertuigprofielen gevonden."
     }
   },
   "options": {

@@ -147,7 +147,9 @@
         "menu_options": {
           "v2_controller": "Add Charge Controller",
           "v2_vehicle": "Add Vehicle",
-          "v2_charger": "Add Charger"
+          "v2_charger": "Add Charger",
+          "v2_convert_controller": "Import prior Charge Controller settings",
+          "v2_convert_vehicle": "Import Vehicle profile from prior Controller"
         }
       },
       "v2_migrate_bindings": {
@@ -185,6 +187,27 @@
         "data": {
           "source_device_id": "Existing Home Assistant device (optional)"
         }
+      },
+      "v2_convert_controller": {
+        "title": "Choose prior Controller",
+        "description": "The original Controller remains untouched. A separate V2 Controller is created from validated settings, with physical control disabled.",
+        "data": {
+          "intermediate_id": "Existing Controller"
+        }
+      },
+      "v2_convert_controller_review": {
+        "title": "Review Controller conversion",
+        "description": "Name: {name}. Maximum simultaneous: {parallel}. Horizon: {horizon} days. {vehicles} existing Vehicle profiles will NOT be created automatically; import them individually. Review warnings: {warnings}. Original Controller and Local chargers stay unchanged.",
+        "data": {
+          "confirmed": "Create new V2 Controller"
+        }
+      },
+      "v2_convert_vehicle": {
+        "title": "Choose original Vehicle profile",
+        "description": "Profile data is suggested. Verify Ready By, SoC source, battery capacity and user before Save. The original source remains untouched.",
+        "data": {
+          "vehicle_uid": "Vehicle"
+        }
       }
     },
     "error": {
@@ -206,7 +229,9 @@
       "invalid_v2_migration_source": "Original Local source or Controller unavailable.",
       "already_migrated": "This original Local Charger is already mapped.",
       "v2_existing_charger_linked": "Existing V2 Charger linked; Local remains unchanged.",
-      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings."
+      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings.",
+      "no_intermediate_controller": "No prior Controller to import.",
+      "no_intermediate_vehicle": "No prior Vehicle profiles to import."
     }
   },
   "options": {

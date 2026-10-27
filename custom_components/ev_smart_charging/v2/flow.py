@@ -274,7 +274,7 @@ def _normalize_vehicle_form(values, timezone_name, *, original=None):
     return changed
 
 
-async def create(flow, kind, user_input=None, defaults=None):
+async def create(flow, kind, user_input=None, defaults=None, *, fixed_uid=None):
     if kind == ENTRY_CHARGER and not entries_of(flow.hass, ENTRY_CONTROLLER):
         return flow.async_abort(reason="create_controller_first")
     if user_input is not None:
@@ -283,7 +283,12 @@ async def create(flow, kind, user_input=None, defaults=None):
                 user_input = _normalize_vehicle_form(
                     user_input, flow.hass.config.time_zone
                 )
-            data = {MARKER: kind, "uid": uuid4().hex, **user_input}
+            data = {MARKER: kind, "uid": fixed_uid or uuid4().hex, **user_input}
+            if fixed_uid and any(
+                e.data.get("uid") == fixed_uid
+                for e in entries_of(flow.hass, kind)
+            ):
+                return flow.async_abort(reason="already_migrated")
             check_proposed(flow.hass, kind, data)
         except (ValueError, TypeError, KeyError):
             return flow.async_show_form(
