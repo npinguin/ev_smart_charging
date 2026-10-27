@@ -54,6 +54,7 @@ def test_preview_is_read_only_and_stable_no_native_writer():
     assert plan["controller"]["physical_enabled"] is False
     assert plan["vehicles"][0]["ready_mode"] == "once"
     assert plan["vehicles"][0]["battery_kwh"] == 20
+    assert plan["ready_for_automatic_vehicle_creation"] is True
     assert (
         plan["legacy_local_assignments"]["v1_local_peblar"]
         == plan["vehicles"][0]["uid"]
@@ -77,6 +78,8 @@ def test_unknown_vehicle_ready_never_silently_becomes_tomorrow_0800():
     vehicle = plan["vehicles"][0]
     assert "ready_by" not in vehicle
     assert "ready_mode" not in vehicle
+    assert plan["ready_for_automatic_vehicle_creation"] is False
+    assert plan["vehicle_ready_review_required"] == ["guest"]
     assert any("no Ready By" in msg for msg in plan["warnings"])
 
 
@@ -101,3 +104,20 @@ def test_existing_v1_source_cannot_become_v2_physical_charger_implicitly():
     assert plan["legacy_linked_chargers"] == ["classic_v1"]
     assert "chargers" not in plan
     assert plan["physical_cutover_permitted"] is False
+
+
+
+def test_invalid_historical_ready_is_not_autoconverted_to_daily_0800():
+    plan = preview_intermediate(
+        interim({
+            "vehicles": {
+                "q8": {
+                    "name": "Audi Q8",
+                    "ready_by": "2026-10-28T08:00:00",
+                }
+            }
+        })
+    )
+    assert plan["ready_for_automatic_vehicle_creation"] is False
+    assert plan["vehicle_ready_review_required"] == ["q8"]
+    assert "ready_by" not in plan["vehicles"][0]

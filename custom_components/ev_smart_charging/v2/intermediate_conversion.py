@@ -76,6 +76,7 @@ def preview_intermediate(entry):
     # Old Controller had no verified native V2 physical ownership or source
     # semantics. Retain its V1 associations as information, not as V2 writers.
     result_vehicles = []
+    pending_review = []
     mapping = {}
     profiles = options.get("vehicles") or {}
     if not isinstance(profiles, dict):
@@ -120,9 +121,12 @@ def preview_intermediate(entry):
                 warnings.append(
                     f"Vehicle {old_id}: invalid absolute Ready By; review required"
                 )
+                pending_review.append(old_id)
         else:
-            # No old schedule: do not silently create a 08:00 commitment.
+            # An absent old schedule is NOT consent to recurring 08:00. Do
+            # not expose it as an automatically convertible Vehicle record.
             warnings.append(f"Vehicle {old_id}: no Ready By; configure in V2")
+            pending_review.append(old_id)
         try:
             Vehicle(
                 uid=candidate["uid"],
@@ -163,6 +167,10 @@ def preview_intermediate(entry):
         "vehicles": result_vehicles,
         "legacy_local_assignments": assignments,
         "legacy_linked_chargers": list(options.get("linked_chargers", [])),
+        # A future importer must require explicit schedule confirmation
+        # before creating these Vehicle Config Entries. Preview only.
+        "vehicle_ready_review_required": sorted(set(pending_review)),
+        "ready_for_automatic_vehicle_creation": not pending_review,
         "warnings": warnings,
         "physical_cutover_permitted": False,
         "destructive_changes": False,
