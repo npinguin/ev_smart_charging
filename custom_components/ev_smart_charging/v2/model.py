@@ -80,6 +80,11 @@ class Charger:
     max_current_a: float | None = None
     nominal_phase_voltage_v: float | None = None
     legacy_entry_id: str = ""
+    # Manual connection supports plug-in/smart-plug Chargers without OEM cable data.
+    connection_source: str = "sensor"
+    requested_grid_kwh: float | None = None
+    requested_duration_quarters: int | None = None
+    charge_ready_time: str = "08:00"
 
     def __post_init__(self):
         if not self.uid or not self.name.strip() or not self.controller_uid:
@@ -95,6 +100,22 @@ class Charger:
             "power_relay",
         ):
             raise ConfigurationError("unsupported_control_semantics")
+        if self.connection_source not in ("sensor", "manual"):
+            raise ConfigurationError("invalid_connection_source")
+        if self.requested_grid_kwh is not None:
+            optional_positive(self.requested_grid_kwh, "requested_grid_kwh")
+        if self.requested_duration_quarters is not None and (
+            not isinstance(self.requested_duration_quarters, int)
+            or not 1 <= self.requested_duration_quarters <= 14 * 96
+        ):
+            raise ConfigurationError("invalid_requested_duration")
+        if (
+            self.requested_grid_kwh is not None
+            and self.requested_duration_quarters is not None
+        ):
+            raise ConfigurationError("choose_kwh_or_duration")
+        from .ready_schedule import parse_clock
+        parse_clock(self.charge_ready_time)
 
 
 @dataclass(frozen=True)

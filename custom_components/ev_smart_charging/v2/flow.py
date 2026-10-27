@@ -146,11 +146,21 @@ async def _schema(hass, kind, old):
                         ),
                         "unspecified",
                     ),
+                    opt("connection_source", vol.In(["sensor", "manual"]), "sensor"),
                     opt("connected_entity", _entity(["sensor", "binary_sensor"])),
                     opt("charging_entity", _entity(["sensor", "binary_sensor"])),
                     opt("power_entity", _entity("sensor")),
                     opt("energy_entity", _entity("sensor")),
                     opt("tariff_entity", _entity("sensor")),
+                    opt(
+                        "requested_grid_kwh",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.001)),
+                    ),
+                    opt(
+                        "requested_duration_quarters",
+                        vol.All(vol.Coerce(int), vol.Range(min=1, max=14 * 96)),
+                    ),
+                    opt("charge_ready_time", minute_selector, "08:00"),
                     opt("max_ac_kw", vol.All(vol.Coerce(float), vol.Range(min=0.01))),
                     opt("phase_count", vol.In([1, 2, 3])),
                     opt(

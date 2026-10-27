@@ -169,7 +169,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         try:
             if MAJOR_VERSION > 2024 or (MAJOR_VERSION == 2024 and MINOR_VERSION >= 7):
                 await hass.config_entries.async_forward_entry_setups(
-                    entry, [Platform.SENSOR]
+                    entry,
+                    (
+                        [Platform.SENSOR, Platform.SWITCH]
+                        if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
+                        and obj.connection_source == "manual"
+                        else [Platform.SENSOR]
+                    ),
                 )
             else:
                 await hass.config_entries.async_forward_entry_setup(
@@ -276,8 +282,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if isinstance(obj, V2ControllerRuntime):
             # Stop command-owner first, then release sensors and Config Entry.
             await obj.async_stop()
-        unloaded = await hass.config_entries.async_forward_entry_unload(
-            entry, Platform.SENSOR
+        platforms = [Platform.SENSOR]
+        if (
+            entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
+            and obj.connection_source == "manual"
+        ):
+            platforms.append(Platform.SWITCH)
+        unloaded = all(
+            await asyncio.gather(
+                *[
+                    hass.config_entries.async_forward_entry_unload(entry, platform)
+                    for platform in platforms
+                ]
+            )
         )
         if unloaded:
             hass.data[DOMAIN].pop(entry.entry_id, None)

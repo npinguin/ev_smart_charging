@@ -140,10 +140,16 @@ class V2Fact(SensorEntity):
             if self.key == "vehicle":
                 return obj.vehicle_uid or "None"
             if self.key == "connected":
-                status = _connected(
-                    self.hass.states.get(obj.connected_entity)
-                    if obj.connected_entity
-                    else None
+                from .manual_connection import manual_connected
+
+                status = (
+                    manual_connected(self.hass, obj.uid)
+                    if obj.connection_source == "manual"
+                    else _connected(
+                        self.hass.states.get(obj.connected_entity)
+                        if obj.connected_entity
+                        else None
+                    )
                 )
                 return (
                     "connected"

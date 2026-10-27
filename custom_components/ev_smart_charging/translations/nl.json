@@ -62,7 +62,11 @@
           "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
           "phase_count": "Aantal laadfasen",
           "max_current_a": "Maximale laadstroom (A)",
-          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen",
+          "connection_source": "Connected-status: HA-sensor of manueel",
+          "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
+          "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)"
         },
         "data_description": {
           "control_entity": "Kies de fysieke bedieningsschakelaar (switch/input_boolean). Fysieke V2-aansturing blijft vergrendeld zolang P0 open is.",
@@ -70,7 +74,11 @@
           "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
           "power_entity": "Kies het gemeten laadvermogen. Ook bestaande OCPP- of templatesensoren zonder device_class zijn selecteerbaar.",
           "energy_entity": "Kies de laadsessie-energiemeter, niet de huismeter.",
-          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is."
+          "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is.",
+          "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
+          "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
+          "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00."
         }
       },
       "v2_controller": {
@@ -290,7 +298,11 @@
           "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
           "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
           "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen",
-          "physical_enabled": "Fysieke V2-laadsturing actief"
+          "physical_enabled": "Fysieke V2-laadsturing actief",
+          "connection_source": "Connected-status: HA-sensor of manueel",
+          "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
+          "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -300,7 +312,11 @@
           "power_entity": "Kies het gemeten laadvermogen. Ook bestaande OCPP- of templatesensoren zonder device_class zijn selecteerbaar.",
           "energy_entity": "Kies de laadsessie-energiemeter, niet de huismeter.",
           "tariff_entity": "Kies de effectieve prijs in EUR/kWh. Controleer zelf of het echt een all-in tarief is.",
-          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen."
+          "physical_enabled": "Alleen inschakelen wanneer geen Local Charger hetzelfde fysieke laadpunt meer bestuurt en de gekozen OEM-bediening, tariefcurve, kabelstatus, vermogensmeting en Start/Stop-readback gevalideerd zijn. Deze wijziging kan echte laadcommando's uitsturen.",
+          "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
+          "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
+          "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00."
         }
       }
     },

@@ -62,7 +62,11 @@
           "max_ac_kw": "Maximum charger AC power (kW)",
           "phase_count": "Number of charging phases",
           "max_current_a": "Maximum charging current (A)",
-          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit",
+          "connection_source": "Connected source: HA sensor or manual",
+          "requested_grid_kwh": "Charge demand without SoC (grid kWh)",
+          "requested_duration_quarters": "Charging duration without SoC (quarters)",
+          "charge_ready_time": "Ready by (HH:MM)"
         },
         "data_description": {
           "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
@@ -70,7 +74,11 @@
           "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
           "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
           "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
-          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff."
+          "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff.",
+          "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
+          "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
+          "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
+          "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00."
         }
       },
       "v2_controller": {
@@ -353,7 +361,11 @@
           "ready_sat": "Saturday ready time (blank = no deadline)",
           "ready_sun": "Sunday ready time (blank = no deadline)",
           "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit",
-          "physical_enabled": "Enable real V2 charging control"
+          "physical_enabled": "Enable real V2 charging control",
+          "connection_source": "Connected source: HA sensor or manual",
+          "requested_grid_kwh": "Charge demand without SoC (grid kWh)",
+          "requested_duration_quarters": "Charging duration without SoC (quarters)",
+          "charge_ready_time": "Ready by (HH:MM)"
         },
         "data_description": {
           "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
@@ -363,7 +375,11 @@
           "power_entity": "Choose measured EVSE power. Existing OCPP and template sensors without device_class remain selectable.",
           "energy_entity": "Choose the charging-session energy meter, not your home energy meter.",
           "tariff_entity": "Choose the effective EUR/kWh price. Verify it represents an actual all-in tariff.",
-          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands."
+          "physical_enabled": "Enable only after the original Local charger no longer owns this EVSE and the OEM control, verified price curve, cable status, real power and Start/Stop readback are configured. This setting can send real charging commands.",
+          "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
+          "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
+          "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
+          "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00."
         }
       }
     },

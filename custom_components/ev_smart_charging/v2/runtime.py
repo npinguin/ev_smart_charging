@@ -76,6 +76,8 @@ def _connected(state):
 
 def read_inputs(hass, chargers, vehicles):
     """Use existing HA cached state only, never poll an OEM/cloud service."""
+    from .manual_connection import manual_connected
+
     result = {}
     for charger in chargers.values():
         vehicle = vehicles.get(charger.vehicle_uid)
@@ -102,14 +104,18 @@ def read_inputs(hass, chargers, vehicles):
         )
         result[charger.uid] = {
             "soc": soc,
-            "connected": _connected(
-                _fresh_state(
-                    (
-                        hass.states.get(charger.connected_entity)
-                        if charger.connected_entity
-                        else None
-                    ),
-                    max_age=timedelta(minutes=2),
+            "connected": (
+                manual_connected(hass, charger.uid)
+                if charger.connection_source == "manual"
+                else _connected(
+                    _fresh_state(
+                        (
+                            hass.states.get(charger.connected_entity)
+                            if charger.connected_entity
+                            else None
+                        ),
+                        max_age=timedelta(minutes=2),
+                    )
                 )
             ),
             "prices": prices,

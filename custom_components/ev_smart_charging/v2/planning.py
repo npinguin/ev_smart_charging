@@ -16,7 +16,7 @@ from ..controller.planner import (
     build_plan,
 )
 from .model import Charger, Controller, Vehicle, effective_charge_kw
-from .ready_schedule import next_ready_deadline
+from .ready_schedule import next_daily_deadline, next_ready_deadline
 
 QUARTER = timedelta(minutes=15)
 # Bound supplier-provided slot data before expanding intervals. This also
@@ -91,19 +91,25 @@ def compile_advisory(
     for charger in sorted(chargers.values(), key=lambda c: c.uid):
         if charger.controller_uid != controller.uid:
             continue
-        if not charger.vehicle_uid:
-            excluded[charger.uid] = "NO_VEHICLE_ASSIGNED"
-            continue
-        vehicle = vehicles.get(charger.vehicle_uid)
-        if vehicle is None:
+        vehicle = vehicles.get(charger.vehicle_uid) if charger.vehicle_uid else None
+        if charger.vehicle_uid and vehicle is None:
             excluded[charger.uid] = "VEHICLE_UNAVAILABLE"
             continue
         inputs = observed.get(charger.uid, {})
         soc = inputs.get("soc")
-        if soc is None or vehicle.battery_kwh is None:
-            excluded[charger.uid] = "BATTERY_DEMAND_UNKNOWN"
+        explicit = (
+            charger.requested_grid_kwh is not None
+            or charger.requested_duration_quarters is not None
+        )
+        has_soc_demand = vehicle is not None and soc is not None and vehicle.battery_kwh is not None
+        if not has_soc_demand and not explicit:
+            excluded[charger.uid] = "BATTERY_DEMAND_UNKNOWN" if vehicle else "NO_EXPLICIT_DEMAND"
             continue
-        power = effective_charge_kw(vehicle, charger)
+        power = (
+            effective_charge_kw(vehicle, charger)
+            if vehicle is not None
+            else charger.max_ac_kw
+        )
         if power is None or power <= 0:
             excluded[charger.uid] = "CHARGE_POWER_UNKNOWN"
             continue
@@ -112,7 +118,11 @@ def compile_advisory(
         if inputs.get("connected") is not True:
             excluded[charger.uid] = "PHYSICAL_CONNECTION_NOT_CONFIRMED"
             continue
-        ready_by = next_ready_deadline(vehicle, now, timezone_name)
+        ready_by = (
+            next_ready_deadline(vehicle, now, timezone_name)
+            if has_soc_demand
+            else next_daily_deadline(charger.charge_ready_time, now, timezone_name)
+        )
         if ready_by is None:
             excluded[charger.uid] = "READY_BY_EXPIRED"
             continue
@@ -123,12 +133,20 @@ def compile_advisory(
             id=charger.uid,
             mode="coordinated",
             connected=True,
-            current_soc=soc,
-            target_soc=vehicle.target_soc,
-            usable_capacity_kwh=vehicle.battery_kwh,
+            current_soc=soc if has_soc_demand else None,
+            target_soc=vehicle.target_soc if has_soc_demand else None,
+            usable_capacity_kwh=vehicle.battery_kwh if has_soc_demand else None,
             charge_power_kw=power,
             ready_by=ready_by,
             enabled=True,
+            # Demand in explicit mode is GRID kWh/quarters, not battery kWh.
+            efficiency=0.90 if has_soc_demand else 1.0,
+            requested_grid_kwh=(
+                charger.requested_grid_kwh if not has_soc_demand else None
+            ),
+            requested_duration_quarters=(
+                charger.requested_duration_quarters if not has_soc_demand else None
+            ),
         )
         requests.append(req)
         slots = [

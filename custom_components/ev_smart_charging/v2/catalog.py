@@ -71,6 +71,16 @@ def model(entry):
                 data.get("nominal_phase_voltage_v"), "phase_voltage"
             ),
             legacy_entry_id=data.get("legacy_entry_id", ""),
+            connection_source=data.get("connection_source", "sensor"),
+            requested_grid_kwh=optional_positive(
+                data.get("requested_grid_kwh"), "requested_grid_kwh"
+            ),
+            requested_duration_quarters=(
+                int(data["requested_duration_quarters"])
+                if data.get("requested_duration_quarters") not in (None, "")
+                else None
+            ),
+            charge_ready_time=data.get("charge_ready_time", "08:00"),
         )
     if kind == ENTRY_CONTROLLER:
         return Controller(

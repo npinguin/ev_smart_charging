@@ -103,6 +103,23 @@ def normalize_once_ready_by(raw: str, timezone_name: str) -> str:
     return _wall_clock_to_utc(selected.date(), selected.time(), zone).isoformat()
 
 
+def next_daily_deadline(clock: str, now: datetime, timezone_name: str) -> datetime:
+    """Resolve one explicit Charger daily clock without inventing a Vehicle."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ReadyScheduleError("aware_now_required")
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (KeyError, ZoneInfoNotFoundError, TypeError) as exc:
+        raise ReadyScheduleError("installation_timezone_invalid") from exc
+    local_today = now.astimezone(zone).date()
+    chosen = parse_clock(clock)
+    for offset in range(2):
+        candidate = _wall_clock_to_utc(local_today + timedelta(days=offset), chosen, zone)
+        if candidate > now.astimezone(UTC):
+            return candidate
+    raise ReadyScheduleError("ready_recurrence_unresolvable")
+
+
 def next_ready_deadline(vehicle, now: datetime, timezone_name: str) -> datetime | None:
     """Next strictly-future UTC deadline; None for an expired once-only intent."""
     if now.tzinfo is None or now.utcoffset() is None:
