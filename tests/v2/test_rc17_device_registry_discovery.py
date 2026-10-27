@@ -32,6 +32,7 @@ def add_entity(hass, device, unique, *, domain="sensor", value="1", unit=None):
         platform=SOURCE,
         unique_id=unique,
         device_id=device.id,
+        original_name=unique.replace("_", " "),
     )
     hass.states.async_set(
         record.entity_id,
