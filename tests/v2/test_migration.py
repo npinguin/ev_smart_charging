@@ -239,3 +239,126 @@ async def test_migration_reuses_existing_charger_without_creating_duplicate(hass
         )
         == 1
     )
+
+
+async def _begin_legacy_migration(hass, legacy):
+    """Follow the actual HA-native entry flow, never call flow internals."""
+    menu = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    source_form = await hass.config_entries.flow.async_configure(
+        menu["flow_id"], {"next_step_id": "v2_migrate"}
+    )
+    return await hass.config_entries.flow.async_configure(
+        source_form["flow_id"], {"legacy_entry_id": legacy.entry_id}
+    )
+
+
+async def test_simple_migration_skips_redundant_device_choice(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    preview = await _begin_legacy_migration(hass, original)
+    assert preview["type"] == FlowResultType.FORM
+    assert preview["step_id"] == "v2_migrate_confirm"
+    assert "legacy_name" in preview["description_placeholders"]
+    created = await hass.config_entries.flow.async_configure(
+        preview["flow_id"], {"confirmed": True, "name": "Peblar V2"}
+    )
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["data"]["controller_uid"] == "main"
+    assert created["data"]["vehicle_uid"] == ""
+    assert created["data"]["legacy_entry_id"] == original.entry_id
+    assert original.options["maximum_price"] == 0.15
+
+
+async def test_optional_create_new_charger_even_when_existing_is_available(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    existing = _v2(
+        hass, ENTRY_CHARGER, "other", controller_uid="main",
+        control_entity="switch.other",
+    )
+    choice = await _begin_legacy_migration(hass, original)
+    assert choice["step_id"] == "v2_migrate_target"
+    preview = await hass.config_entries.flow.async_configure(
+        choice["flow_id"], {"existing_charger_uid": ""}
+    )
+    assert preview["step_id"] == "v2_migrate_confirm"
+    assert existing.options == {}
+    assert original.options["maximum_price"] == 0.15
+
+
+async def test_existing_charger_rejects_conflicting_physical_target(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    existing = _v2(
+        hass, ENTRY_CHARGER, "other", controller_uid="main",
+        control_entity="switch.not_the_peblar",
+    )
+    choice = await _begin_legacy_migration(hass, original)
+    result = await hass.config_entries.flow.async_configure(
+        choice["flow_id"], {"existing_charger_uid": "other"}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "v2_existing_charger_control_conflict"
+    assert existing.options == {}
+    assert not discover(hass)[0]["mapped"]
+
+
+async def test_existing_charger_preserves_operator_sources_and_vehicle(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    _v2(hass, ENTRY_VEHICLE, "car")
+    existing = _v2(
+        hass, ENTRY_CHARGER, "other", controller_uid="main",
+        vehicle_uid="car", power_entity="sensor.operator_meter",
+    )
+    choice = await _begin_legacy_migration(hass, original)
+    preview = await hass.config_entries.flow.async_configure(
+        choice["flow_id"], {"existing_charger_uid": "other"}
+    )
+    assert preview["step_id"] == "v2_migrate_existing_confirm"
+    result = await hass.config_entries.flow.async_configure(
+        preview["flow_id"], {"confirmed": True}
+    )
+    assert result["reason"] == "v2_existing_charger_linked"
+    assert existing.options["legacy_entry_id"] == original.entry_id
+    assert existing.options["power_entity"] == "sensor.operator_meter"
+    assert existing.data["vehicle_uid"] == "car"
+
+
+async def test_existing_charger_failed_persist_does_not_claim_migration(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    _v2(hass, ENTRY_CHARGER, "other", controller_uid="main")
+    choice = await _begin_legacy_migration(hass, original)
+    confirm = await hass.config_entries.flow.async_configure(
+        choice["flow_id"], {"existing_charger_uid": "other"}
+    )
+    with patch(
+        "custom_components.ev_smart_charging.v2.ownership.async_apply_charger_options",
+        side_effect=ValueError("conflicting revision"),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            confirm["flow_id"], {"confirmed": True}
+        )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "invalid_v2_configuration"
+    assert not discover(hass)[0]["mapped"]
+
+
+async def test_migration_skips_already_mapped_original(hass):
+    original = _local(hass)
+    _v2(hass, ENTRY_CONTROLLER, "main")
+    _v2(
+        hass, ENTRY_CHARGER, "already",
+        controller_uid="main", legacy_entry_id=original.entry_id,
+    )
+    start = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        start["flow_id"], {"next_step_id": "v2_migrate"}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "no_legacy_chargers_to_migrate"
