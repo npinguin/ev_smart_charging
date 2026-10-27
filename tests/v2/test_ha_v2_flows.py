@@ -41,9 +41,15 @@ async def start(hass, choice):
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert res["type"] == FlowResultType.MENU
-    assert choice in res["menu_options"]
+    # User-friendly V2 group menu replaces three technical top-level choices.
+    assert "v2_setup" in res["menu_options"]
+    group = await hass.config_entries.flow.async_configure(
+        res["flow_id"], {"next_step_id": "v2_setup"}
+    )
+    assert group["type"] == FlowResultType.MENU
+    assert choice in group["menu_options"]
     return await hass.config_entries.flow.async_configure(
-        res["flow_id"], {"next_step_id": choice}
+        group["flow_id"], {"next_step_id": choice}
     )
 
 
