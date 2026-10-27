@@ -87,6 +87,19 @@ async def _schema(hass, kind, old):
                 [
                     opt("soc_entity", _entity()),
                     opt(
+                        "soc_source_mode",
+                        vol.In(["oem", "manual", "meter_compensated"]),
+                        "oem",
+                    ),
+                    opt(
+                        "manual_soc",
+                        vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                    ),
+                    opt(
+                        "charge_efficiency",
+                        vol.All(vol.Coerce(float), vol.Range(min=0.01, max=1)),
+                    ),
+                    opt(
                         "target_soc",
                         vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
                         80,

@@ -12,6 +12,7 @@ from .model import (
     Controller,
     Vehicle,
     optional_positive,
+    optional_soc,
     validate_catalog,
 )
 
@@ -50,6 +51,11 @@ def model(entry):
                 for key in WEEKDAYS
                 if data.get(f"ready_{key}")
             },
+            soc_source_mode=data.get("soc_source_mode", "oem"),
+            manual_soc=optional_soc(data.get("manual_soc")),
+            charge_efficiency=optional_positive(
+                data.get("charge_efficiency"), "charge_efficiency"
+            ),
         )
     if kind == ENTRY_CHARGER:
         return Charger(

@@ -50,11 +50,29 @@ class Vehicle:
     ready_mode: str = ""
     ready_time: str = "08:00"
     ready_weekly: Mapping[str, str] = field(default_factory=dict)
+    soc_source_mode: str = "oem"
+    manual_soc: float | None = None
+    charge_efficiency: float | None = None
 
     def __post_init__(self):
         if not self.uid or not self.name.strip():
             raise ConfigurationError("invalid_vehicle_identity")
         optional_soc(self.target_soc)
+        if self.soc_source_mode not in ("oem", "manual", "meter_compensated"):
+            raise ConfigurationError("unsupported_soc_source_mode")
+        if self.soc_source_mode == "manual":
+            if optional_soc(self.manual_soc) is None:
+                raise ConfigurationError("manual_soc_required")
+        if self.soc_source_mode == "meter_compensated":
+            if not self.soc_entity or self.battery_kwh is None:
+                raise ConfigurationError("soc_compensation_requires_oem_and_capacity")
+            if self.charge_efficiency is None:
+                raise ConfigurationError("soc_compensation_requires_efficiency")
+        if self.charge_efficiency is not None and (
+            not isfinite(self.charge_efficiency)
+            or not 0 < self.charge_efficiency <= 1
+        ):
+            raise ConfigurationError("invalid_charge_efficiency")
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("vehicle_phases_invalid")
         from .ready_schedule import validate_ready_schedule

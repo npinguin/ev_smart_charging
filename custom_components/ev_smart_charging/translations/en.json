@@ -40,11 +40,17 @@
           "ready_thu": "Thursday ready time (blank = no deadline)",
           "ready_fri": "Friday ready time (blank = no deadline)",
           "ready_sat": "Saturday ready time (blank = no deadline)",
-          "ready_sun": "Sunday ready time (blank = no deadline)"
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "soc_source_mode": "SoC source mode",
+          "manual_soc": "Manual SoC (%)",
+          "charge_efficiency": "Verified charging efficiency (0–1)"
         },
         "data_description": {
           "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline.",
-          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available."
+          "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
+          "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
+          "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified."
         }
       },
       "v2_charger": {
@@ -394,7 +400,10 @@
           "peak_shaving_enabled": "Enable peak shaving",
           "site_power_entity": "Site net import power sensor (W/kW)",
           "peak_target_kw": "Maximum site import (kW)",
-          "peak_reserve_kw": "Site power safety reserve (kW)"
+          "peak_reserve_kw": "Site power safety reserve (kW)",
+          "soc_source_mode": "SoC source mode",
+          "manual_soc": "Manual SoC (%)",
+          "charge_efficiency": "Verified charging efficiency (0–1)"
         },
         "data_description": {
           "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
@@ -413,7 +422,10 @@
           "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
           "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
           "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
-          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW."
+          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
+          "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
+          "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified."
         }
       }
     },

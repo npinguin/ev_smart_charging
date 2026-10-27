@@ -40,11 +40,17 @@
           "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
           "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
           "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
-          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)"
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "soc_source_mode": "SoC-bron en methode",
+          "manual_soc": "Manuele SoC (%)",
+          "charge_efficiency": "Gekende laadefficiëntie (0–1)"
         },
         "data_description": {
           "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline.",
-          "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg."
+          "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
+          "soc_source_mode": "OEM: enkel verse sensor. Manual: zelf ingestelde SoC. Meter compensated: OEM + werkelijk gemeten sessie- of cumulatieve energie, met herkenbare Estimated status.",
+          "manual_soc": "Expliciet ingegeven SoC wanneer de voertuigcloud ontbreekt. Niet voorgesteld als OEM-meting.",
+          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd."
         }
       },
       "v2_charger": {
@@ -331,7 +337,10 @@
           "peak_shaving_enabled": "Piekbewaking inschakelen",
           "site_power_entity": "Huismeter netto netvermogen (W/kW)",
           "peak_target_kw": "Maximaal netvermogen (kW)",
-          "peak_reserve_kw": "Veiligheidsreserve (kW)"
+          "peak_reserve_kw": "Veiligheidsreserve (kW)",
+          "soc_source_mode": "SoC-bron en methode",
+          "manual_soc": "Manuele SoC (%)",
+          "charge_efficiency": "Gekende laadefficiëntie (0–1)"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -350,7 +359,10 @@
           "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
           "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
           "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
-          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW."
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
+          "soc_source_mode": "OEM: enkel verse sensor. Manual: zelf ingestelde SoC. Meter compensated: OEM + werkelijk gemeten sessie- of cumulatieve energie, met herkenbare Estimated status.",
+          "manual_soc": "Expliciet ingegeven SoC wanneer de voertuigcloud ontbreekt. Niet voorgesteld als OEM-meting.",
+          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd."
         }
       }
     },

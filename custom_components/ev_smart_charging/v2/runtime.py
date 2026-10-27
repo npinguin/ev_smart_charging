@@ -16,6 +16,9 @@ from ..controller import safety
 from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory, parse_tariff_slots
 from .group_facts import group_facts
+from .soc_estimation import SocEstimator
+from homeassistant.helpers.storage import Store
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 _INTERVAL = timedelta(minutes=1)
@@ -111,15 +114,13 @@ def read_inputs(hass, chargers, vehicles):
     result = {}
     for charger in chargers.values():
         vehicle = vehicles.get(charger.vehicle_uid)
+        soc_state = (
+            hass.states.get(vehicle.soc_entity)
+            if vehicle is not None and vehicle.soc_entity
+            else None
+        )
         soc = _number(
-            _fresh_state(
-                (
-                    hass.states.get(vehicle.soc_entity)
-                    if vehicle is not None and vehicle.soc_entity
-                    else None
-                ),
-                max_age=timedelta(hours=2),
-            ),
+            _fresh_state(soc_state, max_age=timedelta(hours=2)),
             0,
             100,
         )
@@ -134,6 +135,9 @@ def read_inputs(hass, chargers, vehicles):
         )
         result[charger.uid] = {
             "soc": soc,
+            "oem_soc": _number(soc_state, 0, 100),
+            "oem_at": getattr(soc_state, "last_changed", None),
+            "soc_quality": "OEM" if soc is not None else "STALE",
             "connected": (
                 manual_connected(hass, charger.uid)
                 if charger.connection_source == "manual"
@@ -230,6 +234,10 @@ class V2ControllerRuntime:
         self._writers = {}
         self._peak_latched = False
         self._peak_recovery_since = None
+        self._soc_store = Store(
+            hass, 1, f"{DOMAIN}.v2_soc_{entry.data['uid']}"
+        )
+        self._soc_estimator = SocEstimator()
 
     @callback
     def subscribe(self, fn):
@@ -244,6 +252,8 @@ class V2ControllerRuntime:
     async def async_start(self):
         if self._stopped:
             return
+        restored = await self._soc_store.async_load()
+        self._soc_estimator = SocEstimator(restored)
         if self._unsub is None:
             self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
@@ -272,6 +282,31 @@ class V2ControllerRuntime:
                     if charger.controller_uid == controller.uid
                 }
                 observed = read_inputs(self.hass, chargers, vehicles)
+                observed_at = dt.utcnow()
+                for uid, charger in chargers.items():
+                    vehicle = vehicles.get(charger.vehicle_uid)
+                    if vehicle is None:
+                        continue
+                    item = observed[uid]
+                    if vehicle.soc_source_mode == "meter_compensated":
+                        soc, quality = self._soc_estimator.resolve(
+                            uid, vehicle, oem_soc=item["oem_soc"],
+                            oem_at=item["oem_at"], energy_kwh=item["energy_kwh"],
+                            energy_kind=charger.energy_source_kind,
+                            now=observed_at,
+                        )
+                    elif vehicle.soc_source_mode == "manual":
+                        soc, quality = vehicle.manual_soc, "MANUAL"
+                    else:
+                        soc = item["soc"]
+                        quality = "OEM" if soc is not None else "STALE"
+                    item["soc"] = soc
+                    item["soc_quality"] = quality
+                if self._soc_estimator.dirty:
+                    self._soc_store.async_delay_save(
+                        self._soc_estimator.snapshot, 30
+                    )
+                    self._soc_estimator.dirty = False
                 result = await self.hass.async_add_executor_job(
                     compile_advisory,
                     controller,
@@ -281,6 +316,14 @@ class V2ControllerRuntime:
                     dt.utcnow(),
                     self.hass.config.time_zone,
                 )
+                result["vehicle_sources"] = {
+                    charger.vehicle_uid: {
+                        "effective_soc": observed[uid]["soc"],
+                        "soc_quality": observed[uid]["soc_quality"],
+                    }
+                    for uid, charger in chargers.items()
+                    if charger.vehicle_uid
+                }
                 result["group"] = group_facts(
                     result, chargers, observed, dt.utcnow(), self.hass.config.time_zone
                 )
