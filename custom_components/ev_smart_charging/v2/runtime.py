@@ -411,8 +411,8 @@ class V2ControllerRuntime:
             else:
                 actual_load = sum(observed[uid]["power_kw"] or 0 for uid in chargers)
                 if (
-                    site_kw > controller.peak_target_kw
-                    - controller.peak_reserve_kw + 1e-9
+                    site_kw
+                    > controller.peak_target_kw - controller.peak_reserve_kw + 1e-9
                     or actual_load > headroom + 1e-9
                 ):
                     # House-only overload is still overload. If no EV is
