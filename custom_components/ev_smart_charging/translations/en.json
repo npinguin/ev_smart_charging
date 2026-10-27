@@ -115,7 +115,8 @@
           "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
           "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
           "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
-          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW."
+          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
+          "cost_budget_eur": "Hard EUR cap across the currently connected charging sessions, including a conservative next-quarter reservation. Requires real power/energy readings and complete effective price coverage. Any gap, meter reset or uncertainty prevents physical Start. Leave empty for no cap."
         }
       },
       "v2_migrate": {
@@ -437,7 +438,8 @@
           "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified.",
           "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
           "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
-          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT."
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT.",
+          "cost_budget_eur": "Hard EUR cap across the currently connected charging sessions, including a conservative next-quarter reservation. Requires real power/energy readings and complete effective price coverage. Any gap, meter reset or uncertainty prevents physical Start. Leave empty for no cap."
         }
       }
     },
