@@ -147,7 +147,8 @@
         "menu_options": {
           "v2_controller": "Charge Controller toevoegen",
           "v2_vehicle": "Vehicle toevoegen",
-          "v2_charger": "Charger toevoegen"
+          "v2_charger": "Charger toevoegen",
+          "v2_import_intermediate": "Oude tussen-Controller overnemen"
         }
       },
       "v2_migrate_bindings": {
@@ -185,6 +186,26 @@
         "data": {
           "source_device_id": "Bestaand Home Assistant-device (optioneel)"
         }
+      },
+      "v2_import_intermediate": {
+        "title": "Oude tussen-Controller → V2",
+        "menu_options": {
+          "v2_import_intermediate_controller": "Controllerbeleid voorstellen",
+          "v2_import_intermediate_vehicle": "Vehicle-profiel voorstellen"
+        },
+        "description": "Voorstellen uit de oude tussenoplossing, niet uit V1. De oude Config Entry, Local Chargers en historiek blijven onaangeraakt. Controleer de waarden in de volgende stap en schakel fysieke V2-aansturing apart in."
+      },
+      "v2_import_intermediate_controller": {
+        "title": "Kies oude Controller",
+        "data": {
+          "source_entry_id": "Bestaande Controller"
+        }
+      },
+      "v2_import_intermediate_vehicle": {
+        "title": "Kies oud Vehicle-profiel",
+        "data": {
+          "source_vehicle": "Bestaand Vehicle-profiel"
+        }
       }
     },
     "error": {
@@ -206,7 +227,10 @@
       "invalid_v2_migration_source": "Oorspronkelijke lader of laadcontroller ontbreekt.",
       "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld.",
       "v2_existing_charger_linked": "Bestaande V2 Charger gekoppeld; Local blijft ongewijzigd.",
-      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping."
+      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping.",
+      "no_intermediate_controller": "Er is geen oude tussen-Controller.",
+      "no_intermediate_vehicles": "Er zijn geen oude Vehicle-profielen.",
+      "already_imported": "Deze oude configuratie is al overgenomen in V2."
     }
   },
   "options": {

@@ -147,7 +147,8 @@
         "menu_options": {
           "v2_controller": "Add Charge Controller",
           "v2_vehicle": "Add Vehicle",
-          "v2_charger": "Add Charger"
+          "v2_charger": "Add Charger",
+          "v2_import_intermediate": "Import old interim Controller"
         }
       },
       "v2_migrate_bindings": {
@@ -185,6 +186,26 @@
         "data": {
           "source_device_id": "Existing Home Assistant device (optional)"
         }
+      },
+      "v2_import_intermediate": {
+        "title": "Old interim Controller → V2",
+        "menu_options": {
+          "v2_import_intermediate_controller": "Import Controller policy",
+          "v2_import_intermediate_vehicle": "Import Vehicle profile"
+        },
+        "description": "Review existing interim policy or Vehicle. This does not modify original Local V1, any source Config Entry or the old Controller. Review all values and source quality before enabling physical control."
+      },
+      "v2_import_intermediate_controller": {
+        "title": "Choose old Controller",
+        "data": {
+          "source_entry_id": "Existing Controller"
+        }
+      },
+      "v2_import_intermediate_vehicle": {
+        "title": "Choose old Vehicle profile",
+        "data": {
+          "source_vehicle": "Existing Vehicle profile"
+        }
       }
     },
     "error": {
@@ -206,7 +227,10 @@
       "invalid_v2_migration_source": "Original Local source or Controller unavailable.",
       "already_migrated": "This original Local Charger is already mapped.",
       "v2_existing_charger_linked": "Existing V2 Charger linked; Local remains unchanged.",
-      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings."
+      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings.",
+      "no_intermediate_controller": "No old interim Controller is configured.",
+      "no_intermediate_vehicles": "No old interim Vehicle profiles found.",
+      "already_imported": "This legacy configuration has already been imported into V2."
     }
   },
   "options": {

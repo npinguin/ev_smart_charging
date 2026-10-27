@@ -100,11 +100,113 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """V2 is a separate product surface, not extra fields on Local."""
         return self.async_show_menu(
             step_id="v2_setup",
-            menu_options=["v2_controller", "v2_vehicle", "v2_charger"],
+            menu_options=[
+                "v2_controller",
+                "v2_vehicle",
+                "v2_charger",
+                "v2_import_intermediate",
+            ],
         )
 
     async def async_step_v2_controller(self, user_input=None):
-        return await create_v2(self, V2_CONTROLLER, user_input)
+        return await create_v2(
+            self,
+            V2_CONTROLLER,
+            user_input,
+            defaults=getattr(self, "_v2_controller_defaults", {}),
+        )
+
+    async def async_step_v2_import_intermediate(self, user_input=None):
+        """One-time assisted import of the old *interim* Controller, never V1."""
+        from .v2.intermediate_import import historical_entries
+
+        if not historical_entries(self.hass):
+            return self.async_abort(reason="no_intermediate_controller")
+        return self.async_show_menu(
+            step_id="v2_import_intermediate",
+            menu_options=[
+                "v2_import_intermediate_controller",
+                "v2_import_intermediate_vehicle",
+            ],
+        )
+
+    async def async_step_v2_import_intermediate_controller(self, user_input=None):
+        from .v2.intermediate_import import historical_entries, controller_proposal
+
+        old = {
+            e.entry_id: e
+            for e in historical_entries(self.hass)
+        }
+        if not old:
+            return self.async_abort(reason="no_intermediate_controller")
+        if user_input is None:
+            return self.async_show_form(
+                step_id="v2_import_intermediate_controller",
+                data_schema=vol.Schema({
+                    vol.Required("source_entry_id"): vol.In({
+                        uid: entry.title or uid for uid, entry in old.items()
+                    }),
+                }),
+            )
+        entry = old.get(user_input.get("source_entry_id"))
+        if entry is None:
+            return self.async_abort(reason="invalid_v2_migration_source")
+        if any(
+            e.data.get("imported_from_intermediate") == entry.entry_id
+            for e in v2_entries(self.hass, V2_CONTROLLER)
+        ):
+            return self.async_abort(reason="already_imported")
+        defaults, issues = controller_proposal(entry)
+        self._v2_controller_defaults = defaults
+        self._v2_import_origin = {
+            "kind": V2_CONTROLLER,
+            "imported_from_intermediate": entry.entry_id,
+        }
+        self._v2_import_warnings = issues
+        return await self.async_step_v2_controller()
+
+    async def async_step_v2_import_intermediate_vehicle(self, user_input=None):
+        from .v2.intermediate_import import historical_entries, vehicle_proposal
+
+        choices = {}
+        for entry in historical_entries(self.hass):
+            for profile_id, profile in entry.options.get("vehicles", {}).items():
+                if not isinstance(profile, dict):
+                    continue
+                key = f"{entry.entry_id}:{profile_id}"
+                choices[key] = (entry, profile_id, profile.get("name") or key)
+        if not choices:
+            return self.async_abort(reason="no_intermediate_vehicles")
+        if user_input is None:
+            return self.async_show_form(
+                step_id="v2_import_intermediate_vehicle",
+                data_schema=vol.Schema({
+                    vol.Required("source_vehicle"): vol.In({
+                        key: f"{entry.title} · {title}"
+                        for key, (entry, _, title) in choices.items()
+                    }),
+                }),
+            )
+        selected = choices.get(user_input.get("source_vehicle"))
+        if selected is None:
+            return self.async_abort(reason="invalid_v2_migration_source")
+        entry, vehicle_id, _ = selected
+        if any(
+            e.data.get("imported_from_intermediate") == entry.entry_id
+            and e.data.get("imported_intermediate_vehicle_id") == vehicle_id
+            for e in v2_entries(self.hass, V2_VEHICLE)
+        ):
+            return self.async_abort(reason="already_imported")
+        defaults, issues = vehicle_proposal(entry, vehicle_id)
+        self._v2_vehicle_defaults = defaults
+        self._v2_vehicle_source_selected = True
+        self._v2_import_origin = {
+            "kind": V2_VEHICLE,
+            "imported_from_intermediate": entry.entry_id,
+            "imported_intermediate_vehicle_id": vehicle_id,
+        }
+        self._v2_import_warnings = issues
+        return await self.async_step_v2_vehicle()
 
     async def async_step_v2_vehicle(self, user_input=None):
         if not getattr(self, "_v2_vehicle_source_selected", False):

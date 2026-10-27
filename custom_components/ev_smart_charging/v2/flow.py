@@ -284,6 +284,13 @@ async def create(flow, kind, user_input=None, defaults=None):
                     user_input, flow.hass.config.time_zone
                 )
             data = {MARKER: kind, "uid": uuid4().hex, **user_input}
+            origin = getattr(flow, "_v2_import_origin", None)
+            if isinstance(origin, dict) and origin.get("kind") == kind:
+                data.update({
+                    key: value
+                    for key, value in origin.items()
+                    if key != "kind"
+                })
             check_proposed(flow.hass, kind, data)
         except (ValueError, TypeError, KeyError):
             return flow.async_show_form(
