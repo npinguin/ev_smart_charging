@@ -1,60 +1,23 @@
-# Explicit HACS field-test release request — v2.6.0-rc.16
+# Explicit HACS RC17 test-prerelease request — v2.6.0-rc.17
 
-Date: 27 October 2026. Independent V2 native physical execution is available
-via explicit Charge Controller Options activation, unlike the quarantined
-original Legacy-Coordinated mode. This is an operator-controlled *test* release,
-not confirmation that the previous Peblar site incident is closed.
+**Date:** 27 October 2026. **Operator request:** continue engineering through an installable V2 HACS test release. This file is the explicit, reviewable trigger for the guarded publish workflow on branch `feature/rc17-consolidated-v2`. Do not touch stable/main or an existing immutable tag.
 
-## Product scope / requirements
+## Non-negotiable release contract
 
-- Original V1 Local devices, entity IDs, source options, schedules and commands
-  remain backward compatible. The old Coordinated mode remains blocked.
-- V2 Vehicle, Charger and Charge Controller are separate HA devices with
-  HA-native Config/Options flows, searchable filtered entity selectors and
-  correctly persisted empty / removed bindings.
-- Create or reuse a V2 Charger from V1 migration without changing source entry;
-  use an existing V2 Controller and optionally a Vehicle. No duplicate physical
-  owner. Auto-provisioning all 3 V2 devices is NOT available in this build.
-- V2 physical execution is not universally blocked. The V2 Controller has an
-  explicit physical_enabled configuration defaulting to false, and can command
-  native HA switch/input_boolean entities when selected.
-- Admission checks all prerequisites: one physical owner, original Local
-  inactive/unloaded, supported command semantics, control switch state fresh,
-  cable present, price curve valid in EUR/kWh, known physical charging power,
-  electrical capacity, fresh plan and serialized bounded native service calls.
-- An uncertain actual EUR spending limit must not trigger physical charging:
-  when cost_budget_eur is set without verified measured spend, V2 returns
-  BUDGET_UNCERTAIN. The indicative budget is not equivalent to an enforced
-  actual cost ledger.
-- No placeholder/default physical source, invented prices or fake device states.
+- Version exactly `2.6.0-rc.17` in HACS manifest and const, all code, docs and source tree from **one tested SHA**. Full GitHub Actions CI 3.11–3.14, >=90% coverage, Hassfest/HACS, Black, original Local compatibility and Controller regression must PASS before tag creation.
+- Only the **original upstream V1 Local** and the **canonical V2 Vehicle, Charger, Charge Controller** are new-installation modes. Do not auto-create the intermediate `charge_controller`; the historical entry is retained *solely until its stored settings, Vehicles and associations are reviewed and manually retired*.
+- Independent V2 Config/Options support clean/extend/maintenance with HA-native device/entity selectors and real device-assisted source suggestions. Mandatory/optional meanings and examples are documented in `docs/V2_HOME_ASSISTANT_SETUP_AND_FIELD_TEST.md`.
+- Verified real-source behavior for Peblar, OCPP, VW Group Data Act, Frank Energie, Nord Pool, ENTSO-e and generic metered smart plug is the field-test target, **not a CI-proven claim**. No hardcoded device IDs or invented data.
+- V2 smart plug exposes explicit manual Connected Yes/No distinct from real plug switch and actual measured charging. No-SoC charging supports explicit kWh or duration, separately accounts for real session progress and stops at completion.
+- OEM SoC, manual SoC and meter-compensated SoC must remain distinctly qualified and persisted without double-counting across a restart or meter reset. Once/Daily/Weekly Ready By, HA timezone/DST and Local tomorrow 08:00 remain correct.
+- V2 Controller has measurable per-Charger and group power, actual session kWh and costs with coverage, next-day plans, site net-power peak shedding and an actual-spend budget admission gate that fails closed on unknown meter/price/session provenance.
+- **Physical V2 control is explicitly disabled by default.** It is independently operator-opted-in on a V2 Controller after original Local physical ownership is unloaded/disabled, validated native switch readback and reliable data; never create double writers. Previous legacy Coordinated control remains quarantined.
+- All tests that the release workflow asserts must actually exist and pass. No waivers, skipped tests to hide faults, or moving tags.
 
-## Publication gates
+## Field-test scope and honest limitations
 
-Require the full 9/9 Python 3.11–3.14/HACS/Hassfest/Black/Legacy/upstream/
-controller gate on one immutable source commit; cover V2 Controller explicit
-enable/disable and V2 native writer readback, dual-owner rejection and cooldown.
-Never move an existing tag or publish on incomplete CI.
+This GitHub prerelease is specifically required to **obtain real-device acceptance**. It is **NOT** a stable release or proof that the real Peblar/OCPP hang #5 is resolved. Hardware Start/Stop, sustained HA responsiveness and physical readback cannot be attested without the user's running Home Assistant/OEM devices. CI may simulate failing services to verify safety, but runtime has no fake source values. No software budget control can guarantee power cutoff when Home Assistant itself is offline.
 
-## Actual Home Assistant acceptance still required
+The native HA runbook is in `docs/V2_HOME_ASSISTANT_SETUP_AND_FIELD_TEST.md`. Before using physical Start on **one EVSE at a time**, take a full Home Assistant backup, verify original V1 behavior, manually inspect all mappings/price units and demand, disable that original Local physical writer, and confirm OEM recovery control is accessible. Keep other original chargers Local until accepted. If any hang, disable charging via OEM/hardware and restore backup plus immutable `v2.6.0-rc.16`.
 
-1. Backup HA configuration and current V1 Charger Config Entries and verify
-   physical charger OEM/native control outside Home Assistant.
-2. Install prerelease, start with physical_enabled=false. Verify original Local
-   08:00 next-morning schedules and no HA hangs, extra original device entities
-   or source listener amplification.
-3. Create Controller, Vehicle and Charger via Add Entry. Select *real* HA
-   entities for cable connected, power, tariff curve, vehicle SoC and native
-   Start/Stop; confirm source quality in get_v2_charge_plan.
-4. On only one EVSE, unload/disable the old original Local Config Entry that
-   owns that exact native command target. The V1 entry and history remain
-   intact and can be re-enabled for rollback.
-5. Explicitly enable physical_enabled in the V2 Controller Options only after
-   ensuring a validated schedule and accurate physical readback. Observe OEM
-   Start/Stop and HA responsiveness, then reload/restart and test.
-6. Expand to additional EVSEs only after successful per-device field evidence.
-   If HA hangs, stop the physical charger via OEM/native means and roll back
-   the integration plus HA config. Leave legacy Coordinated disabled.
-
-**No software-only test is physical sign-off.** The open Peblar P0 is closed
-only with actual on-site evidence, not with CI alone. This is a tested release
-candidate for real field testing, not the stable product acceptance.
+**Publication decision:** the HACS field-test prerelease may be tagged only when the workflow's fresh exact-HEAD CI and every publication assertion pass. Promotion to production/stable remains independently blocked on real-device acceptance and cleanup of the historical intermediate Controller.
