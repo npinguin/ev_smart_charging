@@ -4,11 +4,9 @@
       "user": {
         "title": "EV Smart Charging setup",
         "menu_options": {
-          "v2_controller": "Add Charge Controller (one planner)",
-          "v2_vehicle": "Add Vehicle",
-          "v2_charger": "Add Charger",
-          "legacy_local": "Add classic Local Smart Charger",
-          "v2_migrate": "Migrate an existing Local Charger"
+          "v2_migrate": "Move an existing Local charger to V2",
+          "v2_setup": "Add new V2 devices",
+          "legacy_local": "Add original Local charger (upstream)"
         }
       },
       "legacy_local": {
@@ -105,6 +103,14 @@
           "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         },
         "description": "Original Local daily Ready By: {legacy_ready_by}. This is a suggestion for the Vehicle profile only. Verify its schedule before switching charging ownership; the existing Local configuration is not modified."
+      },
+      "v2_setup": {
+        "title": "Add V2 devices",
+        "menu_options": {
+          "v2_controller": "Add Charge Controller",
+          "v2_vehicle": "Add Vehicle",
+          "v2_charger": "Add Charger"
+        }
       }
     },
     "error": {

@@ -44,9 +44,7 @@ async def async_setup_entry(
     selects = []
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectReadyQuarter(entry, coordinator))
-    selects.append(EVSmartChargingSelectControlMode(entry, coordinator))
-    selects.append(ChargerControllerLinkSelect(entry))
-    selects.append(VehicleAssignmentSelect(entry))
+    # Legacy V1 registers only upstream Start Quarter and Ready Quarter.
     async_add_devices(selects)
 
 

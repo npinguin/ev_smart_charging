@@ -44,12 +44,8 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     sensors = []
     sensors.append(EVSmartChargingSensorCharging(entry))
     sensors.append(EVSmartChargingSensorStatus(entry))
-    sensors.extend(
-        EVSmartChargingIndividualFact(
-            entry, coordinator, key, label, device_class, unit
-        )
-        for key, label, device_class, unit in INDIVIDUAL_FACT_SENSORS
-    )
+    # Legacy V1 exposes exactly the two original upstream sensors.
+    # Extended facts live on independent V2 logical devices, not this Device.
     async_add_devices(sensors)
     await coordinator.add_sensor(sensors)
 

@@ -27,8 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     buttons = []
     buttons.append(EVSmartChargingButtonStart(entry, coordinator))
     buttons.append(EVSmartChargingButtonStop(entry, coordinator))
-    buttons.append(EVSmartChargingButtonClearReadyBy(entry, coordinator))
-    buttons.append(EVSmartChargingButtonResumeCoordinated(entry, coordinator))
+    # V1 original device: no extra migration/Controller buttons.
     async_add_devices(buttons)
 
 
@@ -63,11 +62,7 @@ class EVSmartChargingButtonStop(EVSmartChargingButton):
     _attr_icon = ICON_STOP
 
     async def async_press(self) -> None:
-        """Manual Stop latches a pause in Coordinated; Local remains unchanged."""
-        if is_supervised(self.coordinator.hass, self.coordinator.config_entry.entry_id):
-            pause_supervised(
-                self.coordinator.hass, self.coordinator.config_entry.entry_id
-            )
+        """Original upstream Local Stop, without Controller side effects."""
         await self.coordinator.turn_off_charging()
 
 

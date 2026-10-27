@@ -137,22 +137,8 @@ async def test_successful_config_flow_option(
     # Check that the option flow is complete and a new entry is created with
     # the input data
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    # Default source bindings are explicit per-EVSC Options, not group policy.
-    assert result["data"] == {
-        **MOCK_CONFIG_USER,
-        "evsc_capacity_kwh": 0.0,
-        "evsc_capacity_entity": "",
-        "evsc_current_energy_entity": "",
-        "evsc_target_energy_entity": "",
-        "evsc_effective_price_entity": "",
-        "evsc_expected_power_kw": 0.0,
-        "evsc_actual_power_entity": "",
-        "evsc_actual_energy_entity": "",
-        "evsc_price_validated": False,
-        "evsc_control_semantics": "unspecified",
-        "evsc_load_energy_kwh": 0.0,
-        "evsc_load_duration_quarters": 0,
-    }
+    # The original upstream Local Options flow must not add V2 fields.
+    assert result["data"] == MOCK_CONFIG_USER
     if "errors" in result.keys():
         assert len(result["errors"]) == 0
 

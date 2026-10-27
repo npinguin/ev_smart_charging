@@ -95,12 +95,17 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(
             step_id="user",
             menu_options=[
-                "v2_controller",
-                "v2_vehicle",
-                "v2_charger",
                 "v2_migrate",
+                "v2_setup",
                 "legacy_local",
             ],
+        )
+
+    async def async_step_v2_setup(self, user_input=None):
+        """V2 is a separate product surface, not extra fields on Local."""
+        return self.async_show_menu(
+            step_id="v2_setup",
+            menu_options=["v2_controller", "v2_vehicle", "v2_charger"],
         )
 
     async def async_step_v2_controller(self, user_input=None):
@@ -347,11 +352,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if error is not None:
                 self._errors[error[0]] = error[1]
-            if (
-                user_input.get("evsc_load_energy_kwh", 0) > 0
-                and user_input.get("evsc_load_duration_quarters", 0) > 0
-            ):
-                self._errors["base"] = "exclusive_load_demand"
 
             if not self._errors:
                 return self.async_create_entry(
@@ -363,9 +363,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_PRICE_SENSOR,
                 default=get_parameter(self.config_entry, CONF_PRICE_SENSOR),
             ): cv.string,
-            vol.Optional(
+            vol.Required(
                 CONF_EV_SOC_SENSOR,
-                default=get_parameter(self.config_entry, CONF_EV_SOC_SENSOR, "") or "",
+                default=get_parameter(self.config_entry, CONF_EV_SOC_SENSOR),
             ): cv.string,
             vol.Optional(
                 CONF_EV_TARGET_SOC_SENSOR,
@@ -379,96 +379,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_CHARGING_STATE_ENTITY,
                 default=get_parameter(self.config_entry, CONF_CHARGING_STATE_ENTITY),
             ): cv.string,
-            # Only source semantics, not a new command writer. Preserve all
-            # existing physical Local Start/Stop paths when upgrading.
-            vol.Optional(
-                "evsc_control_semantics",
-                default=get_parameter(
-                    self.config_entry, "evsc_control_semantics", "unspecified"
-                ),
-            ): vol.In(CONTROL_SEMANTICS),
             vol.Optional(
                 CONF_EV_CONTROLLED,
                 default=get_parameter(self.config_entry, CONF_EV_CONTROLLED),
             ): cv.boolean,
-            # All optional measurements belong to this EVSC entry, not to
-            # the Charge Controller or the native EVSE device.
-            vol.Optional(
-                "evsc_capacity_kwh",
-                default=get_parameter(
-                    self.config_entry,
-                    "evsc_capacity_kwh",
-                    0,
-                ),
-            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
-            # Optional native numeric kWh source facts. Blank defaults
-            # preserve every existing Local entry, source, and entity ID.
-            vol.Optional(
-                "evsc_capacity_entity",
-                default=get_parameter(self.config_entry, "evsc_capacity_entity", ""),
-            ): cv.string,
-            vol.Optional(
-                "evsc_current_energy_entity",
-                default=get_parameter(
-                    self.config_entry, "evsc_current_energy_entity", ""
-                ),
-            ): cv.string,
-            vol.Optional(
-                "evsc_target_energy_entity",
-                default=get_parameter(
-                    self.config_entry, "evsc_target_energy_entity", ""
-                ),
-            ): cv.string,
-            vol.Optional(
-                "evsc_effective_price_entity",
-                default=get_parameter(
-                    self.config_entry, "evsc_effective_price_entity", ""
-                ),
-            ): cv.string,
-            vol.Optional(
-                "evsc_expected_power_kw",
-                default=get_parameter(
-                    self.config_entry,
-                    "evsc_expected_power_kw",
-                    0,
-                ),
-            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
-            vol.Optional(
-                "evsc_actual_power_entity",
-                default=get_parameter(
-                    self.config_entry,
-                    "evsc_actual_power_entity",
-                    "",
-                ),
-            ): cv.string,
-            vol.Optional(
-                "evsc_actual_energy_entity",
-                default=get_parameter(
-                    self.config_entry,
-                    "evsc_actual_energy_entity",
-                    "",
-                ),
-            ): cv.string,
-            vol.Optional(
-                "evsc_price_validated",
-                default=get_parameter(
-                    self.config_entry,
-                    "evsc_price_validated",
-                    False,
-                ),
-            ): cv.boolean,
-            # Optional explicit demand for source-less EVSEs and other flexible
-            # loads. For now it feeds an advisory planner, not Local actuation.
-            vol.Optional(
-                "evsc_load_energy_kwh",
-                default=get_parameter(self.config_entry, "evsc_load_energy_kwh", 0),
-            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=200)),
-            vol.Optional(
-                "evsc_load_duration_quarters",
-                default=get_parameter(
-                    self.config_entry, "evsc_load_duration_quarters", 0
-                ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=14 * 96)),
         }
 
         return self.async_show_form(

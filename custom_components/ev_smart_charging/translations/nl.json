@@ -4,11 +4,9 @@
       "user": {
         "title": "EV Smart Charging configuratie",
         "menu_options": {
-          "v2_controller": "Laadcontroller toevoegen (één planner)",
-          "v2_vehicle": "Voertuig toevoegen",
-          "v2_charger": "Laadpunt toevoegen",
-          "legacy_local": "Klassieke Local Smart Charger toevoegen",
-          "v2_migrate": "Bestaande Local-lader migreren"
+          "v2_migrate": "Bestaande Local-laadpaal overzetten naar V2",
+          "v2_setup": "Nieuwe V2-apparaten toevoegen",
+          "legacy_local": "Originele Local-laadpaal toevoegen (upstream)"
         }
       },
       "legacy_local": {
@@ -105,6 +103,14 @@
           "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         },
         "description": "Oorspronkelijke Local gereed-tijd (dagelijks): {legacy_ready_by}. Dit is enkel een voorstel voor het Vehicle-profiel. Controleer het laadpatroon vóór de overdracht; de bestaande Local-configuratie wordt niet gewijzigd."
+      },
+      "v2_setup": {
+        "title": "V2-apparaten toevoegen",
+        "menu_options": {
+          "v2_controller": "Charge Controller toevoegen",
+          "v2_vehicle": "Vehicle toevoegen",
+          "v2_charger": "Charger toevoegen"
+        }
       }
     },
     "error": {
