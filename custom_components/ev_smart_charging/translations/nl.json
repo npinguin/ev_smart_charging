@@ -206,6 +206,13 @@
         "data": {
           "source_vehicle": "Bestaand Vehicle-profiel"
         }
+      },
+      "v2_import_intermediate_review": {
+        "title": "Controleer overname vóór V2-configuratie",
+        "description": "Niet-destr uctieve overname. De volgende punten kunnen niet betrouwbaar worden overgenomen en vragen manuele controle: {unresolved}. Deze stap wijzigt V1, de oude Controller en fysieke laadpunten niet.",
+        "data": {
+          "confirm": "Ik heb de ontbrekende gegevens en fysieke ownership begrepen"
+        }
       }
     },
     "error": {

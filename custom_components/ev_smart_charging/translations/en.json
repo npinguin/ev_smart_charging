@@ -206,6 +206,13 @@
         "data": {
           "source_vehicle": "Existing Vehicle profile"
         }
+      },
+      "v2_import_intermediate_review": {
+        "title": "Review imported facts before V2 setup",
+        "description": "Non-destructive import. The following fields cannot be reliably converted and require manual review: {unresolved}. The original V1, old Controller, Charger ownership and physical outputs stay unchanged.",
+        "data": {
+          "confirm": "I understand incomplete data and physical ownership must be reviewed"
+        }
       }
     },
     "error": {

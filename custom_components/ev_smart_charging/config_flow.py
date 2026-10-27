@@ -163,7 +163,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "imported_from_intermediate": entry.entry_id,
         }
         self._v2_import_warnings = issues
-        return await self.async_step_v2_controller()
+        return await self.async_step_v2_import_intermediate_review()
 
     async def async_step_v2_import_intermediate_vehicle(self, user_input=None):
         from .v2.intermediate_import import historical_entries, vehicle_proposal
@@ -206,7 +206,33 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "imported_intermediate_vehicle_id": vehicle_id,
         }
         self._v2_import_warnings = issues
-        return await self.async_step_v2_vehicle()
+        return await self.async_step_v2_import_intermediate_review()
+
+    async def async_step_v2_import_intermediate_review(self, user_input=None):
+        """Show the incomplete facts *before* copying into a V2 Config Entry."""
+        origin = getattr(self, "_v2_import_origin", None)
+        if not origin:
+            return self.async_abort(reason="invalid_v2_migration_source")
+        if user_input is not None and user_input.get("confirm") is True:
+            if origin["kind"] == V2_CONTROLLER:
+                return await self.async_step_v2_controller()
+            return await self.async_step_v2_vehicle()
+        return self.async_show_form(
+            step_id="v2_import_intermediate_review",
+            data_schema=vol.Schema({
+                vol.Required("confirm", default=False):
+                    selector.BooleanSelector(),
+            }),
+            description_placeholders={
+                "unresolved": ", ".join(
+                    getattr(self, "_v2_import_warnings", [])
+                ) or "None",
+            },
+            errors=(
+                {"base": "confirm_required"}
+                if user_input is not None else {}
+            ),
+        )
 
     async def async_step_v2_vehicle(self, user_input=None):
         if not getattr(self, "_v2_vehicle_source_selected", False):
