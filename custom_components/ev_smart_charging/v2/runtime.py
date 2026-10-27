@@ -18,6 +18,7 @@ from .planning import compile_advisory, parse_tariff_slots
 from .group_facts import group_facts
 from .soc_estimation import SocEstimator
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -377,6 +378,9 @@ class V2ControllerRuntime:
             if not self._stopped:
                 self.snapshot = result
                 self._notify()
+                async_dispatcher_send(
+                    self.hass, f"{DOMAIN}_v2_vehicle_sources"
+                )
 
     async def _apply_native_plan(self, controller, chargers, observed, result):
         """One physically serialized writer per owned Charger, not per event."""
@@ -458,6 +462,9 @@ class V2ControllerRuntime:
 
     async def async_stop(self):
         """HA unload must wait for any native-service critical section."""
+        # HA Store's delayed save is normally enough, but explicit flush
+        # prevents losing a charging interval on integration reload.
+        await self._soc_store.async_save(self._soc_estimator.snapshot())
         task = self._tick_task
         self._stopped = True
         if task is not None and not task.done():

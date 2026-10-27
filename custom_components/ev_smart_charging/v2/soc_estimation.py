@@ -62,6 +62,17 @@ class SocEstimator:
         ) else None
         key = charger_uid
         anchor = self.anchors.get(key)
+        # A meter reset is sticky until the OEM source actually supplies
+        # a fresh observation. Otherwise next-minute refresh would silently
+        # re-anchor the same stale OEM value at the reset counter.
+        quarantined = (
+            isinstance(anchor, dict)
+            and anchor.get("invalidated_oem_at") is not None
+        )
+        if quarantined and (
+            stamp is None or stamp.isoformat() == anchor["invalidated_oem_at"]
+        ):
+            return None, "METER_RESET_REQUIRES_OEM"
         new_oem = (
             stamp is not None
             and observation is not None
@@ -106,7 +117,7 @@ class SocEstimator:
         if value < last - 0.000001:
             # Reset/replacement could have hidden energy between samples.
             # Never assume 0 or silently restart compensation mid-session.
-            self.anchors.pop(key, None)
+            self.anchors[key] = {"invalidated_oem_at": anchor["oem_at"]}
             self.dirty = True
             return None, "METER_RESET_REQUIRES_OEM"
         if value > last:

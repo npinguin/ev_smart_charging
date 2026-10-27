@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_point_in_time,
@@ -63,6 +64,20 @@ class V2Fact(SensorEntity):
                 self.async_on_remove(manager.subscribe(self._source_changed))
             return
         obj = model(self.entry)
+        if (
+            self.kind == ENTRY_VEHICLE
+            and self.key in (
+                "effective_soc", "soc_quality", "source_quality",
+                "required_battery_kwh",
+            )
+        ):
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    f"{DOMAIN}_v2_vehicle_sources",
+                    self._source_changed,
+                )
+            )
         if self.kind == ENTRY_VEHICLE and self.key == "next_ready_by":
             self._schedule_ready_boundary()
             self.async_on_remove(self._cancel_ready_boundary)
@@ -111,6 +126,19 @@ class V2Fact(SensorEntity):
                 self.hass, self._ready_boundary, ready + timedelta(seconds=1)
             )
 
+    def _vehicle_observed(self):
+        """Read latest single-owner Controller source, not a parallel planner."""
+        from .runtime import V2ControllerRuntime
+
+        for runtime in self.hass.data.get(DOMAIN, {}).values():
+            if isinstance(runtime, V2ControllerRuntime):
+                source = runtime.snapshot.get("vehicle_sources", {}).get(
+                    self.entry.data["uid"]
+                )
+                if source is not None:
+                    return source
+        return None
+
     @property
     def native_value(self):
         obj = model(self.entry)
@@ -124,16 +152,24 @@ class V2Fact(SensorEntity):
                 return next_ready_deadline(obj, dt.utcnow(), self.hass.config.time_zone)
             if self.key == "ready_mode":
                 return normalized_mode(obj)
+            source = self._vehicle_observed()
             if self.key == "soc":
                 return soc
+            if self.key == "effective_soc":
+                return source.get("effective_soc") if source else None
+            if self.key == "soc_quality":
+                return source.get("soc_quality") if source else "UNKNOWN"
             if self.key == "target_soc":
                 return obj.target_soc
             if self.key == "required_battery_kwh":
-                if soc is None or obj.battery_kwh is None:
+                effective = source.get("effective_soc") if source else None
+                if effective is None or obj.battery_kwh is None:
                     return None
-                return round(obj.battery_kwh * max(0, obj.target_soc - soc) / 100, 4)
+                return round(
+                    obj.battery_kwh * max(0, obj.target_soc - effective) / 100, 4
+                )
             if self.key == "source_quality":
-                return "VALID" if soc is not None else "UNKNOWN"
+                return source.get("soc_quality") if source else "UNKNOWN"
         elif self.kind == ENTRY_CHARGER:
             if self.key == "controller":
                 return obj.controller_uid
@@ -198,7 +234,12 @@ def sensors_for_entry(entry):
     kind = entry.data["__evsc_entry_type"]
     if kind == ENTRY_VEHICLE:
         return [
-            V2Fact(entry, kind, "soc", "SoC", SensorDeviceClass.BATTERY, "%"),
+            V2Fact(entry, kind, "soc", "OEM SoC", SensorDeviceClass.BATTERY, "%"),
+            V2Fact(
+                entry, kind, "effective_soc", "Effective SoC",
+                SensorDeviceClass.BATTERY, "%",
+            ),
+            V2Fact(entry, kind, "soc_quality", "SoC basis"),
             V2Fact(
                 entry, kind, "target_soc", "Target SoC", SensorDeviceClass.BATTERY, "%"
             ),
