@@ -152,3 +152,62 @@ def test_price_gaps_or_transition_use_safe_upper_bound_not_guess():
 
 def test_negative_prices_never_lower_conservative_spend_budget():
     assert price_upper_bound(rates(-0.05), NOW, NOW + timedelta(minutes=15)) == 0.0
+
+
+def test_budget_requires_connection_verified_meter_identity_and_timestamp():
+    guard = CostBudgetGuard()
+    assert guard.observe(
+        "utility",
+        connected=None,
+        session_start=None,
+        meter_source="sensor.utility_meter",
+        meter_kwh=100,
+        meter_at=NOW,
+        prices=rates(),
+    ) == "SESSION_UNVERIFIED"
+    assert guard.observe(
+        "utility",
+        connected=True,
+        session_start=SESSION,
+        meter_source="",
+        meter_kwh=100,
+        meter_at=NOW,
+        prices=rates(),
+    ) == "METER_UNVERIFIED"
+    assert observe(guard) == "CERTIFIED"
+    assert guard.observe(
+        "utility",
+        connected=True,
+        session_start=SESSION,
+        meter_source="sensor.replaced_meter",
+        meter_kwh=101,
+        meter_at=NOW + timedelta(minutes=1),
+        prices=rates(),
+    ) == "METER_SOURCE_CHANGED"
+    assert allow(guard, 10)[0] == set()
+
+
+def test_repeated_meter_readback_is_idempotent_but_time_reversal_is_rejected():
+    guard = CostBudgetGuard()
+    assert observe(guard) == "CERTIFIED"
+    assert observe(guard) == "CERTIFIED"
+    assert guard.sessions["utility"]["cost_upper_eur"] == 0
+    assert observe(
+        guard, meter=101, at=NOW - timedelta(seconds=1)
+    ) == "METER_GAP_OR_RESET"
+    assert allow(guard, 5)[1]["status"] == "UNVERIFIED"
+
+
+def test_invalid_price_inputs_or_missing_next_quarter_cannot_approve_budget():
+    assert price_upper_bound(rates(), None, NOW) is None
+    assert price_upper_bound(rates(), NOW, NOW) is None
+    guard = CostBudgetGuard()
+    assert observe(guard) == "CERTIFIED"
+    approved, summary = allow(guard, 3, prices=[])
+    assert approved == set()
+    assert summary["status"] == "FUTURE_PRICE_UNVERIFIED"
+    assert summary["remaining_eur"] is None
+    # A budget-less Controller does not use a fabricated meter or price.
+    permitted, summary = allow(CostBudgetGuard(), None, prices=[])
+    assert permitted == {"utility"}
+    assert summary["status"] == "DISABLED"
