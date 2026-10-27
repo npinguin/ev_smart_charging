@@ -106,17 +106,18 @@ def test_existing_v1_source_cannot_become_v2_physical_charger_implicitly():
     assert plan["physical_cutover_permitted"] is False
 
 
-
 def test_invalid_historical_ready_is_not_autoconverted_to_daily_0800():
     plan = preview_intermediate(
-        interim({
-            "vehicles": {
-                "q8": {
-                    "name": "Audi Q8",
-                    "ready_by": "2026-10-28T08:00:00",
+        interim(
+            {
+                "vehicles": {
+                    "q8": {
+                        "name": "Audi Q8",
+                        "ready_by": "2026-10-28T08:00:00",
+                    }
                 }
             }
-        })
+        )
     )
     assert plan["ready_for_automatic_vehicle_creation"] is False
     assert plan["vehicle_ready_review_required"] == ["q8"]

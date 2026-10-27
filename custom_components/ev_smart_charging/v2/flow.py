@@ -285,8 +285,7 @@ async def create(flow, kind, user_input=None, defaults=None, *, fixed_uid=None):
                 )
             data = {MARKER: kind, "uid": fixed_uid or uuid4().hex, **user_input}
             if fixed_uid and any(
-                e.data.get("uid") == fixed_uid
-                for e in entries_of(flow.hass, kind)
+                e.data.get("uid") == fixed_uid for e in entries_of(flow.hass, kind)
             ):
                 return flow.async_abort(reason="already_migrated")
             check_proposed(flow.hass, kind, data)

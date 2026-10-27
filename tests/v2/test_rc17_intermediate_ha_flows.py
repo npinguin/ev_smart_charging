@@ -18,7 +18,9 @@ from custom_components.ev_smart_charging.v2 import (
 @pytest.fixture(autouse=True)
 def no_physical_setup_on_config_flow():
     # Fixture blocks actual HA integration setup, not ConfigFlow processing.
-    with patch("custom_components.ev_smart_charging.async_setup_entry", return_value=True):
+    with patch(
+        "custom_components.ev_smart_charging.async_setup_entry", return_value=True
+    ):
         yield
 
 

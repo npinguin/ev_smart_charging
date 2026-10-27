@@ -135,11 +135,13 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_convert_controller_review()
         return self.async_show_form(
             step_id="v2_convert_controller",
-            data_schema=vol.Schema({
-                vol.Required("intermediate_id"): vol.In({
-                    key: entry.title for key, entry in candidates.items()
-                }),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("intermediate_id"): vol.In(
+                        {key: entry.title for key, entry in candidates.items()}
+                    ),
+                }
+            ),
         )
 
     async def async_step_v2_convert_controller_review(self, user_input=None):
@@ -162,9 +164,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title=old["name"], data=data)
         return self.async_show_form(
             step_id="v2_convert_controller_review",
-            data_schema=vol.Schema({
-                vol.Required("confirmed", default=False): cv.boolean,
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirmed", default=False): cv.boolean,
+                }
+            ),
             description_placeholders={
                 "name": old["name"],
                 "parallel": str(old["max_parallel"]),
@@ -202,10 +206,7 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._v2_vehicle_import_uid = profile["uid"]
             # Old user IDs may not be in HA anymore; do not force a broken
             # selector or silently attach the Vehicle to a different user.
-            defaults = {
-                k: v for k, v in profile.items()
-                if k not in ("uid", "user_id")
-            }
+            defaults = {k: v for k, v in profile.items() if k not in ("uid", "user_id")}
             if not defaults.get("ready_by"):
                 # Require an explicit Ready By choice. V2 accepts once,
                 # daily or weekly but must not silently infer recurring 08:00.
@@ -214,11 +215,13 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_v2_vehicle()
         return self.async_show_form(
             step_id="v2_convert_vehicle",
-            data_schema=vol.Schema({
-                vol.Required("vehicle_uid"): vol.In({
-                    uid: profile["name"] for uid, (_, profile) in options.items()
-                }),
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("vehicle_uid"): vol.In(
+                        {uid: profile["name"] for uid, (_, profile) in options.items()}
+                    ),
+                }
+            ),
         )
 
     async def async_step_v2_controller(self, user_input=None):
