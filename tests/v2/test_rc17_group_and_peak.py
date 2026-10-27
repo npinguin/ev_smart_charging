@@ -147,7 +147,15 @@ def test_controller_group_facts_have_complete_and_partial_data_quality():
             energy_source_kind="session",
         )
     }
-    observed = {"a": {"connected": True, "power_kw": 1.2, "energy_kwh": 2.0}}
+    observed = {
+        "a": {
+            "connected": True,
+            "power_kw": 1.2,
+            "energy_kwh": 2.0,
+            "session_grid_kwh": 2.0,
+            "session_meter_quality": "VALID",
+        }
+    }
     result = group_facts(plan, ch, observed, now, "Europe/Brussels")
     assert result["measured_power_kw"] == 1.2
     assert result["session_energy_kwh"] == 2.0
@@ -163,6 +171,8 @@ def test_controller_group_facts_have_complete_and_partial_data_quality():
             energy_source_kind="total_increasing",
         )
     }
+    observed["a"]["session_grid_kwh"] = None
+    observed["a"]["session_meter_quality"] = "METER_UNAVAILABLE"
     result = group_facts(plan, ch, observed, now, "Europe/Brussels")
     assert result["session_energy_kwh"] is None
     assert result["energy_coverage"] == 0
