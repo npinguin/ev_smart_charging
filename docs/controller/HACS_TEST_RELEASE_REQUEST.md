@@ -30,3 +30,7 @@ The full CI gate additionally checks there is no `await asyncio.sleep` in the Lo
 ## Final guarded release invocation — 27 October 2026
 
 The Local source refresh loop and timer regression is fixed and the exact Black correction is applied. This file update explicitly requests a fresh **workflow_call** full matrix on this commit, followed by rc.14 prerelease publication only if its nine jobs are green. No manual bypass, no physical Coordinated start/stop enablement, and no changes to rc.13 or main.
+
+## Publication gate correction — 27 October 2026
+
+The protected rc.14 run completed all nine regression jobs successfully but its source-code check incorrectly rejected the intentional zero-duration `await asyncio.sleep(0)` used to coalesce same-tick Home Assistant events. That release assertion now accepts only this non-blocking yield while still rejecting timed sleeps inside the source event worker. Re-run the exact-commit protected matrix and publish only on success. This request supersedes the earlier failed publication attempt; no runtime code change or physical writer enablement.
