@@ -214,7 +214,7 @@ jobs:
             "tests/v2/test_rc17_actual_cost_reporting.py",
             "tests/v2/test_rc17_intermediate_conversion.py",
             "tests/v2/test_rc17_intermediate_ha_flows.py",
-        ):
+          ):
             assert Path(file).is_file(), f"RC17 missing source/acceptance: {file}"
           assert "Connected (manual)" in Path(
               "custom_components/ev_smart_charging/switch.py"
