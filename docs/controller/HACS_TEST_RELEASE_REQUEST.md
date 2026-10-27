@@ -34,3 +34,14 @@ The Local source refresh loop and timer regression is fixed and the exact Black 
 ## Publication gate correction — 27 October 2026
 
 The protected rc.14 run completed all nine regression jobs successfully but its source-code check incorrectly rejected the intentional zero-duration `await asyncio.sleep(0)` used to coalesce same-tick Home Assistant events. That release assertion now accepts only this non-blocking yield while still rejecting timed sleeps inside the source event worker. Re-run the exact-commit protected matrix and publish only on success. This request supersedes the earlier failed publication attempt; no runtime code change or physical writer enablement.
+
+
+## Original Local Ready By regression repair (27 October 2026)
+
+The pure `get_ready_quarter_utc` and original `Scheduler` remain **unchanged**. A recurring 08:00 chosen after 08:00 is still **tomorrow at 08:00 in HA local time**. The newer absolute datetime extension was overriding the restored Local select, and the old plan could fail to rebuild when tomorrow's prices became valid without a new vehicle SoC report.
+
+Fixes: an explicit Local completion-time select clears the stale absolute-date override; startup restore does **not** automatically discard an intentionally configured absolute date; `datetime.clear()` now clears the coordinator's override; and a newly valid tomorrow price feed forces one base-plan rebuild. HA source jobs use `eager_start=False` to coalesce a synchronous burst instead of creating repeated eager updates.
+
+Required regressions: `tests/test_select.py`, `tests/controller/test_legacy_next_day_ready.py`, `tests/controller/test_local_event_coalescing.py`, and the whole existing test suite.
+
+**Do not publish rc.14 until exact-head 9/9 CI succeeds, including these tests.**
