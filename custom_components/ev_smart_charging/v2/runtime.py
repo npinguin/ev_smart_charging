@@ -18,6 +18,7 @@ from .planning import compile_advisory, parse_tariff_slots
 from .group_facts import group_facts
 from ..controller.costs import ActualCostLedger
 from .soc_estimation import SocEstimator
+from .session_progress import SessionProgress
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from ..const import DOMAIN
@@ -250,6 +251,10 @@ class V2ControllerRuntime:
             hass, 1, f"{DOMAIN}.v2_actual_cost_{entry.data['uid']}"
         )
         self._cost_ledgers = {}
+        self._session_store = Store(
+            hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}"
+        )
+        self._session_progress = SessionProgress()
 
     def _cost_payload(self):
         return {
@@ -272,6 +277,9 @@ class V2ControllerRuntime:
             return
         restored = await self._soc_store.async_load()
         self._soc_estimator = SocEstimator(restored)
+        self._session_progress = SessionProgress(
+            await self._session_store.async_load()
+        )
         stored_costs = await self._cost_store.async_load()
         self._cost_ledgers = {
             uid: ActualCostLedger.from_storage(state)
@@ -308,6 +316,20 @@ class V2ControllerRuntime:
                 observed = read_inputs(self.hass, chargers, vehicles)
                 observed_at = dt.utcnow()
                 for uid, charger in chargers.items():
+                    item = observed[uid]
+                    progress = self._session_progress.observe(
+                        uid,
+                        connected=item.get("connected"),
+                        energy_kwh=item.get("energy_kwh"),
+                        energy_kind=charger.energy_source_kind,
+                        energy_source=charger.energy_entity,
+                        power_kw=item.get("power_kw"),
+                        now=observed_at,
+                    )
+                    item["session_grid_kwh"] = progress["delivered_kwh"]
+                    item["session_elapsed_seconds"] = progress["elapsed_seconds"]
+                    item["session_meter_quality"] = progress["meter_quality"]
+                    item["session_duration_quality"] = progress["duration_quality"]
                     vehicle = vehicles.get(charger.vehicle_uid)
                     if vehicle is None:
                         continue
@@ -329,6 +351,11 @@ class V2ControllerRuntime:
                         quality = "OEM" if soc is not None else "STALE"
                     item["soc"] = soc
                     item["soc_quality"] = quality
+                if self._session_progress.dirty:
+                    self._session_store.async_delay_save(
+                        self._session_progress.snapshot, 30
+                    )
+                    self._session_progress.dirty = False
                 if self._soc_estimator.dirty:
                     self._soc_store.async_delay_save(self._soc_estimator.snapshot, 30)
                     self._soc_estimator.dirty = False
@@ -369,6 +396,15 @@ class V2ControllerRuntime:
                     cost_changed |= previous != ledger.to_storage()
                 if cost_changed:
                     self._cost_store.async_delay_save(self._cost_payload, 30)
+                result["session_sources"] = {
+                    uid: {
+                        "delivered_kwh": item["session_grid_kwh"],
+                        "elapsed_seconds": item["session_elapsed_seconds"],
+                        "meter_quality": item["session_meter_quality"],
+                        "duration_quality": item["session_duration_quality"],
+                    }
+                    for uid, item in observed.items()
+                }
                 result["actual_cost_per_charger"] = {
                     uid: ledger.summary()
                     for uid, ledger in self._cost_ledgers.items()
@@ -529,6 +565,7 @@ class V2ControllerRuntime:
         # prevents losing a charging interval on integration reload.
         await self._soc_store.async_save(self._soc_estimator.snapshot())
         await self._cost_store.async_save(self._cost_payload())
+        await self._session_store.async_save(self._session_progress.snapshot())
         task = self._tick_task
         self._stopped = True
         if task is not None and not task.done():
