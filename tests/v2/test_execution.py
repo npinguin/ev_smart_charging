@@ -672,3 +672,61 @@ async def test_shutdown_requires_real_off_readback_not_service_ack(hass, charger
         "main",
         "ch",
     )
+
+
+
+async def test_shutdown_never_operates_target_reclaimed_by_original_local(
+    hass, charger
+):
+    """A V1 Local owner may never receive V2's shutdown command."""
+    seen = []
+
+    async def stop(call):
+        seen.append(call.data.get("entity_id"))
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    assert await writer.async_reconcile(
+        _snapshot(),
+        NOW,
+        connected=True,
+        measured_power_kw=7.4,
+        group_capacity_certified=True,
+    ) == "ALREADY_AT_TARGET"
+    original = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "charger_entity": "switch.native_charger",
+            "device_name": "Original Local",
+        },
+        entry_id="original_local_reclaimed_target",
+        version=8,
+    )
+    original.add_to_hass(hass)
+    assert (
+        await writer.async_shutdown()
+        == "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER"
+    )
+    assert seen == []
+    assert hass.states.get("switch.native_charger").state == "on"
+
+
+async def test_shutdown_keeps_owner_reservation_when_adapter_missing(
+    hass, charger
+):
+    """An unavailable HA command adapter must never count as physical OFF."""
+    hass.states.async_set("switch.native_charger", "on")
+    writer = NativeChargeWriter(hass, charger, "main")
+    assert await writer.async_reconcile(
+        _snapshot(),
+        NOW,
+        connected=True,
+        measured_power_kw=7.4,
+        group_capacity_certified=True,
+    ) == "ALREADY_AT_TARGET"
+    writer._port = None
+    assert await writer.async_shutdown() == "STOP_PORT_UNAVAILABLE"
+    assert hass.data[f"{DOMAIN}.v2_native_writers"][
+        "switch.native_charger"
+    ] == ("main", "ch")

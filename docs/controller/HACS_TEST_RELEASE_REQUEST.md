@@ -42,3 +42,13 @@ verify **actual switch state, charging power, service response, HA responsivenes
 and task growth**. Repeat on Peblar, OCPP Wallboxes and utility smart plug
 before any stable promotion. If hardware remains ON or HA becomes unresponsive,
 stop via OEM and restore the HA backup; keep physical P0 #5 open.
+
+
+## Additional native shutdown regression gate
+The hotfix must explicitly cover both adverse ownership situations:
+a former V2-owned HA control target becomes owned by an enabled original V1
+Local Config Entry before shutdown; V2 must send **no command** to it.
+If a previously-owned native control adapter becomes unavailable, shutdown
+must not claim verified OFF or release the V2 owner reservation. These cases
+are tested by `tests/v2/test_execution.py` and included in the full CI gate;
+they do not substitute for physical OEM feedback in the installation.
