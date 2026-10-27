@@ -69,11 +69,18 @@ class CostBudgetGuard:
         prices,
     ):
         if connected is False:
-            if uid in self.sessions:
-                self.sessions.pop(uid, None)
+            # The false state is a witnessed physical session boundary. Keep
+            # it across HA restarts; absence of a prior session is NOT proof
+            # that a connected EVSE just started a fresh session.
+            if self.sessions.get(uid) != {"disconnected_observed": True}:
+                self.sessions[uid] = {"disconnected_observed": True}
                 self.dirty = True
             return "DISCONNECTED"
         if connected is not True or not session_start:
+            prior = self.sessions.get(uid)
+            if isinstance(prior, dict) and prior.get("certified"):
+                prior["certified"] = False
+                self.dirty = True
             return "SESSION_UNVERIFIED"
         meter = _number(meter_kwh)
         if (
@@ -90,6 +97,35 @@ class CostBudgetGuard:
         stamp = meter_at.astimezone(timezone.utc)
         previous = self.sessions.get(uid)
         if not isinstance(previous, dict) or previous.get("session") != session_start:
+            # A previously connected EVSE, or one already connected on first
+            # setup, may have spent € before this process observed it.
+            # Never reset such a session to a trusted zero.
+            if not isinstance(previous, dict) or not previous.get(
+                "disconnected_observed"
+            ):
+                self.sessions[uid] = {
+                    "session": session_start,
+                    "certified": False,
+                    "reason": "SESSION_START_NOT_WITNESSED",
+                }
+                self.dirty = True
+                return "SESSION_START_NOT_WITNESSED"
+            try:
+                beginning = datetime.fromisoformat(session_start)
+            except (ValueError, TypeError):
+                return "SESSION_START_UNVERIFIED"
+            if beginning.tzinfo is None or not (
+                timedelta(minutes=-2)
+                <= stamp - beginning
+                <= timedelta(minutes=2)
+            ):
+                self.sessions[uid] = {
+                    "session": session_start,
+                    "certified": False,
+                    "reason": "METER_ANCHOR_STALE",
+                }
+                self.dirty = True
+                return "METER_ANCHOR_STALE"
             self.sessions[uid] = {
                 "session": session_start,
                 "meter_source": meter_source,

@@ -64,6 +64,7 @@ def allow(ledger, limit, prices=None):
 
 def test_real_meter_budget_reserves_next_quarter_before_energizing():
     tracker = CostBudgetGuard()
+    observe(tracker, connected=False)
     assert observe(tracker) == "CERTIFIED"
     assert (
         observe(
@@ -85,6 +86,7 @@ def test_real_meter_budget_reserves_next_quarter_before_energizing():
 def test_missing_meter_counter_reset_or_gaps_block_all_physical_cost_grants():
     tracker = CostBudgetGuard()
     assert allow(tracker, 5)[1]["status"] == "UNVERIFIED"
+    observe(tracker, connected=False)
     observe(tracker)
     assert (
         observe(tracker, meter=0, at=NOW + timedelta(minutes=1)) == "METER_GAP_OR_RESET"
@@ -99,6 +101,7 @@ def test_missing_meter_counter_reset_or_gaps_block_all_physical_cost_grants():
     assert observe(tracker, meter=1, at=NOW + timedelta(minutes=3)) == ("CERTIFIED")
 
     other = CostBudgetGuard()
+    observe(other, connected=False)
     observe(other)
     assert (
         observe(other, meter=102, at=NOW + timedelta(minutes=30))
@@ -109,6 +112,7 @@ def test_missing_meter_counter_reset_or_gaps_block_all_physical_cost_grants():
 
 def test_ha_restart_restores_spent_amount_and_never_rezeros_cost():
     original = CostBudgetGuard()
+    observe(original, connected=False)
     observe(original)
     observe(original, meter=101, at=NOW + timedelta(minutes=1))
     restored = CostBudgetGuard(original.snapshot())
@@ -137,6 +141,7 @@ def test_price_gaps_or_transition_use_safe_upper_bound_not_guess():
         is None
     )
     original = CostBudgetGuard()
+    observe(original, connected=False)
     observe(original)
     assert (
         observe(
@@ -180,6 +185,7 @@ def test_budget_requires_connection_verified_meter_identity_and_timestamp():
         )
         == "METER_UNVERIFIED"
     )
+    observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
     assert (
         guard.observe(
@@ -198,7 +204,9 @@ def test_budget_requires_connection_verified_meter_identity_and_timestamp():
 
 def test_repeated_meter_readback_is_idempotent_but_time_reversal_is_rejected():
     guard = CostBudgetGuard()
+    observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
+    observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
     assert guard.sessions["utility"]["cost_upper_eur"] == 0
     assert (
@@ -211,6 +219,7 @@ def test_invalid_price_inputs_or_missing_next_quarter_cannot_approve_budget():
     assert price_upper_bound(rates(), None, NOW) is None
     assert price_upper_bound(rates(), NOW, NOW) is None
     guard = CostBudgetGuard()
+    observe(guard, connected=False)
     assert observe(guard) == "CERTIFIED"
     approved, summary = allow(guard, 3, prices=[])
     assert approved == set()
@@ -220,3 +229,36 @@ def test_invalid_price_inputs_or_missing_next_quarter_cannot_approve_budget():
     permitted, summary = allow(CostBudgetGuard(), None, prices=[])
     assert permitted == {"utility"}
     assert summary["status"] == "DISABLED"
+
+
+
+def test_connected_on_first_observation_cannot_reset_unknown_prior_spend():
+    guard = CostBudgetGuard()
+    assert observe(guard) == "SESSION_START_NOT_WITNESSED"
+    assert allow(guard, 5)[0] == set()
+    assert observe(guard, meter=101, at=NOW + timedelta(minutes=1)) == (
+        "BUDGET_LEDGER_UNVERIFIED"
+    )
+    assert allow(CostBudgetGuard(guard.snapshot()), 5)[0] == set()
+    observe(guard, connected=False)
+    assert observe(guard) == "CERTIFIED"
+
+
+def test_connection_unknown_invalidates_existing_certified_cost_ledger():
+    guard = CostBudgetGuard()
+    observe(guard, connected=False)
+    assert observe(guard) == "CERTIFIED"
+    assert guard.observe(
+        "utility", connected=None, session_start=SESSION,
+        meter_source="sensor.utility_meter", meter_kwh=100,
+        meter_at=NOW, prices=rates(),
+    ) == "SESSION_UNVERIFIED"
+    assert allow(guard, 5)[0] == set()
+    assert observe(guard) == "BUDGET_LEDGER_UNVERIFIED"
+
+
+def test_stale_meter_cannot_certify_newly_witnessed_connected_session():
+    guard = CostBudgetGuard()
+    observe(guard, connected=False)
+    assert observe(guard, at=NOW - timedelta(minutes=4)) == "METER_ANCHOR_STALE"
+    assert allow(guard, 5)[0] == set()
