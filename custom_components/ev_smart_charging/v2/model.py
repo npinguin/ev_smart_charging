@@ -92,6 +92,9 @@ class Charger:
     power_entity: str = ""
     energy_entity: str = ""
     tariff_entity: str = ""
+    price_mode: str = "effective_slots"
+    spot_markup_eur_kwh: float | None = None
+    price_vat_percent: float | None = None
     max_ac_kw: float | None = None
     phase_count: int | None = None
     max_current_a: float | None = None
@@ -118,6 +121,23 @@ class Charger:
             "power_relay",
         ):
             raise ConfigurationError("unsupported_control_semantics")
+        if self.price_mode not in ("effective_slots", "spot_with_fees"):
+            raise ConfigurationError("price_mode_invalid")
+        if self.price_mode == "spot_with_fees" and (
+            self.spot_markup_eur_kwh is None
+            or self.price_vat_percent is None
+        ):
+            raise ConfigurationError("spot_requires_explicit_fees_and_vat")
+        if self.spot_markup_eur_kwh is not None and (
+            not isfinite(self.spot_markup_eur_kwh)
+            or abs(self.spot_markup_eur_kwh) > 10
+        ):
+            raise ConfigurationError("invalid_spot_markup")
+        if self.price_vat_percent is not None and (
+            not isfinite(self.price_vat_percent)
+            or not 0 <= self.price_vat_percent <= 100
+        ):
+            raise ConfigurationError("invalid_price_vat")
         if self.connection_source not in ("sensor", "manual"):
             raise ConfigurationError("invalid_connection_source")
         if self.energy_source_kind not in ("unknown", "session", "total_increasing"):

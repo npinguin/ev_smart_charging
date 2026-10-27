@@ -70,6 +70,17 @@ def model(entry):
             power_entity=data.get("power_entity", ""),
             energy_entity=data.get("energy_entity", ""),
             tariff_entity=data.get("tariff_entity", ""),
+            price_mode=data.get("price_mode", "effective_slots"),
+            spot_markup_eur_kwh=(
+                float(data["spot_markup_eur_kwh"])
+                if data.get("spot_markup_eur_kwh") not in (None, "")
+                else None
+            ),
+            price_vat_percent=(
+                float(data["price_vat_percent"])
+                if data.get("price_vat_percent") not in (None, "")
+                else None
+            ),
             max_ac_kw=optional_positive(data.get("max_ac_kw"), "charger_ac"),
             phase_count=data.get("phase_count"),
             max_current_a=optional_positive(data.get("max_current_a"), "current"),

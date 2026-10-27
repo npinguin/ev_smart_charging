@@ -172,6 +172,19 @@ async def _schema(hass, kind, old):
                     ),
                     opt("tariff_entity", _entity("sensor")),
                     opt(
+                        "price_mode",
+                        vol.In(["effective_slots", "spot_with_fees"]),
+                        "effective_slots",
+                    ),
+                    opt(
+                        "spot_markup_eur_kwh",
+                        vol.All(vol.Coerce(float), vol.Range(min=-10, max=10)),
+                    ),
+                    opt(
+                        "price_vat_percent",
+                        vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                    ),
+                    opt(
                         "requested_grid_kwh",
                         vol.All(vol.Coerce(float), vol.Range(min=0.001)),
                     ),

@@ -14,7 +14,8 @@ from homeassistant.util import dt
 from .catalog import catalog
 from ..controller import safety
 from .execution import NativeChargeWriter, _desired_now
-from .planning import compile_advisory, parse_tariff_slots
+from .planning import compile_advisory
+from .tariffs import source_tariff_slots
 from .group_facts import group_facts
 from ..controller.costs import ActualCostLedger
 from .soc_estimation import SocEstimator
@@ -131,11 +132,7 @@ def read_inputs(hass, chargers, vehicles):
             hass.states.get(charger.tariff_entity) if charger.tariff_entity else None
         )
         tariff = _fresh_state(tariff, max_age=timedelta(hours=36))
-        prices, quality = parse_tariff_slots(
-            tariff.attributes.get("price_slots") if tariff else None,
-            tariff.attributes.get("currency") if tariff else None,
-            tariff.attributes.get("unit_of_measurement") if tariff else None,
-        )
+        prices, quality = source_tariff_slots(tariff, charger)
         energy_state = (
             hass.states.get(charger.energy_entity)
             if charger.energy_entity else None

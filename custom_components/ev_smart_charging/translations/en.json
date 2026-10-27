@@ -73,7 +73,10 @@
           "requested_grid_kwh": "Charge demand without SoC (grid kWh)",
           "requested_duration_quarters": "Charging duration without SoC (quarters)",
           "charge_ready_time": "Ready by (HH:MM)",
-          "energy_source_kind": "Energy meter kind"
+          "energy_source_kind": "Energy meter kind",
+          "price_mode": "Tariff source: effective price or market spot",
+          "spot_markup_eur_kwh": "Explicit all-in markup (EUR/kWh)",
+          "price_vat_percent": "VAT on electricity price (%)"
         },
         "data_description": {
           "control_entity": "Choose the physical control switch (switch/input_boolean). V2 physical control remains locked while P0 is open.",
@@ -86,7 +89,10 @@
           "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
           "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
           "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00.",
-          "energy_source_kind": "Select Session only when the source resets for each charging session; Total increasing means lifetime meter. Only Session is used directly for session energy totals."
+          "energy_source_kind": "Select Session only when the source resets for each charging session; Total increasing means lifetime meter. Only Session is used directly for session energy totals.",
+          "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
+          "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT."
         }
       },
       "v2_controller": {
@@ -403,7 +409,10 @@
           "peak_reserve_kw": "Site power safety reserve (kW)",
           "soc_source_mode": "SoC source mode",
           "manual_soc": "Manual SoC (%)",
-          "charge_efficiency": "Verified charging efficiency (0–1)"
+          "charge_efficiency": "Verified charging efficiency (0–1)",
+          "price_mode": "Tariff source: effective price or market spot",
+          "spot_markup_eur_kwh": "Explicit all-in markup (EUR/kWh)",
+          "price_vat_percent": "VAT on electricity price (%)"
         },
         "data_description": {
           "soc_entity": "Choose an existing SoC sensor. Leave empty if no reliable SoC source is available.",
@@ -425,7 +434,10 @@
           "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
           "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
           "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
-          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified."
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified.",
+          "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
+          "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT."
         }
       }
     },

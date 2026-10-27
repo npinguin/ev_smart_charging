@@ -73,7 +73,10 @@
           "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
           "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
           "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
-          "energy_source_kind": "Energiemeter type"
+          "energy_source_kind": "Energiemeter type",
+          "price_mode": "Tariefbron: effectieve prijs of marktprijs",
+          "spot_markup_eur_kwh": "Extra kosten per kWh (EUR/kWh)",
+          "price_vat_percent": "BTW op energieprijs (%)"
         },
         "data_description": {
           "control_entity": "Kies de fysieke bedieningsschakelaar (switch/input_boolean). Fysieke V2-aansturing blijft vergrendeld zolang P0 open is.",
@@ -86,7 +89,10 @@
           "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
           "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
           "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
-          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter."
+          "energy_source_kind": "Selecteer Session voor een meter die de huidige laadsessie vanaf nul meet, Total increasing voor een levensduurmeter. Alleen Session telt direct als sessie-energie; een levensduurmeter is geen sessiemeter.",
+          "price_mode": "Effective slots: bron biedt geverifieerde EUR/kWh-slots. Spot with fees: Nord Pool/Frank/ENTSO-e marktprijzen worden pas bruikbaar na expliciete kosten en BTW.",
+          "spot_markup_eur_kwh": "Verplicht bij spot: bekende variabele leveranciers-, net- en heffingskosten per kWh samen, negatief indien korting. Geen fictief nultarief.",
+          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten."
         }
       },
       "v2_controller": {
@@ -340,7 +346,10 @@
           "peak_reserve_kw": "Veiligheidsreserve (kW)",
           "soc_source_mode": "SoC-bron en methode",
           "manual_soc": "Manuele SoC (%)",
-          "charge_efficiency": "Gekende laadefficiëntie (0–1)"
+          "charge_efficiency": "Gekende laadefficiëntie (0–1)",
+          "price_mode": "Tariefbron: effectieve prijs of marktprijs",
+          "spot_markup_eur_kwh": "Extra kosten per kWh (EUR/kWh)",
+          "price_vat_percent": "BTW op energieprijs (%)"
         },
         "data_description": {
           "soc_entity": "Kies een bestaande SoC-sensor. Geen betrouwbare SoC-bron? Laat dit leeg.",
@@ -362,7 +371,10 @@
           "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
           "soc_source_mode": "OEM: enkel verse sensor. Manual: zelf ingestelde SoC. Meter compensated: OEM + werkelijk gemeten sessie- of cumulatieve energie, met herkenbare Estimated status.",
           "manual_soc": "Expliciet ingegeven SoC wanneer de voertuigcloud ontbreekt. Niet voorgesteld als OEM-meting.",
-          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd."
+          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd.",
+          "price_mode": "Effective slots: bron biedt geverifieerde EUR/kWh-slots. Spot with fees: Nord Pool/Frank/ENTSO-e marktprijzen worden pas bruikbaar na expliciete kosten en BTW.",
+          "spot_markup_eur_kwh": "Verplicht bij spot: bekende variabele leveranciers-, net- en heffingskosten per kWh samen, negatief indien korting. Geen fictief nultarief.",
+          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten."
         }
       }
     },
