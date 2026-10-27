@@ -21,3 +21,7 @@ This GitHub prerelease is specifically required to **obtain real-device acceptan
 The native HA runbook is in `docs/V2_HOME_ASSISTANT_SETUP_AND_FIELD_TEST.md`. Before using physical Start on **one EVSE at a time**, take a full Home Assistant backup, verify original V1 behavior, manually inspect all mappings/price units and demand, disable that original Local physical writer, and confirm OEM recovery control is accessible. Keep other original chargers Local until accepted. If any hang, disable charging via OEM/hardware and restore backup plus immutable `v2.6.0-rc.16`.
 
 **Publication decision:** the HACS field-test prerelease may be tagged only when the workflow's fresh exact-HEAD CI and every publication assertion pass. Promotion to production/stable remains independently blocked on real-device acceptance and cleanup of the historical intermediate Controller.
+
+## Workflow validation repair and new immutable attempt
+
+This explicit RC17 request supersedes the earlier rejected workflow YAML on the same branch. The release script indentation was corrected in commit `d108980da0e94981ff699d763a702ae64d2e2ad8`. Re-run the **full publication CI on this request's own SHA**, fail closed on any test/assertion error, and create exactly one immutable `v2.6.0-rc.17` HACS prerelease tag only after completion. No green status from a previous commit qualifies.
