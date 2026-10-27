@@ -30,12 +30,6 @@ def _score(entity, state, role):
     words = _label(entity)
     attrs = state.attributes if state is not None else {}
     unit = attrs.get("unit_of_measurement", "")
-    device_class = (
-        getattr(entity, "device_class", None)
-        or getattr(entity, "original_device_class", None)
-        or attrs.get("device_class", "")
-    )
-    dc = str(device_class or "").lower()
     if role == "soc_entity":
         return (
             10 if domain == "sensor" and unit == "%"
