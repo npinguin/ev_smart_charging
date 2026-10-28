@@ -7,6 +7,8 @@ the interval remains on the Charger but is unassigned: never guess a split.
 
 from __future__ import annotations
 
+from math import isfinite
+
 from ..controller.costs import ActualCostLedger
 
 
@@ -59,6 +61,15 @@ class V2CostLedger(ActualCostLedger):
         buckets = value.get("vehicle_breakdown", {})
         if not isinstance(buckets, dict):
             return result
+        if "vehicle_breakdown" not in value and result.intervals:
+            # Previously persisted V2 Charger cost remains valid, but its
+            # unknown historical Vehicle must not be guessed.
+            buckets = {
+                "": {
+                    "energy_kwh": result.known_energy,
+                    "cost_eur": result.known_cost,
+                }
+            }
         try:
             parsed = {}
             for uid, item in buckets.items():
@@ -66,13 +77,16 @@ class V2CostLedger(ActualCostLedger):
                     return result
                 energy = float(item["energy_kwh"])
                 cost = float(item["cost_eur"])
-                from math import isfinite
-
                 if not all(map(isfinite, (energy, cost))) or energy < 0:
                     return result
                 parsed[uid] = {"energy_kwh": energy, "cost_eur": cost}
-            if sum(item["energy_kwh"] for item in parsed.values()) > (
-                result.known_energy + 1e-6
+            # No financial projection may exceed or contradict the one
+            # authoritative per-Charger actual-energy and cost ledger.
+            if parsed and (
+                abs(sum(item["energy_kwh"] for item in parsed.values()) - result.known_energy)
+                > 1e-5
+                or abs(sum(item["cost_eur"] for item in parsed.values()) - result.known_cost)
+                > 1e-5
             ):
                 return result
             result.vehicle_breakdown = parsed
