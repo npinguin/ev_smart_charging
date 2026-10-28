@@ -46,6 +46,8 @@ async def async_setup_entry(
     if entry_type in V2_TYPES:
         if entry_type == ENTRY_CHARGER:
             async_add_devices([V2VehicleSelection(entry)])
+        elif entry_type == "vehicle_v2":
+            async_add_devices([V2SoCSourceSelection(entry)])
         return
     coordinator = hass.data[DOMAIN][entry.entry_id]
     selects = []
@@ -372,4 +374,59 @@ class V2VehicleSelection(SelectEntity):
             self.entry.data["uid"],
             {"vehicle_uid": choices[option]},
         )
+        self.async_write_ha_state()
+
+
+class V2SoCSourceSelection(SelectEntity):
+    """OEM/manual/meter compensated; never stores an independent selected mode."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "SoC source"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:car-battery"
+    _MODES = {
+        "OEM": "oem",
+        "Manual": "manual",
+        "Meter compensated": "meter_compensated",
+    }
+
+    def __init__(self, entry):
+        self.entry = entry
+        self._attr_unique_id = f"{DOMAIN}_v2_vehicle_{entry.data['uid']}_soc_source"
+
+    @property
+    def device_info(self):
+        from .v2.entities import logical_device_info
+
+        return logical_device_info(self.entry)
+
+    @property
+    def options(self):
+        return list(self._MODES)
+
+    @property
+    def current_option(self):
+        from .v2.catalog import model
+
+        mode = model(self.entry).soc_source_mode
+        return next(
+            (label for label, value in self._MODES.items() if value == mode), "OEM"
+        )
+
+    async def async_select_option(self, option):
+        from types import SimpleNamespace
+
+        from .v2.catalog import model
+
+        if option not in self._MODES:
+            raise ValueError("unknown_soc_source")
+        updated = {
+            **self.entry.options,
+            "soc_source_mode": self._MODES[option],
+        }
+        # Manual requires a deliberate user-entered SoC. Compensated
+        # requires a source, verified capacity and charging efficiency.
+        model(SimpleNamespace(data=self.entry.data, options=updated))
+        self.hass.config_entries.async_update_entry(self.entry, options=updated)
         self.async_write_ha_state()
