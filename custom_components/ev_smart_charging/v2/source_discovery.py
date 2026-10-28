@@ -150,6 +150,10 @@ def suggest_device_bindings(hass, device_id, kind):
             review[role] = "suggested"
         else:
             review[role] = "ambiguous" if scores else "not_available"
+    # A matching display name alone is not evidence of a supported device.
+    # Reject empty discovery rather than silently presenting a no-op prefill.
+    if not suggestions:
+        raise ValueError("no_compatible_source_entities")
     name = getattr(dev, "name_by_user", None) or getattr(dev, "name", None)
     if name:
         suggestions["name"] = name
