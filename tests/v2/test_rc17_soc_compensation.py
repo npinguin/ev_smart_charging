@@ -25,7 +25,7 @@ def vehicle(**kwargs):
     return Vehicle(**(defaults | kwargs))
 
 
-def observed(estimator, *, raw=40, oem_at=NOW, energy=100, at=NOW):
+def observed(estimator, *, raw=40, oem_at=NOW, energy=100, at=NOW, meter_source=""):
     return estimator.resolve(
         "peblar",
         vehicle(),
@@ -33,6 +33,7 @@ def observed(estimator, *, raw=40, oem_at=NOW, energy=100, at=NOW):
         oem_at=oem_at,
         energy_kwh=energy,
         energy_kind="total_increasing",
+        meter_source=meter_source,
         now=at,
     )
 
@@ -126,3 +127,48 @@ def test_no_meter_compensation_without_capacity_efficiency_and_source():
         vehicle(charge_efficiency=1.2)
     with pytest.raises(ConfigurationError, match="manual_soc_required"):
         vehicle(soc_source_mode="manual", manual_soc=None)
+
+
+def test_rebinding_energy_source_never_inflates_soc_from_unrelated_meter():
+    tracker = SocEstimator()
+    old = "sensor.peblar_lifetime_energy"
+    new = "sensor.peblar_new_energy"
+    assert observed(tracker, meter_source=old) == (40, "OEM")
+    assert observed(
+        tracker, meter_source=old, energy=101, at=NOW + timedelta(minutes=1)
+    ) == (44.5, "ESTIMATED")
+    # Even though the replacement meter counter is larger, its old absolute
+    # baseline must never become EV energy delivered since the OEM sample.
+    assert observed(
+        tracker, meter_source=new, energy=500, at=NOW + timedelta(minutes=2)
+    ) == (None, "METER_SOURCE_CHANGED_REQUIRES_OEM")
+    restored = SocEstimator(tracker.snapshot())
+    assert observed(
+        restored, meter_source=new, energy=501, at=NOW + timedelta(minutes=3)
+    ) == (None, "METER_SOURCE_CHANGED_REQUIRES_OEM")
+    new_oem_at = NOW + timedelta(minutes=5)
+    assert observed(
+        restored,
+        raw=45,
+        oem_at=new_oem_at,
+        meter_source=new,
+        energy=501,
+        at=new_oem_at,
+    ) == (45, "OEM")
+    assert observed(
+        restored,
+        raw=45,
+        oem_at=new_oem_at,
+        meter_source=new,
+        energy=502,
+        at=new_oem_at + timedelta(minutes=3),
+    ) == (49.5, "ESTIMATED")
+
+
+def test_legacy_anchor_without_meter_provenance_requires_new_oem_event():
+    tracker = SocEstimator()
+    assert observed(tracker) == (40, "OEM")
+    # Legacy stored anchors cannot prove which old meter was the baseline.
+    assert observed(
+        tracker, meter_source="sensor.real_meter", at=NOW + timedelta(minutes=1)
+    ) == (None, "METER_SOURCE_CHANGED_REQUIRES_OEM")
