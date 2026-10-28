@@ -340,3 +340,19 @@ def test_unobserved_cost_and_energy_are_unknown_not_free():
     observed = ledger.summary()
     assert observed["known_recorded_cost_eur"] == 0
     assert observed["known_recorded_energy_kwh"] == 0
+
+
+def test_numeric_meter_string_is_normalized_and_corrupt_history_is_rejected():
+    anchor = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    price = PriceSlot(anchor, anchor + timedelta(minutes=15), 0.25)
+    ledger = V2CostLedger()
+    ledger.observe(anchor, "10", "sensor.meter", [price], "audi")
+    ledger.observe(anchor + timedelta(minutes=5), "12", "sensor.meter", [price], "audi")
+    assert ledger.summary()["known_recorded_energy_kwh"] == 2
+    assert ledger.summary()["known_recorded_cost_eur"] == 0.5
+
+    invalid = ledger.to_storage()
+    invalid["prior_vehicle_totals"] = {
+        "audi": {"energy_kwh": "invalid", "cost_eur": 1}
+    }
+    assert V2CostLedger.from_storage(invalid).vehicle_breakdown == {}
