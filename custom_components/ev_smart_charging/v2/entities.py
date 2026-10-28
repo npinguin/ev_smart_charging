@@ -427,7 +427,6 @@ def sensors_for_entry(entry):
                 "kWh",
             ),
             V2Fact(entry, kind, "controller", "Charge Controller"),
-            V2Fact(entry, kind, "connected", "Connection"),
             V2Fact(
                 entry,
                 kind,
