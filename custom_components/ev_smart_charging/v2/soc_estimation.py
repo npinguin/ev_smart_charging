@@ -45,6 +45,7 @@ class SocEstimator:
         energy_kwh,
         energy_kind,
         now,
+        meter_source="",
     ):
         if vehicle.soc_source_mode == "manual":
             return vehicle.manual_soc, "MANUAL"
@@ -80,7 +81,24 @@ class SocEstimator:
         if quarantined and (
             stamp is None or stamp.isoformat() == anchor["invalidated_oem_at"]
         ):
-            return None, "METER_RESET_REQUIRES_OEM"
+            return None, anchor.get(
+                "invalidated_reason", "METER_RESET_REQUIRES_OEM"
+            )
+        # Changing the physical energy source invalidates the delta origin.
+        # Never add two unrelated meters, even when both counters increase.
+        source = meter_source or ""
+        if (
+            isinstance(anchor, dict)
+            and anchor.get("oem_at")
+            and anchor.get("meter_source", "") != source
+            and (stamp is None or stamp.isoformat() == anchor["oem_at"])
+        ):
+            self.anchors[key] = {
+                "invalidated_oem_at": anchor["oem_at"],
+                "invalidated_reason": "METER_SOURCE_CHANGED_REQUIRES_OEM",
+            }
+            self.dirty = True
+            return None, "METER_SOURCE_CHANGED_REQUIRES_OEM"
         new_oem = (
             stamp is not None
             and observation is not None
@@ -99,6 +117,7 @@ class SocEstimator:
                 "last_meter_kwh": value,
                 "gained_grid_kwh": 0.0,
                 "meter_kind": energy_kind,
+                "meter_source": source,
             }
             self.anchors[key] = anchor
             self.dirty = True
@@ -113,6 +132,7 @@ class SocEstimator:
         if (
             now - anchored_at > timedelta(hours=36)
             or anchor.get("meter_kind") != energy_kind
+            or anchor.get("meter_source", "") != source
         ):
             self.anchors.pop(key, None)
             self.dirty = True
