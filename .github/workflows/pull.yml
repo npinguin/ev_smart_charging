@@ -136,11 +136,24 @@ jobs:
             -o console_output_style=count \
             -p no:sugar \
             tests
-      - name: Enforce coverage on measured artifact
+      - name: Enforce exact measured coverage (no rounded pass)
         run: |
-          # Independent hard gate: catches runner/wrapper combinations that
-          # report a successful pytest step despite a cov-fail-under warning.
-          python3 -m coverage report --fail-under=90
+          # coverage report rounds the display (e.g. 89.97% => 90%), which
+          # can falsely accept a run despite pytest-cov reporting failure.
+          # Read the unrounded percentage from the measured coverage data.
+          python3 -m coverage json -o coverage.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          totals = json.loads(Path("coverage.json").read_text())["totals"]
+          percentage = float(totals["percent_covered"])
+          print(f"Measured exact coverage: {percentage:.6f}%")
+          if percentage < 90.0:
+              raise SystemExit(
+                  f"FAIL: strict coverage gate is >=90%, measured {percentage:.6f}%"
+              )
+          PY
       # External Codecov reporting is optional. pytest coverage remains a
       # required >=90% gate on every Python test matrix version.
       - name: "Upload coverage to Codecov (optional)"
