@@ -1,6 +1,8 @@
 """One trailing HA refresh after concurrent source/operator updates."""
 
 import asyncio
+
+import pytest
 from unittest.mock import patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -122,3 +124,47 @@ async def test_planner_failure_shutdown_attempts_all_owned_writers(hass):
     finally:
         runtime._writers.clear()
         await runtime.async_stop()
+
+
+async def test_controller_unload_shuts_down_all_writers_before_failed_storage(
+    hass, monkeypatch
+):
+    """Disk failure or one broken EVSE must not skip other shutdown attempts."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="storage_failure_controller",
+        data={
+            MARKER: ENTRY_CONTROLLER,
+            "uid": "storage_failure",
+            "name": "Storage failure controller",
+        },
+        version=8,
+    )
+    entry.add_to_hass(hass)
+    runtime = V2ControllerRuntime(hass, entry)
+    calls = []
+
+    class Writer:
+        def __init__(self, uid, should_fail=False):
+            self.uid = uid
+            self.should_fail = should_fail
+
+        async def async_shutdown(self):
+            calls.append(self.uid)
+            if self.should_fail:
+                raise RuntimeError("physical readback failure")
+            return "VERIFIED_OFF"
+
+    runtime._writers["broken"] = Writer("broken", should_fail=True)
+    runtime._writers["good"] = Writer("good")
+
+    async def reject_storage(_value):
+        calls.append("store")
+        raise OSError("HA storage offline")
+
+    monkeypatch.setattr(runtime._soc_store, "async_save", reject_storage)
+    with pytest.raises(OSError, match="HA storage offline"):
+        await runtime.async_stop()
+    assert calls == ["broken", "good", "store"]
+    assert runtime._stopped is True
+    assert runtime._writers == {}
