@@ -22,9 +22,10 @@ jobs:
   publish_test_prerelease:
     name: Publish isolated HACS test prerelease
     needs: full_ci_gate
-    # Operator explicitly requested another HACS build. P0 stays OPEN:
-    # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/fix/rc17-connected-off-race' }}
+    # Release gate #11 and physical P0 #5 remain OPEN. An RC, including
+    # a guarded HACS prerelease, must not be published by CI alone.
+    # Re-enable only after exact-head software + actual HA/EVSE acceptance.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
