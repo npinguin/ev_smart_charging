@@ -329,3 +329,18 @@ def test_vehicle_soc_follows_canonical_charger_not_stale_controller_snapshot(has
     assert fact._vehicle_observed()["effective_soc"] == 75
     south.snapshot["vehicle_sources"]["audi"]["charger_uid"] = "white"
     assert fact._vehicle_observed() is None
+
+
+def test_unobserved_cost_and_energy_are_unknown_not_free():
+    ledger = V2CostLedger()
+    empty = ledger.summary()
+    assert empty["known_recorded_cost_eur"] is None
+    assert empty["known_recorded_energy_kwh"] is None
+
+    anchor = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    price = PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)
+    ledger.observe(anchor, 5, "sensor.meter", [price], "audi")
+    ledger.observe(anchor + timedelta(minutes=5), 5, "sensor.meter", [price], "audi")
+    observed = ledger.summary()
+    assert observed["known_recorded_cost_eur"] == 0
+    assert observed["known_recorded_energy_kwh"] == 0
