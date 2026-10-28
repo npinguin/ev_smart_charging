@@ -1,118 +1,651 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "Configuration of name and external entities.",
-                "data": {
-                    "device_name": "Name",
-                    "price_sensor": "Electricity price sensor",
-                    "ev_soc_sensor": "EV SOC entity",
-                    "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
-                    "charger_entity": "Charger control entity (single space to remove)",
-                    "charging_state_entity": "Charging state entity (single space to remove)",
-                    "ev_controlled": "An EV integration will control start/stop of charging"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electricity price sensor not found.",
-            "price_not_sensor": "The Electricity price entity is not a sensor.",
-            "sensor_is_not_price": "The Electricity price sensor does not have the needed attributes.",
-            "ev_soc_not_found": "EV SOC entity not found.",
-            "ev_soc_invalid_data": "The SOC entity gives invalid data.",
-            "ev_target_soc_not_found": "EV Target SOC entity not found.",
-            "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
-            "charger_control_switch_not_found": "Charger control entity not found.",
-            "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
-            "charging_state_entity_not_found": "Charging state entity not found."
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Smart Charging setup",
+        "menu_options": {
+          "v2_migrate": "Move an existing Local charger to V2",
+          "v2_setup": "Add new V2 devices",
+          "legacy_local": "Add original Local charger (upstream)"
         }
+      },
+      "legacy_local": {
+        "description": "Configuration of name and external entities.",
+        "data": {
+          "device_name": "Name",
+          "price_sensor": "Electricity price sensor",
+          "ev_soc_sensor": "EV SoC entity (optional; no automatic charging without known demand)",
+          "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
+          "charger_entity": "Charger control entity (single space to remove)",
+          "charging_state_entity": "Charging state entity (single space to remove)",
+          "ev_controlled": "An EV integration will control start/stop of charging"
+        }
+      },
+      "v2_vehicle": {
+        "title": "Add Vehicle",
+        "data": {
+          "name": "Vehicle name (required)",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum vehicle AC power (kW)",
+          "phase_count": "Number of AC phases",
+          "ready_by": "Ready by — specific date and time (one-time)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "soc_source_mode": "SoC source mode",
+          "manual_soc": "Manual SoC (%)",
+          "charge_efficiency": "Verified charging efficiency (0–1)"
+        },
+        "data_description": {
+          "ready_mode": "Daily is the default. In the weekly calendar, blank days have no deadline.",
+          "soc_entity": "Optional for manual or kWh/time charging. Required for OEM SoC planning: choose the existing vehicle percentage sensor, e.g. sensor.audi_soc.",
+          "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
+          "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified.",
+          "battery_kwh": "Required for SoC-driven planning: usable battery capacity in kWh, e.g. 20 kWh. Do not guess gross capacity."
+        }
+      },
+      "v2_charger": {
+        "title": "Add Charger",
+        "data": {
+          "name": "Charger name (required)",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native charging control entity (required for Start/Stop)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Energy meter source (session or cumulative)",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "max_current_a": "Maximum charging current (A)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit",
+          "connection_source": "Connected source: HA sensor or manual",
+          "requested_grid_kwh": "Charge demand without SoC (grid kWh)",
+          "requested_duration_quarters": "Charging duration without SoC (quarters)",
+          "charge_ready_time": "Ready by (HH:MM)",
+          "energy_source_kind": "Energy meter kind",
+          "price_mode": "Tariff source: effective price or market spot",
+          "spot_markup_eur_kwh": "Explicit all-in markup (EUR/kWh)",
+          "price_vat_percent": "VAT on electricity price (%)"
+        },
+        "data_description": {
+          "control_entity": "Required for physical charging: select the original EVSE or EV-rated smart-plug switch/input_boolean. V2 only commands with an explicitly enabled Controller, exclusive ownership and actual readback.",
+          "connected_entity": "Required when Connected source = Sensor. Pick the native cable/vehicle-connected entity. Manual mode instead gives a separate Connected Yes/No switch.",
+          "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
+          "power_entity": "Required for physical control: real Charger power entity in W/kW, e.g. sensor.peblar_charge_power. Not total household power.",
+          "energy_entity": "For actual session kWh and costs: select the real kWh/Wh meter of this charging point, including total-increasing meters. The meter kind below controls safe per-connection accounting.",
+          "tariff_entity": "Required for price-based planning: an entity with a verified future effective EUR/kWh curve or market curve plus explicit costs. A scalar current spot price is not enough.",
+          "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
+          "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
+          "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
+          "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00.",
+          "energy_source_kind": "Session resets each session. Total increasing is a lifetime meter; V2 uses only witnessed increments since the operator-declared connection. Unknown meter kinds never produce invented session energy.",
+          "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
+          "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT.",
+          "max_ac_kw": "Required for physical execution and SoC-free planning: known continuous charger rating, e.g. 2.0 kW for an EV-rated smart plug. Never infer a rating from present idle power.",
+          "controller_uid": "Required: choose the existing V2 Charge Controller responsible for this Charger's planning and electrical budget."
+        }
+      },
+      "v2_controller": {
+        "title": "Add Charge Controller (one planner)",
+        "data": {
+          "name": "Controller name (required)",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Hard cost cap per active connection (€) — optional",
+          "physical_enabled": "Enable real V2 charging control (requires exclusive EVSE ownership)",
+          "peak_shaving_enabled": "Enable peak shaving",
+          "site_power_entity": "Site net import power sensor (W/kW)",
+          "peak_target_kw": "Maximum site import (kW)",
+          "peak_reserve_kw": "Site power safety reserve (kW)"
+        },
+        "data_description": {
+          "physical_enabled": "Optional, off by default. Enable only once V1 Local no longer commands this EVSE and connected/power, effective prices, native control and Start/Stop readback are verified.",
+          "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
+          "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
+          "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
+          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
+          "cost_budget_eur": "Applies across currently connected charging sessions, not an automatic daily budget. V2 measures energy and effective tariff, reserving the next 15 minutes conservatively. Missing meter/price coverage blocks physical Start. Leave empty for no cap."
+        }
+      },
+      "v2_migrate": {
+        "title": "Step 1 · Choose the original charger",
+        "data": {
+          "legacy_entry_id": "Existing Local charger"
+        },
+        "description": "The original charger and its configuration will remain unchanged."
+      },
+      "v2_migrate_confirm": {
+        "title": "Step 3 · Review and create V2 Charger",
+        "description": "Source: {legacy_name}. Original Ready By: {legacy_ready_by} (Vehicle suggestion only). Missing mappings: {missing_sources}. Only a new logical V2 Charger is created. Original Local charging remains active and V2 physical actuation stays disabled. Configure remaining mappings later in V2 Charger Options.",
+        "data": {
+          "name": "V2 Charger name",
+          "connected_entity": "Cable/connected sensor (optional)",
+          "max_ac_kw": "Maximum AC charging power (kW)",
+          "confirmed": "Confirm non-physical mapping"
+        },
+        "data_description": {
+          "connected_entity": "Choose the cable-connected sensor (sensor or binary_sensor)."
+        }
+      },
+      "v2_setup": {
+        "title": "Add V2 devices",
+        "menu_options": {
+          "v2_controller": "Add Charge Controller",
+          "v2_vehicle": "Add Vehicle",
+          "v2_charger": "Add Charger",
+          "v2_convert_controller": "Import prior Charge Controller settings",
+          "v2_convert_vehicle": "Import Vehicle profile from prior Controller"
+        }
+      },
+      "v2_migrate_bindings": {
+        "title": "Step 2 · Link existing V2 devices",
+        "description": "Select an existing Charge Controller and optionally an available Vehicle. Create new ones through Add V2 devices.",
+        "data": {
+          "controller_uid": "Charge Controller",
+          "vehicle_uid": "Vehicle (optional)"
+        }
+      },
+      "v2_migrate_target": {
+        "title": "Choose the V2 Charger",
+        "description": "Create a new V2 Charger or link an existing V2 Charger with no V1 source.",
+        "data": {
+          "existing_charger_uid": "Destination"
+        }
+      },
+      "v2_migrate_existing_confirm": {
+        "title": "Confirm existing Charger link",
+        "description": "Link {legacy_name} to existing V2 Charger {v2_name}. Existing V2 configuration stays authoritative; only missing source bindings are filled. Original Local charging remains unchanged, and no V2 charging commands are issued.",
+        "data": {
+          "confirmed": "Confirm link"
+        }
+      },
+      "v2_vehicle_source": {
+        "title": "Add vehicle",
+        "menu_options": {
+          "v2_vehicle_source_device": "Use existing Home Assistant device",
+          "v2_vehicle_source_manual": "Configure manually"
+        }
+      },
+      "v2_charger_source": {
+        "title": "Add charger",
+        "menu_options": {
+          "v2_charger_source_device": "Use existing Home Assistant device",
+          "v2_charger_source_manual": "Configure manually"
+        }
+      },
+      "v2_convert_controller": {
+        "title": "Choose prior Controller",
+        "description": "The original Controller remains untouched. A separate V2 Controller is created from validated settings, with physical control disabled.",
+        "data": {
+          "intermediate_id": "Existing Controller"
+        }
+      },
+      "v2_convert_controller_review": {
+        "title": "Review Controller conversion",
+        "description": "Name: {name}. Maximum simultaneous: {parallel}. Horizon: {horizon} days. {vehicles} existing Vehicle profiles will NOT be created automatically; import them individually. Review warnings: {warnings}. Original Controller and Local chargers stay unchanged.",
+        "data": {
+          "confirmed": "Create new V2 Controller"
+        }
+      },
+      "v2_convert_vehicle": {
+        "title": "Choose original Vehicle profile",
+        "description": "Profile data is suggested. Verify Ready By, SoC source, battery capacity and user before Save. The original source remains untouched.",
+        "data": {
+          "vehicle_uid": "Vehicle"
+        }
+      },
+      "v2_charger_source_device": {
+        "title": "Select existing HA charger device",
+        "description": "Select a device to suggest entity mappings. Review each suggestion in the next step. Go back to choose manual configuration.",
+        "data": {
+          "source_device_id": "Home Assistant device"
+        }
+      },
+      "v2_vehicle_source_device": {
+        "title": "Select existing HA vehicle device",
+        "description": "Select a device to suggest entity mappings. Review each suggestion in the next step. Go back to choose manual configuration.",
+        "data": {
+          "source_device_id": "Home Assistant device"
+        }
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "description": "Configuration of external entities.",
-                "data": {
-                    "price_sensor": "Electricity price sensor",
-                    "ev_soc_sensor": "EV SOC entity",
-                    "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
-                    "charger_entity": "Charger control entity (single space to remove)",
-                    "charging_state_entity": "Charging state entity (single space to remove)",
-                    "ev_controlled": "An EV integration will control start/stop of charging"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electricity price sensor not found.",
-            "price_not_sensor": "The Electricity price entity is not a sensor.",
-            "sensor_is_not_price": "The Electricity price sensor does not have the needed attributes.",
-            "ev_soc_not_found": "EV SOC entity not found.",
-            "ev_soc_invalid_data": "The SOC entity gives invalid data.",
-            "ev_target_soc_not_found": "EV Target SOC entity not found.",
-            "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
-            "charger_control_switch_not_found": "Charger control entity not found.",
-            "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
-            "charging_state_entity_not_found": "Charging state entity not found."
-        }
+    "error": {
+      "price_not_found": "Electricity price sensor not found.",
+      "price_not_sensor": "The Electricity price entity is not a sensor.",
+      "sensor_is_not_price": "The Electricity price sensor does not have the needed attributes.",
+      "ev_soc_not_found": "EV SOC entity not found.",
+      "ev_soc_invalid_data": "The SOC entity gives invalid data.",
+      "ev_target_soc_not_found": "EV Target SOC entity not found.",
+      "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
+      "charger_control_switch_not_found": "Charger control entity not found.",
+      "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
+      "charging_state_entity_not_found": "Charging state entity not found.",
+      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
     },
-    "entity": {
-        "button": {
-            "manually_start_charging": { "name": "Manually start charging" },
-            "manually_stop_charging": { "name": "Manually stop charging" }
-        },
-        "number": {
-            "charging_speed": { "name": "Charging speed" },
-            "electricity_price_limit": { "name": "Electricity price limit" },
-            "opportunistic_level": { "name": "Opportunistic level" },
-            "opportunistic_type2_level": { "name": "Opportunistic type2 level" },
-            "low_price_charging_level": { "name": "Low price charging level" },
-            "low_soc_charging_level": { "name": "Low SOC charging level" },
-            "minimum_ev_soc": { "name": "Minimum EV SOC" }
-        },
-        "select": {
-            "charge_start_time": { "name": "Charge start time" },
-            "charge_completion_time": { "name": "Charge completion time" }
-        },
-        "sensor": {
-            "charging": {
-                "name": "Charging",
-                "state_attributes": {
-                    "current_price": { "name": "Current price"},
-                    "ev_soc": {"name": "EV SOC"},
-                    "ev_target_soc": {"name": "EV target SOC"},
-                    "charging_is_planned": {"name": "Charging is planned"},
-                    "charging_start_time": {"name": "Charging start time"},
-                    "charging_stop_time": {"name": "Charging stop time"},
-                    "charging_number_of_hours": {"name": "Charging number of hours"},
-                    "opportunistic": {"name": "Opportunistic"},
-                    "raw_two_days": {"name": "Raw two days"},
-                    "charging_schedule": {"name": "Charging schedule"}
-                }
-            },
-            "status": {
-                "name": "Status",
-                "state": {
-                    "waiting_for_new_prices": "Waiting for new prices",
-                    "no_charging_planned": "No charging planned",
-                    "waiting_for_charging_to_begin": "Waiting for charging to begin",
-                    "charging": "Charging",
-                    "keeping_charger_on": "Keeping charger on",
-                    "disconnected": "Disconnected",
-                    "smart_charging_not_active": "Smart charging not active",
-                    "low_price_charging": "Low price charging",
-                    "low_soc_charging": "Low SOC charging"
-                }
-            }
-        },
-        "switch": {
-            "smart_charging_activated": { "name": "Smart charging activated" },
-            "apply_price_limit": { "name": "Apply price limit" },
-            "continuous_charging_preferred": { "name": "Continuous charging preferred" },
-            "ev_connected": { "name": "EV connected" },
-            "keep_charger_on": { "name": "Keep charger on" },
-            "opportunistic_charging": { "name": "Opportunistic charging" },
-            "opportunistic_type2_charging": { "name": "Opportunistic type2 charging" },
-            "low_price_charging": { "name": "Low price charging" },
-            "low_soc_charging": { "name": "Low SOC charging" }
-        }
+    "abort": {
+      "create_controller_first": "Create a Charge Controller before adding a Charger.",
+      "no_legacy_chargers_to_migrate": "No unmapped original Local Chargers found.",
+      "invalid_v2_migration_source": "Original Local source or Controller unavailable.",
+      "already_migrated": "This original Local Charger is already mapped.",
+      "v2_existing_charger_linked": "Existing V2 Charger linked; Local remains unchanged.",
+      "v2_existing_charger_control_conflict": "V1 and V2 Charger have conflicting physical control entities. Check mappings.",
+      "no_intermediate_controller": "No prior Controller to import.",
+      "no_intermediate_vehicle": "No prior Vehicle profiles to import."
     }
+  },
+  "options": {
+    "step": {
+      "retire_to_v2": {
+        "title": "Retire intermediate Controller",
+        "description": "All Controller and Vehicle profiles must be imported before the old runtime is stopped. Missing: {missing}. Historical data and V1 Local Chargers remain untouched.",
+        "data": {"confirm": "I confirm the V2 import is complete"}
+      },
+      "init": {
+        "description": "Configuration of external entities.",
+        "data": {
+          "price_sensor": "Electricity price sensor",
+          "ev_soc_sensor": "EV SoC entity (optional; blank leaves automatic charging inactive)",
+          "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
+          "charger_entity": "Charger control entity (single space to remove)",
+          "charging_state_entity": "Charging state entity (single space to remove)",
+          "ev_controlled": "An EV integration will control start/stop of charging",
+          "evsc_load_energy_kwh": "Requested energy (kWh; optional, for source-less load preview only)",
+          "evsc_load_duration_quarters": "Requested duration (15-minute quarters; optional, preview only)",
+          "evsc_control_semantics": "Charger control switch semantics",
+          "name": "Charger name",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Maximum indicative session cost (EUR)",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "ready_by": "Ready by — specific date and time (one-time)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native control switch (observation only during P0)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Session energy sensor",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_current_a": "Maximum charging current (A)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
+        },
+        "menu_options": {
+          "retire_to_v2": "Retire interim Controller after V2 import",
+          "policy": "Charge Controller policy",
+          "add_vehicle": "Add Vehicle",
+          "edit_vehicle": "Edit Vehicle",
+          "assign_vehicle": "Assign Vehicles to Chargers",
+          "delete_vehicle": "Delete Vehicle",
+          "link_chargers": "Link Chargers to Controller"
+        }
+      },
+      "charger": {
+        "title": "Charging inputs for {charger}",
+        "data": {
+          "capacity_kwh": "Usable vehicle battery (kWh)",
+          "power_kw": "Expected EVSE charging power (kW)",
+          "power_sensor": "Native charger power sensor",
+          "energy_sensor": "Native charger session-energy sensor"
+        }
+      },
+      "controller": {
+        "description": "Select chargers whose schedules are coordinated. Unselected chargers keep their original Local schedule. Uncheck paused chargers to resume.",
+        "data": {
+          "price_sensor": "Electricity price sensor",
+          "ev_soc_sensor": "EV SOC entity",
+          "ev_target_soc_sensor": "EV Target SOC entity (single space to remove)",
+          "charger_entity": "Charger control entity (single space to remove)",
+          "charging_state_entity": "Charging state entity (single space to remove)",
+          "ev_controlled": "An EV integration will control start/stop of charging",
+          "participants": "Coordinated chargers",
+          "max_parallel": "Maximum simultaneous chargers",
+          "power_budget_kw": "Group charger power budget (kW, 0 = no limit)",
+          "paused_chargers": "Manually paused chargers"
+        },
+        "title": "Charge Controller settings"
+      },
+      "policy": {
+        "title": "Charge Controller policy",
+        "description": "Local works independently. Coordinated membership is held for safety until field acceptance.",
+        "data": {
+          "participants": "Coordinated Chargers",
+          "max_parallel": "Maximum simultaneous Chargers",
+          "power_budget_kw": "Group power budget (kW; 0=unlimited)",
+          "peak_shaving_enabled": "Enable peak shaving",
+          "site_power_sensor": "Site power sensor",
+          "peak_target_kw": "Target peak (kW)",
+          "peak_reserve_kw": "Reserve power (kW)",
+          "planning_horizon_days": "Planning horizon (days, 1–14)"
+        }
+      },
+      "add_vehicle": {
+        "title": "Add Vehicle",
+        "description": "Configure one Vehicle using Home Assistant entities; no car-brand integration required.",
+        "data": {
+          "name": "Vehicle name",
+          "soc_entity": "Vehicle SoC sensor (Home Assistant entity)",
+          "target_soc": "Default target SoC (%)",
+          "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
+          "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
+          "external_identifier": "External vehicle reference (optional)",
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)",
+          "soc_max_age_minutes": "SoC freshness limit (minutes; 0 = no enforced age limit)",
+          "ready_by": "Ready by (date and time, optional)"
+        }
+      },
+      "edit_vehicle": {
+        "title": "Choose a Vehicle",
+        "data": {
+          "vehicle": "Vehicle to edit"
+        }
+      },
+      "update_vehicle": {
+        "title": "Edit Vehicle",
+        "data": {
+          "name": "Vehicle name",
+          "soc_entity": "Vehicle SoC sensor (Home Assistant entity)",
+          "target_soc": "Default target SoC (%)",
+          "usable_battery_kwh": "Usable battery capacity (kWh; optional)",
+          "max_ac_charge_kw": "Vehicle maximum AC power (kW; optional)",
+          "external_identifier": "External vehicle reference (optional)",
+          "ha_user_id": "Associated Home Assistant user ID (optional, not a permission)",
+          "soc_max_age_minutes": "SoC freshness limit (minutes; 0 = no enforced age limit)",
+          "ready_by": "Ready by (date and time, optional)"
+        }
+      },
+      "assign_vehicle": {
+        "title": "Assign Vehicle to Charger",
+        "description": "Each Charger can select a Vehicle or None. This selection does not change original Local physical control.",
+        "data": {}
+      },
+      "delete_vehicle": {
+        "title": "Choose Vehicle to delete",
+        "description": "Deletion does not change the Local charger configuration.",
+        "data": {
+          "vehicle": "Vehicle to delete"
+        }
+      },
+      "confirm_delete_vehicle": {
+        "title": "Confirm Vehicle deletion",
+        "description": "Delete {vehicle} and clear its assignment? Its EVSC entities and device are removed on Controller reload. Local charging continues unchanged.",
+        "data": {
+          "confirm": "Yes, delete this Vehicle"
+        }
+      },
+      "link_chargers": {
+        "title": "Link Chargers",
+        "description": "Link existing Chargers to the Charge Controller while retaining their native Local execution.",
+        "data": {
+          "linked_chargers": "Linked Chargers"
+        }
+      },
+      "v2_options": {
+        "title": "Configure V2 device",
+        "description": "Configure this V2 device. Choose existing Home Assistant entities. Clear an optional selection to unlink it. Original Local charging is unchanged.",
+        "data": {
+          "name": "Charger name",
+          "max_parallel": "Maximum simultaneous chargers",
+          "horizon_days": "Planning horizon (days)",
+          "power_budget_kw": "Maximum total charging power (kW)",
+          "price_cap_eur_kwh": "Maximum effective price (EUR/kWh)",
+          "cost_budget_eur": "Hard cost cap per active connection (€) — optional",
+          "soc_entity": "State of charge sensor",
+          "target_soc": "Target SoC (%)",
+          "battery_kwh": "Usable battery capacity (kWh)",
+          "max_ac_kw": "Maximum charger AC power (kW)",
+          "phase_count": "Number of charging phases",
+          "ready_by": "Ready by — specific date and time (one-time)",
+          "user_id": "Associated Home Assistant user (optional)",
+          "controller_uid": "Charge Controller (required)",
+          "vehicle_uid": "Assigned Vehicle (optional)",
+          "control_entity": "Native charging control entity (required for Start/Stop)",
+          "connected_entity": "Physical cable connected sensor",
+          "charging_entity": "Physical charging status sensor",
+          "power_entity": "Measured charging power sensor",
+          "energy_entity": "Energy meter source (session or cumulative)",
+          "tariff_entity": "Validated effective EUR/kWh tariff sensor",
+          "max_current_a": "Maximum charging current (A)",
+          "ready_mode": "Ready By pattern",
+          "ready_time": "Daily ready time (same every day)",
+          "ready_mon": "Monday ready time (blank = no deadline)",
+          "ready_tue": "Tuesday ready time (blank = no deadline)",
+          "ready_wed": "Wednesday ready time (blank = no deadline)",
+          "ready_thu": "Thursday ready time (blank = no deadline)",
+          "ready_fri": "Friday ready time (blank = no deadline)",
+          "ready_sat": "Saturday ready time (blank = no deadline)",
+          "ready_sun": "Sunday ready time (blank = no deadline)",
+          "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit",
+          "physical_enabled": "Enable real V2 charging control",
+          "connection_source": "Connected source: HA sensor or manual",
+          "requested_grid_kwh": "Charge demand without SoC (grid kWh)",
+          "requested_duration_quarters": "Charging duration without SoC (quarters)",
+          "charge_ready_time": "Ready by (HH:MM)",
+          "energy_source_kind": "Energy meter kind",
+          "peak_shaving_enabled": "Enable peak shaving",
+          "site_power_entity": "Site net import power sensor (W/kW)",
+          "peak_target_kw": "Maximum site import (kW)",
+          "peak_reserve_kw": "Site power safety reserve (kW)",
+          "soc_source_mode": "SoC source mode",
+          "manual_soc": "Manual SoC (%)",
+          "charge_efficiency": "Verified charging efficiency (0–1)",
+          "price_mode": "Tariff source: effective price or market spot",
+          "spot_markup_eur_kwh": "Explicit all-in markup (EUR/kWh)",
+          "price_vat_percent": "VAT on electricity price (%)"
+        },
+        "data_description": {
+          "soc_entity": "Optional for manual or kWh/time charging. Required for OEM SoC planning: choose the existing vehicle percentage sensor, e.g. sensor.audi_soc.",
+          "control_entity": "Required for physical charging: select the original EVSE or EV-rated smart-plug switch/input_boolean. V2 only commands with an explicitly enabled Controller, exclusive ownership and actual readback.",
+          "connected_entity": "Required when Connected source = Sensor. Pick the native cable/vehicle-connected entity. Manual mode instead gives a separate Connected Yes/No switch.",
+          "charging_entity": "Choose the actual charging status sensor (sensor or binary_sensor).",
+          "power_entity": "Required for physical control: real Charger power entity in W/kW, e.g. sensor.peblar_charge_power. Not total household power.",
+          "energy_entity": "For actual session kWh and costs: select the real kWh/Wh meter of this charging point, including total-increasing meters. The meter kind below controls safe per-connection accounting.",
+          "tariff_entity": "Required for price-based planning: an entity with a verified future effective EUR/kWh curve or market curve plus explicit costs. A scalar current spot price is not enough.",
+          "physical_enabled": "Optional, off by default. Enable only once V1 Local no longer commands this EVSE and connected/power, effective prices, native control and Start/Stop readback are verified.",
+          "connection_source": "Choose Manual for smart plugs without a cable sensor. A separate Connected Yes/No switch appears on the V2 Charger device.",
+          "requested_grid_kwh": "Optional grid energy when no reliable SoC is available. Choose kWh OR duration, not both.",
+          "requested_duration_quarters": "Optional number of 15-minute periods without reliable SoC. Four quarters = one hour.",
+          "charge_ready_time": "Daily ready deadline for charging without Vehicle/SoC, e.g. 08:00.",
+          "energy_source_kind": "Session resets each session. Total increasing is a lifetime meter; V2 uses only witnessed increments since the operator-declared connection. Unknown meter kinds never produce invented session energy.",
+          "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
+          "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
+          "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
+          "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
+          "soc_source_mode": "OEM: fresh vehicle data only. Manual: explicit user-entered value. Meter compensated: OEM plus actual energy meter with marked Estimated status.",
+          "manual_soc": "Explicit SoC when the vehicle cloud is unavailable; not presented as OEM measurement.",
+          "charge_efficiency": "Required for meter compensation: evidence-based battery kWh / grid kWh ratio, e.g. 0.9 if verified.",
+          "price_mode": "Effective slots use verified all-in EUR/kWh source slots. Spot with fees accepts Nord Pool/Frank/ENTSO-e-style arrays only after explicit cost and VAT confirmation.",
+          "spot_markup_eur_kwh": "Required in spot mode: known per-kWh supplier, network and levy costs combined; can be negative for a discount. No assumed zero.",
+          "price_vat_percent": "Required in spot mode: correct VAT on spot plus adjustments. Verify whether source values already contain VAT.",
+          "cost_budget_eur": "Applies across currently connected charging sessions, not an automatic daily budget. V2 measures energy and effective tariff, reserving the next 15 minutes conservatively. Missing meter/price coverage blocks physical Start. Leave empty for no cap.",
+          "max_ac_kw": "Required for physical execution and SoC-free planning: known continuous charger rating, e.g. 2.0 kW for an EV-rated smart plug. Never infer a rating from present idle power.",
+          "battery_kwh": "Required for SoC-driven planning: usable battery capacity in kWh, e.g. 20 kWh. Do not guess gross capacity.",
+          "controller_uid": "Required: choose the existing V2 Charge Controller responsible for this Charger's planning and electrical budget."
+        }
+      }
+    },
+    "error": {
+      "price_not_found": "Electricity price sensor not found.",
+      "price_not_sensor": "The Electricity price entity is not a sensor.",
+      "sensor_is_not_price": "The Electricity price sensor does not have the needed attributes.",
+      "ev_soc_not_found": "EV SOC entity not found.",
+      "ev_soc_invalid_data": "The SOC entity gives invalid data.",
+      "ev_target_soc_not_found": "EV Target SOC entity not found.",
+      "ev_target_soc_invalid_data": "The Target SOC entity gives invalid data.",
+      "charger_control_switch_not_found": "Charger control entity not found.",
+      "charger_control_switch_not_switch": "Charger control entity is not a switch or an input boolean.",
+      "charging_state_entity_not_found": "Charging state entity not found.",
+      "coordinated_disabled": "Coordinated charging is disabled for safety after a Home Assistant crash. Local charging stays active. No charger can join until supervised physical acceptance is complete.",
+      "invalid_assignment": "A Vehicle can only be assigned to one Charger. Check the selected Vehicles.",
+      "invalid_vehicle_configuration": "Vehicle name, SoC input, battery values or proposed entity ID conflicts with existing Home Assistant entities. Choose unique device and entity names.",
+      "confirm_required": "Confirm the deletion explicitly or return to the previous screen.",
+      "exclusive_load_demand": "Configure requested kWh OR duration, not both.",
+      "invalid_charger_link": "Unknown Charger",
+      "unlink_coordinated_first": "Return Charger to Local before unlinking",
+      "charger_not_linked": "Link Charger to Controller first",
+      "invalid_v2_configuration": "Invalid V2 configuration or conflicting assignment."
+    },
+    "abort": {
+      "no_vehicles": "No Vehicles configured. Add a Vehicle first."
+    }
+  },
+  "entity": {
+    "button": {
+      "manually_start_charging": {
+        "name": "Manually start charging"
+      },
+      "manually_stop_charging": {
+        "name": "Manually stop charging"
+      },
+      "clear_absolute_ready_by": {
+        "name": "Clear absolute Ready by"
+      }
+    },
+    "number": {
+      "charging_speed": {
+        "name": "Charging speed"
+      },
+      "electricity_price_limit": {
+        "name": "Electricity price limit"
+      },
+      "opportunistic_level": {
+        "name": "Opportunistic level"
+      },
+      "opportunistic_type2_level": {
+        "name": "Opportunistic type2 level"
+      },
+      "low_price_charging_level": {
+        "name": "Low price charging level"
+      },
+      "low_soc_charging_level": {
+        "name": "Low SOC charging level"
+      },
+      "minimum_ev_soc": {
+        "name": "Minimum EV SOC"
+      }
+    },
+    "select": {
+      "charge_start_time": {
+        "name": "Charge start time"
+      },
+      "charge_completion_time": {
+        "name": "Charge completion time"
+      }
+    },
+    "sensor": {
+      "charging": {
+        "name": "Charging",
+        "state_attributes": {
+          "current_price": {
+            "name": "Current price"
+          },
+          "ev_soc": {
+            "name": "EV SOC"
+          },
+          "ev_target_soc": {
+            "name": "EV target SOC"
+          },
+          "charging_is_planned": {
+            "name": "Charging is planned"
+          },
+          "charging_start_time": {
+            "name": "Charging start time"
+          },
+          "charging_stop_time": {
+            "name": "Charging stop time"
+          },
+          "charging_number_of_hours": {
+            "name": "Charging number of hours"
+          },
+          "opportunistic": {
+            "name": "Opportunistic"
+          },
+          "raw_two_days": {
+            "name": "Raw two days"
+          },
+          "charging_schedule": {
+            "name": "Charging schedule"
+          }
+        }
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "waiting_for_new_prices": "Waiting for new prices",
+          "no_charging_planned": "No charging planned",
+          "waiting_for_charging_to_begin": "Waiting for charging to begin",
+          "charging": "Charging",
+          "keeping_charger_on": "Keeping charger on",
+          "disconnected": "Disconnected",
+          "smart_charging_not_active": "Smart charging not active",
+          "low_price_charging": "Low price charging",
+          "low_soc_charging": "Low SOC charging"
+        }
+      }
+    },
+    "switch": {
+      "smart_charging_activated": {
+        "name": "Smart charging activated"
+      },
+      "apply_price_limit": {
+        "name": "Apply price limit"
+      },
+      "continuous_charging_preferred": {
+        "name": "Continuous charging preferred"
+      },
+      "ev_connected": {
+        "name": "EV connected"
+      },
+      "keep_charger_on": {
+        "name": "Keep charger on"
+      },
+      "opportunistic_charging": {
+        "name": "Opportunistic charging"
+      },
+      "opportunistic_type2_charging": {
+        "name": "Opportunistic type2 charging"
+      },
+      "low_price_charging": {
+        "name": "Low price charging"
+      },
+      "low_soc_charging": {
+        "name": "Low SOC charging"
+      }
+    },
+    "datetime": {
+      "absolute_ready_by": {
+        "name": "Absolute Ready by"
+      }
+    }
+  }
 }

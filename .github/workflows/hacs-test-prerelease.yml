@@ -1,0 +1,147 @@
+name: HACS V2 full-functionality field-test prerelease
+
+# A field-test prerelease is required to obtain real HA/EVSE evidence.
+# It is NOT stable approval or an automatic production deployment.
+# Only a deliberate change to the release request file starts publishing.
+on:
+  push:
+    branches:
+      - feature/rc17-consolidated-v2
+    paths:
+      - docs/controller/HACS_TEST_RELEASE_REQUEST.md
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  full_ci_gate:
+    name: Exact-SHA full regression gate
+    uses: ./.github/workflows/pull.yml
+
+  publish_hacs_field_test:
+    name: Publish full V2 HACS test release (not stable)
+    needs: full_ci_gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: 2.6.0-rc.19
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate exact package and runtime capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          base = Path("custom_components/ev_smart_charging")
+          manifest = json.loads((base / "manifest.json").read_text())
+          const = (base / "const.py").read_text()
+          safety = (base / "controller/safety.py").read_text()
+          executor = (base / "v2/execution.py").read_text()
+          runtime = (base / "v2/runtime.py").read_text()
+          hacs = json.loads(Path("hacs.json").read_text())
+
+          assert manifest["version"] == version, "Manifest version mismatch"
+          assert f'VERSION = "{version}"' in const, "Runtime version mismatch"
+          assert not hacs.get("zip_release", False), "HACS installs tagged source"
+          assert "filename" not in hacs, "Unexpected HACS asset override"
+          # The independent V2 writer must be genuinely available in the
+          # distributable artifact, not replaced by simulated services.
+          assert "V2_PHYSICAL_EXECUTION_AVAILABLE = True" in safety, (
+              "Cannot publish a V2 field test with native physical execution off"
+          )
+          assert "controller.physical_enabled" in runtime, (
+              "No Controller-level physical operating mode"
+          )
+          assert "NativeChargeWriter" in runtime, "Missing physical writer"
+          assert "async_reconcile" in executor, "Missing native readback control"
+          assert "async_shutdown" in executor, "Missing native stop control"
+          # The old, unrelated P0 legacy-Coordinated path remains quarantined.
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
+              "Do not re-enable the old incident path to test new V2"
+          )
+          for required in (
+              "v2/flow.py",
+              "v2/source_discovery.py",
+              "v2/ownership.py",
+              "v2/soc_estimation.py",
+              "v2/cost_attribution.py",
+              "v2/budget.py",
+              "v2/session_progress.py",
+          ):
+              assert (base / required).is_file(), f"Missing functional code: {required}"
+          print(f"Full-functionality HA V2 test package: {version}")
+          PY
+
+      - name: Prepare installable recovery ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/evsc-dist"
+          (
+            cd custom_components/ev_smart_charging
+            zip -q -r "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" . \
+              -x '*/__pycache__/*' '*.pyc'
+          )
+          unzip -t "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip"
+          unzip -Z -1 "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" |
+            grep -qx 'manifest.json'
+          unzip -Z -1 "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" |
+            grep -qx 'services.yaml'
+
+      - name: Publish immutable prerelease on exact passed commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $tag exists; never overwrite tested source"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags \
+            "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$tag" \
+            >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/evsc-dist/RELEASE_NOTES.md" <<EOF
+          FULL V2 HOME ASSISTANT FIELD-TEST PRERELEASE — NOT STABLE
+
+          Git commit: $GITHUB_SHA
+          Exact-SHA full Python 3.11–3.14 CI, HA/HACS/Hassfest, formatting,
+          upstream Local smoke and Controller regressions passed.
+
+          Independent V2 Charge Controller has genuine native physical
+          Start/Stop available, enabled in its normal HA configuration.
+          V2 Vehicle, Charger and Controller controls, metering, cost
+          attribution, source bindings and budgeting are included.
+          No simulated charging or disabled V2 writer.
+
+          The historical Legacy Coordinated mode remains quarantined after
+          incident #5; it is NOT the V2 implementation. The original V1
+          Local implementation is preserved.
+
+          This build is for real HA and EVSE field acceptance, not certification:
+          verify OEM/switch OFF readback separately, use one EVSE at a time,
+          have a backup and physical emergency stop, and preserve diagnostics.
+          Do not connect original V1 Local and V2 simultaneously to one EVSE.
+          An HA restart/crash is not a hardware safety mechanism.
+          Stable/main promotion requires observed hardware + functional tests.
+          EOF
+          gh release create "$tag" \
+            "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — full V2 HA field test" \
+            --notes-file "$RUNNER_TEMP/evsc-dist/RELEASE_NOTES.md"

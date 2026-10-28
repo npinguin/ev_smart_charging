@@ -12,6 +12,9 @@ on:
 jobs:
   release_zip_file:
     name: Publish zip file asset
+    # Isolated prereleases already attach a tested ZIP. Do not overwrite it
+    # from a second, independently triggered release-published job.
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

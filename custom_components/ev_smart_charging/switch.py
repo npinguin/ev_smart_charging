@@ -33,6 +33,14 @@ async def async_setup_entry(
 ):  # pylint: disable=unused-argument
     """Setup switch platform."""
     _LOGGER.debug("EVSmartCharging.switch.py")
+    if entry.data.get("__evsc_entry_type") == "charger_v2":
+        from .v2.catalog import model
+        from .v2.manual_connection import manual_states
+
+        charger = model(entry)
+        if charger.connection_source == "manual":
+            async_add_devices([V2ManualConnected(entry, charger, manual_states(hass))])
+        return
     coordinator = hass.data[DOMAIN][entry.entry_id]
     switches = []
     switches.append(EVSmartChargingSwitchActive(entry, coordinator))
@@ -296,3 +304,58 @@ class EVSmartChargingSwitchOpportunisticType2(EVSmartChargingSwitch):
         """Turn the entity off."""
         await super().async_turn_off(**kwargs)
         await self.coordinator.switch_opportunistic_type2_update(False)
+
+
+class V2ManualConnected(SwitchEntity, RestoreEntity):
+    """Operator-declared EV connection, never derived from smart-plug power."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Connected (manual)"
+    _attr_icon = "mdi:ev-plug-type2"
+
+    def __init__(self, entry, charger, states):
+        self.entry = entry
+        self.charger = charger
+        self.states = states
+        self._attr_unique_id = f"{DOMAIN}_v2_charger_v2_{charger.uid}_connected_manual"
+        self._attr_is_on = False
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, f"v2:charger_v2:{self.charger.uid}")},
+            "name": self.charger.name,
+            "manufacturer": "EV Smart Charging",
+            "model": "Charger V2",
+        }
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        state = await self.async_get_last_state()
+        # Default to No on a new Charger; restore only a real prior Yes.
+        self._attr_is_on = state is not None and state.state == STATE_ON
+        self.states[self.charger.uid] = self._attr_is_on
+        self.async_write_ha_state()
+        self.async_on_remove(lambda: self.states.pop(self.charger.uid, None))
+
+    async def _set_connected(self, yes):
+        self._attr_is_on = yes
+        self.states[self.charger.uid] = yes
+        self.async_write_ha_state()
+        # Re-evaluate scheduling/physical STOP without waiting for minute tick.
+        from .v2.runtime import V2ControllerRuntime
+
+        for item in self.hass.data.get(DOMAIN, {}).values():
+            if (
+                isinstance(item, V2ControllerRuntime)
+                and item.entry.data.get("uid") == self.charger.controller_uid
+            ):
+                self.hass.async_create_task(item.async_refresh())
+                break
+
+    async def async_turn_on(self, **kwargs):
+        await self._set_connected(True)
+
+    async def async_turn_off(self, **kwargs):
+        await self._set_connected(False)

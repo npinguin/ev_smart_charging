@@ -1,7 +1,9 @@
 """Coordinator for EV Smart Charging"""
 
 from datetime import datetime
+import asyncio
 import logging
+from time import monotonic
 from homeassistant.config_entries import (
     ConfigEntry,
 )
@@ -78,6 +80,10 @@ from .const import (
     START_QUARTER_NONE,
     SWITCH,
 )
+from .controller.deadlines import effective_deadline, price_coverage_reaches_deadline
+from .controller import safety
+from .charger_observation import charging_readback
+from .controller.runtime import is_supervised, physical_grant
 from .helpers.coordinator import (
     Scheduler,
     get_charging_value,
@@ -93,6 +99,8 @@ from .sensor import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+# Same-target native commands must not be repeated for every HA readback event.
+COORDINATED_COMMAND_RETRY_SECONDS = 15.0
 
 
 class ChargerSwitch:
@@ -102,12 +110,17 @@ class ChargerSwitch:
         """Initialize."""
 
         self.entity_id = entity_id
-        self.domain = None
-
-        if len(entity_id) > 0:
-            entity = hass.states.get(entity_id)
-            if entity and entity.domain:
-                self.domain = entity.domain
+        # The configured HA entity ID fixes the service domain even if the
+        # source is temporarily unavailable at startup. A one-time state
+        # lookup could otherwise leave the Local writer permanently inert.
+        # No new hardware writer or unsolicited native command is created.
+        self.domain = (
+            entity_id.split(".", 1)[0]
+            if isinstance(entity_id, str)
+            and "." in entity_id
+            and all(entity_id.split(".", 1))
+            else None
+        )
 
 
 class EVSmartChargingCoordinator:
@@ -117,6 +130,21 @@ class EVSmartChargingCoordinator:
         """Initialize."""
         self.hass = hass
         self.config_entry = config_entry
+        self._coordinated_command_lock = asyncio.Lock()
+        self._last_coordinated_command = None
+        self._last_coordinated_command_at = 0.0
+        self._last_local_retry_at = None
+        # One bounded source-event worker per Local Charger. All source values
+        # are read from HA when the worker runs; events need not be queued.
+        self._source_refresh_task = None
+        self._source_refresh_unsub = None
+        self._source_refresh_dirty = False
+        self._source_target_changed = False
+        # Keep only a reference to the latest HA State for each subscribed
+        # input; repeated identical reports must not trigger new replans.
+        self._source_latest_states = {}
+        self._source_refresh_lock = asyncio.Lock()
+        self._stopped = False
         self.platforms = []
         self.listeners = []
         self.setup_timestamp = None
@@ -203,6 +231,11 @@ class EVSmartChargingCoordinator:
         self.ready_quarter_first = (
             True  # True for first update_sensor the ready_quarter
         )
+        # An optional absolute deadline; unset by default for full legacy parity.
+        # DateTimeEntity restores it, without changing the original Options fields.
+        self.absolute_ready_by = None
+        self.absolute_ready_by_entity = None
+        self.absolute_ready_by_pending = False
 
         self.max_price = float(get_parameter(self.config_entry, CONF_MAX_PRICE, 0.0))
         self.number_min_soc = int(get_parameter(self.config_entry, CONF_MIN_SOC, 0.0))
@@ -220,6 +253,7 @@ class EVSmartChargingCoordinator:
         )
 
         self.auto_charging_state = STATE_OFF
+        self._last_native_command = None
         self.low_price_charging_state = STATE_OFF
         self.low_soc_charging_state = STATE_OFF
 
@@ -239,31 +273,71 @@ class EVSmartChargingCoordinator:
     async def periodic_check_charging_state(
         self, date_time=None
     ):  # pylint: disable=unused-argument
-        """Periodically check if charging has actually started, and retry if not."""
-        if not self.charging_state_entity_id:
+        """Local-only bounded native readback retry every five minutes.
+
+        Use the configured charging-state sensor when present, falling back
+        to the native controllable switch if no charging-state sensor exists.
+        An absent, unknown or unavailable readback is NOT evidence to retry.
+        Coordinated operation has a separate quarantined safety lifecycle.
+        """
+        if is_supervised(self.hass, self.config_entry.entry_id):
             return
-        # Only check if we think we should be charging
-        should_be_charging = self.auto_charging_state == STATE_ON
-        if not should_be_charging:
+        if self.auto_charging_state != STATE_ON:
             return
-        # Get the actual state of the charging state entity
-        state_obj = self.hass.states.get(self.charging_state_entity_id)
-        if state_obj is None:
+        # No retry when the Vehicle is disconnected, source unknown, EVSC
+        # disabled, or the battery target has been reached.
+        if getattr(self, "switch_active", True) is not True:
             return
-        is_actually_charging = state_obj.state == STATE_ON
-        if not is_actually_charging:
-            _LOGGER.warning(
-                "EV Smart Charging: Charging should be ON but %s is not ON. Retrying start.",
-                self.charging_state_entity_id,
-            )
-            await self.turn_on_charging()
+        if getattr(self, "switch_ev_connected", True) is not True:
+            return
+        soc = getattr(self, "ev_soc", None)
+        target = getattr(self, "ev_target_soc", None)
+        if soc is not None and target is not None and soc >= target:
+            return
+        # An actual charging-state sensor confirming ON also suppresses
+        # retries, even if a separately managed enable switch is OFF.
+        state_id = self.charging_state_entity_id
+        if state_id:
+            charging_state = self.hass.states.get(state_id)
+            if (
+                charging_state is not None
+                and charging_readback(charging_state.state) is True
+            ):
+                return
+        # This control switch is a command/enable readback, not a charging
+        # sensor. A physically idle EVSE with an enabled control is healthy.
+        source = self.charger_switch.entity_id
+        if not source:
+            return
+        state_obj = self.hass.states.get(source)
+        if state_obj is None or state_obj.state != STATE_OFF:
+            return
+        # Bound retry cadence even when repeated readback updates arrive.
+        now = monotonic()
+        last_retry = getattr(self, "_last_local_retry_at", None)
+        if last_retry is not None and now - last_retry < 900:
+            return
+        self._last_local_retry_at = now
+        _LOGGER.warning(
+            "EV Smart Charging: Local control OFF despite expected Start; "
+            "one bounded retry."
+        )
+        await self.turn_on_charging(reason="retry")
 
     def unsubscribe_listeners(self):
-        """Unsubscribed to listeners"""
+        """Remove HA callbacks and cancel any pending source refresh."""
+        self._stopped = True
+        self._source_refresh_dirty = False
+        if self._source_refresh_unsub is not None:
+            self._source_refresh_unsub()
+            self._source_refresh_unsub = None
+        task = self._source_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
         for unsub in self.listeners:
             unsub()
+        self.listeners.clear()
 
-    @callback
     async def device_updated(self, event: Event):  # pylint: disable=unused-argument
         """Called when device is updated"""
         _LOGGER.debug("EVSmartChargingCoordinator.device_updated()")
@@ -287,7 +361,6 @@ class EVSmartChargingCoordinator:
                                     self.config_entry, title=device.name_by_user
                                 )
 
-    @callback
     async def update_quarterly(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
@@ -295,7 +368,6 @@ class EVSmartChargingCoordinator:
         _LOGGER.debug("EVSmartChargingCoordinator.update_quarterly()")
         await self.update_sensors()
 
-    @callback
     async def update_initial(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
@@ -310,12 +382,18 @@ class EVSmartChargingCoordinator:
         time_since_start = now_timestamp - self.setup_timestamp
         return time_since_start < 5
 
-    @callback
     async def update_state(
         self, date_time: datetime = None
     ):  # pylint: disable=unused-argument
         """Called every quarter"""
         _LOGGER.debug("EVSmartChargingCoordinator.update_state()")
+        if is_supervised(self.hass, self.config_entry.entry_id):
+            # P0 containment: persisted Coordinated membership must not send
+            # a new physical ON or OFF command after HA restart/reload.
+            if not safety.COORDINATED_ACTUATION_ENABLED:
+                return
+            await self._update_coordinated_state()
+            return
         if self._charging_schedule is not None:
             charging_value = get_charging_value(self._charging_schedule)
             _LOGGER.debug("charging_value = %s", charging_value)
@@ -391,6 +469,14 @@ class EVSmartChargingCoordinator:
                         # Keep charger on.
                         turn_on_charging = True
 
+            # Unbound Charger without SoC/demand has NO automatic permission.
+            # In particular, low-price and keep-on overrides cannot invent
+            # Vehicle demand. Manual native control remains separate.
+            if getattr(self, "ev_soc_entity_id", "configured") == "":
+                turn_on_charging = False
+                self.low_price_charging_state = STATE_OFF
+                self.low_soc_charging_state = STATE_OFF
+
             # Don't turn on charging if initialization is not complete.
             # Initialization is assumed to be finished in 5 seconds.
             if self.is_during_intialization():
@@ -413,11 +499,11 @@ class EVSmartChargingCoordinator:
                     self.switch_keep_on_completion_time = (
                         self.scheduler.get_charging_stop_time()
                     )
-                await self.turn_on_charging()
+                await self.turn_on_charging(reason="automatic")
             if not turn_on_charging and current_value:
                 # Turn off charging
                 self.auto_charging_state = STATE_OFF
-                await self.turn_off_charging()
+                await self.turn_off_charging(reason="automatic")
 
             if (
                 self.scheduler.charging_stop_time is not None
@@ -478,11 +564,71 @@ class EVSmartChargingCoordinator:
                 self._charging_schedule = Scheduler.get_empty_schedule()
                 self.sensor.charging_schedule = self._charging_schedule
 
-    async def turn_on_charging(self, state: bool = True):
-        """Turn on charging"""
+    async def _update_coordinated_state(self):
+        """Serialize physical actions and cap same-target feedback retries."""
+        if not safety.COORDINATED_ACTUATION_ENABLED:
+            return
+        async with self._coordinated_command_lock:
+            if not safety.COORDINATED_ACTUATION_ENABLED:
+                return
+            admit = physical_grant(self.hass, self.config_entry.entry_id, "automatic")
+            state = (
+                self.hass.states.get(self.charger_switch.entity_id)
+                if self.charger_switch.entity_id
+                else None
+            )
+            actual_on = state is not None and state.state == STATE_ON
+            internal_on = self.auto_charging_state == STATE_ON
+            command = None
+            if admit and not internal_on:
+                command = "on"
+            elif not admit and (internal_on or actual_on):
+                command = "off"
+            if command is None:
+                return
+
+            now = monotonic()
+            if (
+                command == self._last_coordinated_command
+                and now - self._last_coordinated_command_at
+                < COORDINATED_COMMAND_RETRY_SECONDS
+            ):
+                return
+            # Mark before the service call: immediate readback must not
+            # launch an unbounded retry while the first write is pending.
+            self._last_coordinated_command = command
+            self._last_coordinated_command_at = now
+            if command == "on":
+                if await self.turn_on_charging(reason="automatic"):
+                    self.auto_charging_state = STATE_ON
+            else:
+                self.auto_charging_state = STATE_OFF
+                await self.turn_off_charging(reason="automatic")
+
+    async def turn_on_charging(self, state: bool = True, *, reason: str = "manual"):
+        """Existing physical writer; fail closed before any supervised ON."""
 
         if state is True:
+            if not physical_grant(self.hass, self.config_entry.entry_id, reason):
+                self._last_native_command = {
+                    "action": "start",
+                    "reason": reason,
+                    "dispatch": "denied",
+                    "at": dt.utcnow().isoformat(),
+                }
+                _LOGGER.info(
+                    "Charge Controller denied %s start on %s",
+                    reason,
+                    self.config_entry.entry_id,
+                )
+                return False
             _LOGGER.debug("Turn on charging")
+            self._last_native_command = {
+                "action": "start",
+                "reason": reason,
+                "dispatch": "requested",
+                "at": dt.utcnow().isoformat(),
+            }
             self.sensor.set_state(STATE_ON)
             if (
                 self.charger_switch.entity_id is not None
@@ -497,8 +643,15 @@ class EVSmartChargingCoordinator:
                     service=SERVICE_TURN_ON,
                     target={"entity_id": self.charger_switch.entity_id},
                 )
+            return True
         else:
             _LOGGER.debug("Turn off charging")
+            self._last_native_command = {
+                "action": "stop",
+                "reason": reason,
+                "dispatch": "requested",
+                "at": dt.utcnow().isoformat(),
+            }
             self.sensor.set_state(STATE_OFF)
             if (
                 self.charger_switch.entity_id is not None
@@ -514,9 +667,9 @@ class EVSmartChargingCoordinator:
                     target={"entity_id": self.charger_switch.entity_id},
                 )
 
-    async def turn_off_charging(self):
-        """Turn off charging"""
-        await self.turn_on_charging(False)
+    async def turn_off_charging(self, *, reason: str = "manual"):
+        """Turn off charging through the original native writer."""
+        await self.turn_on_charging(False, reason=reason)
 
     async def add_sensor(self, sensors: list[EVSmartChargingSensor]):
         """Set up sensor"""
@@ -529,20 +682,22 @@ class EVSmartChargingCoordinator:
         self.price_entity_id = get_parameter(self.config_entry, CONF_PRICE_SENSOR)
         price_state = self.hass.states.get(self.price_entity_id)
         self.price_adaptor.initiate(price_state)
-        self.ev_soc_entity_id = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR)
-        self.ev_target_soc_entity_id = get_parameter(
-            self.config_entry, CONF_EV_TARGET_SOC_SENSOR
+        self.ev_soc_entity_id = (
+            get_parameter(self.config_entry, CONF_EV_SOC_SENSOR) or ""
         )
+        self.ev_target_soc_entity_id = (
+            get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR) or ""
+        )
+        source_entities = [
+            entity for entity in (self.price_entity_id, self.ev_soc_entity_id) if entity
+        ]
 
         if MAJOR_VERSION <= 2023 or (MAJOR_VERSION == 2024 and MINOR_VERSION <= 5):
             # Use for Home Assistant 2024.5 or older
             self.listeners.append(
                 async_track_state_change(
                     self.hass,
-                    [
-                        self.price_entity_id,
-                        self.ev_soc_entity_id,
-                    ],
+                    source_entities,
                     self.update_sensors,
                 )
             )
@@ -551,10 +706,7 @@ class EVSmartChargingCoordinator:
             self.listeners.append(
                 async_track_state_change_event(
                     self.hass,
-                    [
-                        self.price_entity_id,
-                        self.ev_soc_entity_id,
-                    ],
+                    source_entities,
                     self.update_sensors_new,
                 )
             )
@@ -675,8 +827,13 @@ class EVSmartChargingCoordinator:
                 if get_parameter(self.config_entry, CONF_EV_CONTROLLED):
                     self.after_ev_connected = True
         else:
-            # Make sure the charger is turned off, but only if smart charging is active.
-            if self.switch_active is True:
+            # Do not issue an automatic native OFF during the P0 Coordinated
+            # safety hold (including HA RestoreEntity startup callbacks).
+            # Explicit operator physical STOP remains available separately.
+            if self.switch_active is True and not (
+                is_supervised(self.hass, self.config_entry.entry_id)
+                and not safety.COORDINATED_ACTUATION_ENABLED
+            ):
                 await self.turn_off_charging()
         await self.update_configuration()
 
@@ -836,25 +993,86 @@ class EVSmartChargingCoordinator:
         await self.update_sensors(configuration_updated=True)
 
     @callback
-    async def update_sensors_new(
+    def update_sensors_new(
         self,
         event: Event,  # Event[EventStateChangedData]
         configuration_updated: bool = False,
-    ):  # pylint: disable=unused-argument
-        """Price or EV sensors have been updated.
-        EventStateChangedData is supported from Home Assistant 2024.5.5"""
+    ):
+        """Coalesce HA source events without allocating one task per event."""
+        if self._stopped:
+            return
+        before = event.data.get("old_state")
+        after = event.data.get("new_state")
+        entity_id = event.data.get("entity_id")
+        if (
+            before is not None
+            and after is not None
+            and before.state == after.state
+            and before.attributes == after.attributes
+        ):
+            return
+        previous = self._source_latest_states.get(entity_id)
+        if (
+            after is not None
+            and previous is not None
+            and previous.state == after.state
+            and previous.attributes == after.attributes
+        ):
+            return
+        self._source_latest_states[entity_id] = after
+        self._source_refresh_dirty = True
+        if configuration_updated or (
+            event.data.get("entity_id") == self.ev_target_soc_entity_id
+            and self.ev_target_soc_entity_id
+        ):
+            self._source_target_changed = True
+        # The first source change must remain visible on the next HA task
+        # drain (legacy Local contract). A synchronous burst of events shares
+        # this single task. Feedback arriving while it runs is timer-throttled.
+        if self._source_refresh_unsub is None and (
+            self._source_refresh_task is None or self._source_refresh_task.done()
+        ):
+            # HA normally starts tasks eagerly; defer until this event-loop
+            # turn completes so a synchronous source burst stays one batch.
+            self._source_refresh_task = self.hass.async_create_task(
+                self._drain_source_updates(), eager_start=False
+            )
 
-        # Allowed from HA 2024.4
-        entity_id = event.data["entity_id"]
-        old_state = event.data["old_state"]
-        new_state = event.data["new_state"]
+    @callback
+    def _source_timer_fired(self, _now):
+        self._source_refresh_unsub = None
+        if self._stopped or not self._source_refresh_dirty:
+            return
+        if self._source_refresh_task is None or self._source_refresh_task.done():
+            # HA normally starts tasks eagerly; defer until this event-loop
+            # turn completes so a synchronous source burst stays one batch.
+            self._source_refresh_task = self.hass.async_create_task(
+                self._drain_source_updates(), eager_start=False
+            )
 
-        await self.update_sensors(
-            entity_id=entity_id,
-            old_state=old_state,
-            new_state=new_state,
-            configuration_updated=configuration_updated,
-        )
+    async def _drain_source_updates(self):
+        """Process one batch, then defer any feedback to a future HA timer."""
+        try:
+            # Yield once: HA may start tasks eagerly in the callback itself.
+            # Events from the same tick must be coalesced before refreshing.
+            await asyncio.sleep(0)
+            if not self._source_refresh_dirty or self._stopped:
+                return
+            self._source_refresh_dirty = False
+            config_changed = self._source_target_changed
+            self._source_target_changed = False
+            await self.update_sensors(
+                entity_id=self.ev_target_soc_entity_id if config_changed else None,
+                configuration_updated=config_changed,
+            )
+        finally:
+            self._source_refresh_task = None
+            # Physical source updates arriving DURING the refresh cannot
+            # create a spin loop or hold a HA-tracked sleeping task open.
+            if self._source_refresh_dirty and not self._stopped:
+                self._source_refresh_unsub = async_call_later(
+                    self.hass, 1, self._source_timer_fired
+                )
 
     async def update_sensors(
         self,
@@ -862,8 +1080,21 @@ class EVSmartChargingCoordinator:
         old_state: State = None,
         new_state: State = None,
         configuration_updated: bool = False,
-    ):  # pylint: disable=unused-argument
-        """Price or EV sensors have been updated."""
+    ):
+        """Serialize Local plan updates from source, UI and quarter triggers."""
+        if self._stopped:
+            return
+        async with self._source_refresh_lock:
+            if self._stopped:
+                return
+            await self._update_sensors_locked(
+                entity_id, old_state, new_state, configuration_updated
+            )
+
+    async def _update_sensors_locked(
+        self, entity_id, old_state, new_state, configuration_updated
+    ):
+        """Original Local schedule and state update logic, unchanged."""
 
         _LOGGER.debug("EVSmartChargingCoordinator.update_sensors()")
         _LOGGER.debug("entity_id = %s", entity_id)
@@ -914,8 +1145,10 @@ class EVSmartChargingCoordinator:
             # To handle non-live SOC
             # Update self.ev_soc_last if new price and ready_quarter == None
             if self.tomorrow_valid and not self.tomorrow_valid_previous:
-                if self.ready_quarter_local == READY_QUARTER_NONE:
-                    self.ev_soc_before_last_charging = -1
+                # The original daily Ready By can be tomorrow morning. Once
+                # tomorrow's prices arrive we must rebuild even when the car
+                # has not reported a new SoC value since the previous plan.
+                self.ev_soc_before_last_charging = -1
             self.tomorrow_valid_previous = self.tomorrow_valid
         else:
             # If the problem occured directly after midnight, ignore it.
@@ -931,7 +1164,11 @@ class EVSmartChargingCoordinator:
                 _LOGGER.error("Price sensor not valid")
                 _LOGGER.error("Price state: %s", price_state)
 
-        ev_soc_state = self.hass.states.get(self.ev_soc_entity_id)
+        ev_soc_state = (
+            self.hass.states.get(self.ev_soc_entity_id)
+            if self.ev_soc_entity_id
+            else None
+        )
         if Validator.is_soc_state(ev_soc_state):
             self.ev_soc_valid = True
             self.sensor.ev_soc = ev_soc_state.state
@@ -945,6 +1182,12 @@ class EVSmartChargingCoordinator:
                 # Make only one error message per outage.
                 _LOGGER.error("SOC sensor not valid: %s", ev_soc_state)
             self.ev_soc_valid = False
+            if not self.ev_soc_entity_id:
+                # Do not preserve a value when no Vehicle is configured.
+                # Configured but temporarily unavailable upstream sources retain
+                # their historical behavior for backwards compatibility.
+                self.ev_soc = None
+                self.sensor.ev_soc = None
 
         if len(self.ev_target_soc_entity_id) > 0:
             ev_target_soc_state = self.hass.states.get(self.ev_target_soc_entity_id)
@@ -998,6 +1241,26 @@ class EVSmartChargingCoordinator:
         if self.sensor.opportunistic != self.opportunistic_feature_triggered:
             self.sensor.opportunistic = self.opportunistic_feature_triggered
 
+        # Explicit calendar deadlines cannot be optimized against unknown future
+        # prices. Never substitute today's cheap slots for an unpriced later day.
+        if self.absolute_ready_by is not None:
+            raw = self.raw_two_days.get_raw() if self.raw_two_days else []
+            priced_until = raw[-1]["end"] if raw else None
+            if not price_coverage_reaches_deadline(
+                self.absolute_ready_by, priced_until, raw, dt.utcnow()
+            ):
+                self.absolute_ready_by_pending = True
+                self.scheduler.set_empty_schedule()
+                self._charging_schedule = Scheduler.get_empty_schedule()
+                if self.sensor is not None:
+                    self.sensor.charging_schedule = self._charging_schedule
+                await self.update_state()
+                return
+            if self.absolute_ready_by_pending:
+                configuration_updated = True
+                self.ev_soc_before_last_charging = -1
+            self.absolute_ready_by_pending = False
+
         scheduling_params = {
             "ev_soc": self.ev_soc,
             "ev_target_soc": self.ev_target_soc,
@@ -1006,7 +1269,10 @@ class EVSmartChargingCoordinator:
             "start_quarter": get_start_quarter_utc(
                 self.start_quarter_local, self.ready_quarter_local
             ),
-            "ready_quarter": get_ready_quarter_utc(self.ready_quarter_local),
+            "ready_quarter": effective_deadline(
+                self.absolute_ready_by,
+                get_ready_quarter_utc(self.ready_quarter_local),
+            ),
             "switch_active": self.switch_active,
             "switch_apply_limit": self.switch_apply_limit
             or self.opportunistic_feature_triggered,
@@ -1019,7 +1285,10 @@ class EVSmartChargingCoordinator:
 
         # To handle non-live SOC
         # # To enable rescheduling after ready_quarter if no live SOC is available
-        if time_now_quarter_local == self.ready_quarter_local:
+        if (
+            self.absolute_ready_by is None
+            and time_now_quarter_local == self.ready_quarter_local
+        ):
             if self.ready_quarter_first:
                 self.ev_soc_before_last_charging = -1
                 self.ready_quarter_first = False
@@ -1079,7 +1348,8 @@ class EVSmartChargingCoordinator:
         # If the ready_quarter is updated to next day before next day's prices are available,
         # then remove the schedule
         if (
-            not self.tomorrow_valid
+            self.absolute_ready_by is None
+            and not self.tomorrow_valid
             and time_now_quarter_local > self.ready_quarter_local
             and configuration_updated
         ):
@@ -1130,7 +1400,9 @@ class EVSmartChargingCoordinator:
         if ev_soc_state is None or ev_soc_state.state is None:
             return "Input sensors not ready."
 
-        ev_target_soc = get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR)
+        ev_target_soc = (
+            get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR) or ""
+        )
         if len(ev_target_soc) > 0:  # Check if the sensor exists
             ev_target_soc_state = self.hass.states.get(ev_target_soc)
             if ev_target_soc_state is None or ev_target_soc_state.state is None:
@@ -1142,7 +1414,14 @@ class EVSmartChargingCoordinator:
         """Check that all control entities are ready."""
 
         if self.charger_switch.entity_id:
-            if self.charger_switch.domain is None:
+            # Keep the original HA ConfigEntryNotReady startup contract when
+            # the control entity is not registered yet. Its service domain is
+            # nevertheless derived from the configured ID so a later reload
+            # cannot permanently lose the writer on recovery.
+            if (
+                self.charger_switch.domain is None
+                or self.hass.states.get(self.charger_switch.entity_id) is None
+            ):
                 return "Control entities not ready."
 
         return None

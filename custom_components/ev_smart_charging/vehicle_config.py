@@ -1,0 +1,207 @@
+"""Canonical, user-configured Vehicle and Charger relationship storage.
+
+Vehicles are HA Devices owned by the existing singleton Charge Controller
+config entry. Charger entries and all existing Local entities remain intact.
+No supplier/OEM/RHI bridge or extra ConfigEntry is needed.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from math import isfinite
+from typing import Any
+
+from homeassistant.util import dt
+
+from .domain import (
+    Assignment,
+    ChargeIntent,
+    Charger,
+    Vehicle,
+    VehicleState,
+    resolve_charging_contexts,
+    validate_unique_device_names,
+)
+
+VEHICLES = "vehicles"
+ASSIGNMENTS = "vehicle_assignments"
+NO_VEHICLE = ""
+VEHICLE_FACT_KEYS = (
+    "soc",
+    "target_soc",
+    "battery_capacity",
+    "battery_energy",
+    "energy_required",
+    "source_status",
+)
+
+
+def _optional_positive(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    result = float(value)
+    if not isfinite(result) or result <= 0:
+        raise ValueError("invalid_positive_value")
+    return result
+
+
+def vehicle_from_profile(vehicle_id: str, profile: dict) -> Vehicle:
+    return Vehicle(
+        id=vehicle_id,
+        name=profile["name"],
+        external_identifier=profile.get("external_identifier") or None,
+        ha_user_id=profile.get("ha_user_id") or None,
+        usable_battery_kwh=_optional_positive(profile.get("usable_battery_kwh")),
+        max_ac_charge_kw=_optional_positive(profile.get("max_ac_charge_kw")),
+    )
+
+
+def intent_from_profile(vehicle_id: str, profile: dict) -> ChargeIntent:
+    """Vehicle/session owns target and absolute timezone-aware Ready By."""
+    raw = profile.get("ready_by")
+    ready = None
+    if raw:
+        if not isinstance(raw, str):
+            raise ValueError("invalid_ready_by")
+        try:
+            ready = datetime.fromisoformat(raw)
+        except ValueError as error:
+            raise ValueError("invalid_ready_by") from error
+        if ready.tzinfo is None or ready.utcoffset() is None:
+            raise ValueError("ready_by_must_be_timezone_aware")
+    return ChargeIntent(
+        vehicle_id,
+        target_soc_percent=float(profile.get("target_soc", 80)),
+        ready_by=ready,
+    )
+
+
+def validate_profiles(vehicles: dict[str, dict], charger_names: dict[str, str]):
+    """Validate names and physical facts before committing controller Options."""
+    models = {
+        vid: vehicle_from_profile(vid, profile) for vid, profile in vehicles.items()
+    }
+    charger_models = {
+        key: Charger(id=key, name=name) for key, name in charger_names.items()
+    }
+    validate_unique_device_names(models, charger_models)
+    for profile in vehicles.values():
+        source = profile.get("soc_entity")
+        if source and (not isinstance(source, str) or "." not in source):
+            raise ValueError("invalid_soc_entity")
+        intent_from_profile("validation", profile)
+        freshness = profile.get("soc_max_age_minutes", 0)
+        if (
+            not isinstance(freshness, int)
+            or isinstance(freshness, bool)
+            or freshness < 0
+            or freshness > 1440
+        ):
+            raise ValueError("invalid_soc_freshness_limit")
+    return models
+
+
+def validate_assignments(
+    selected: dict[str, str | None],
+    vehicles: dict[str, dict],
+    charger_names: dict[str, str],
+) -> dict[str, str]:
+    """Normalize explicit None; reject duplicate Vehicle and unknown Charger."""
+    cleaned = {}
+    claimed = set()
+    for charger_id, vehicle_id in selected.items():
+        if charger_id not in charger_names:
+            raise ValueError("unknown_charger")
+        if vehicle_id in (None, NO_VEHICLE):
+            continue
+        if vehicle_id not in vehicles:
+            raise ValueError("unknown_vehicle")
+        if vehicle_id in claimed:
+            raise ValueError("vehicle_already_assigned")
+        claimed.add(vehicle_id)
+        cleaned[charger_id] = vehicle_id
+    return cleaned
+
+
+def vehicle_soc_reading(hass, profile: dict) -> tuple[float | None, str]:
+    """Read source and optional freshness without inventing SoC or permission."""
+    entity_id = profile.get("soc_entity")
+    if not entity_id:
+        return None, "not_configured"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None, "entity_missing"
+    if state.state in ("unknown", "unavailable"):
+        return None, "unavailable"
+    try:
+        value = float(state.state)
+    except (ValueError, TypeError, OverflowError):
+        return None, "invalid"
+    if not isfinite(value) or value < 0 or value > 100:
+        return None, "invalid"
+    unit = state.attributes.get("unit_of_measurement")
+    if unit not in (None, "%"):
+        return None, "invalid_unit"
+    max_age = profile.get("soc_max_age_minutes", 0)
+    if max_age:
+        # Prefer explicit reports on newer HA; older releases use last_updated.
+        observed = getattr(state, "last_reported", None) or getattr(
+            state, "last_updated", None
+        )
+        if observed is None or observed.tzinfo is None:
+            return None, "timestamp_unknown"
+        age = dt.utcnow() - observed
+        if age < timedelta(0) or age > timedelta(minutes=max_age):
+            return None, "stale"
+    return value, "valid"
+
+
+def read_vehicle_soc(hass, profile: dict) -> float | None:
+    """Read a Vehicle's known SoC; stale/missing/invalid sources stay unknown."""
+    return vehicle_soc_reading(hass, profile)[0]
+
+
+def resolve_user_contexts(hass, options: dict, chargers: dict):
+    """One read-only Vehicle/Charger input model; no native actuation.
+
+    Charger details are supplied by existing EVSC Local runtime entries:
+    {config_entry_id: {name, max_ac_power_kw, connected}}.
+    """
+    profiles = options.get(VEHICLES, {})
+    selected = options.get(ASSIGNMENTS, {})
+    vehicles = validate_profiles(
+        profiles, {key: obj["name"] for key, obj in chargers.items()}
+    )
+    charger_models = {
+        key: Charger(
+            id=key,
+            name=obj["name"],
+            max_ac_power_kw=_optional_positive(obj.get("max_ac_power_kw")),
+        )
+        for key, obj in chargers.items()
+    }
+    valid_assignments = validate_assignments(
+        selected, profiles, {key: obj.name for key, obj in charger_models.items()}
+    )
+    readings = {
+        vid: vehicle_soc_reading(hass, profile) for vid, profile in profiles.items()
+    }
+    states = {
+        vid: VehicleState(vid, value, source_status=quality)
+        for vid, (value, quality) in readings.items()
+    }
+    intents = {
+        vid: intent_from_profile(vid, profile) for vid, profile in profiles.items()
+    }
+    assignments = tuple(
+        Assignment(vehicle_id, charger_id)
+        for charger_id, vehicle_id in sorted(valid_assignments.items())
+    )
+    return resolve_charging_contexts(
+        charger_models,
+        vehicles,
+        assignments,
+        states,
+        intents,
+        {key: obj.get("connected") for key, obj in chargers.items()},
+    )

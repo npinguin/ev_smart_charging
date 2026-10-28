@@ -6,7 +6,7 @@ from homeassistant.const import __version__ as HA_VERSION
 NAME = "EV Smart Charging"
 DOMAIN = "ev_smart_charging"
 DOMAIN_DATA = f"{DOMAIN}_data"
-VERSION = "0.1.0"
+VERSION = "2.6.0-rc.19"
 ISSUE_URL = "https://github.com/jonasbkarlsson/ev_smart_charging/issues"
 
 # Icons
@@ -25,7 +25,14 @@ SWITCH = Platform.SWITCH
 BUTTON = Platform.BUTTON
 NUMBER = Platform.NUMBER
 SELECT = Platform.SELECT
-PLATFORMS = [SENSOR, NUMBER, SWITCH, BUTTON, SELECT]
+DATETIME = Platform.DATETIME
+PLATFORMS = [
+    SENSOR,
+    NUMBER,
+    SWITCH,
+    BUTTON,
+    SELECT,
+]  # Exact upstream V1 public platforms
 PLATFORM_NORDPOOL = "nordpool"
 PLATFORM_ENERGIDATASERVICE = "energidataservice"
 PLATFORM_ENTSOE = "entsoe"

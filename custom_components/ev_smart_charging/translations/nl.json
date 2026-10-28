@@ -1,118 +1,566 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "Configuratie van de naam en gekoppelde entities.",
-                "data": {
-                    "device_name": "Naam",
-                    "price_sensor": "Electriciteit prijs template entity",
-                    "ev_soc_sensor": "EV SOC sensor",
-                    "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
-                    "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
-                    "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
-                    "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electriciteit prijs sensor niet gevonden.",
-            "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
-            "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
-            "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
-            "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
-            "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
-            "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
-            "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
-            "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-            "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Smart Charging configuratie",
+        "menu_options": {
+          "v2_migrate": "Bestaande Local-laadpaal overzetten naar V2",
+          "v2_setup": "Nieuwe V2-apparaten toevoegen",
+          "legacy_local": "Originele Local-laadpaal toevoegen (upstream)"
         }
+      },
+      "legacy_local": {
+        "description": "Configuratie van de naam en gekoppelde entities.",
+        "data": {
+          "device_name": "Naam",
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
+        }
+      },
+      "v2_vehicle": {
+        "title": "Voertuig toevoegen",
+        "data": {
+          "name": "Voertuignaam (verplicht)",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-laadvermogen voertuig (kW)",
+          "phase_count": "Aantal AC-fasen",
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "soc_source_mode": "SoC-bron en methode",
+          "manual_soc": "Manuele SoC (%)",
+          "charge_efficiency": "Gekende laadefficiëntie (0–1)"
+        },
+        "data_description": {
+          "ready_mode": "Dagelijks is de standaard. Weekkalender: lege dag = geen deadline.",
+          "soc_entity": "Optioneel voor manuele of kWh/tijd-lading. Voor OEM-SoC-planning verplicht: kies een bestaande voertuigsensor (%) zoals sensor.audi_soc.",
+          "soc_source_mode": "OEM: enkel verse sensor. Manual: zelf ingestelde SoC. Meter compensated: OEM + werkelijk gemeten sessie- of cumulatieve energie, met herkenbare Estimated status.",
+          "manual_soc": "Expliciet ingegeven SoC wanneer de voertuigcloud ontbreekt. Niet voorgesteld als OEM-meting.",
+          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd.",
+          "battery_kwh": "Voor SoC-gebaseerde laadplanning verplicht: bruikbare capaciteit in kWh, bijvoorbeeld 20 kWh. Niet de volledige bruto capaciteit wanneer onbekend."
+        }
+      },
+      "v2_charger": {
+        "title": "Laadpunt toevoegen",
+        "data": {
+          "name": "Laadpuntnaam (verplicht)",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Fysieke laadbediening (vereist voor echte Start/Stop)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Energiemeter bron (sessie of cumulatief)",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "max_current_a": "Maximale laadstroom (A)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen",
+          "connection_source": "Connected-status: HA-sensor of manueel",
+          "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
+          "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
+          "energy_source_kind": "Energiemetertype",
+          "price_mode": "Tariefbron: effectieve prijs of marktprijs",
+          "spot_markup_eur_kwh": "Extra kosten per kWh (EUR/kWh)",
+          "price_vat_percent": "BTW op energieprijs (%)"
+        },
+        "data_description": {
+          "control_entity": "Voor fysieke bediening verplicht: kies de bestaande switch/input_boolean van de laadpaal of EV-geschikte smart plug. V2 stuurt alleen met expliciet geactiveerde Controller, exclusieve ownership en readback.",
+          "connected_entity": "Verplicht wanneer Connected source = Sensor. Kies de bestaande kabel-/voertuig-aangesloten sensor. Bij Manual verschijnt een aparte Connected Ja/Nee schakelaar.",
+          "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
+          "power_entity": "Voor fysieke laadsturing verplicht: gemeten vermogen van het gekozen laadpunt in W/kW. Bijvoorbeeld sensor.peblar_charge_power. Geen huishoudtotaal.",
+          "energy_entity": "Voor gemeten sessiekWh en kosten: kies de echte kWh/Wh-meter van dit laadpunt, ook als die levenslang oploopt. Het type hieronder bepaalt de veilige sessieberekening.",
+          "tariff_entity": "Verplicht voor prijsplanning: sensor met controleerbare toekomstige effectieve EUR/kWh-prijsreeks of bron voor spotprijs met expliciete kosten. Een losse huidige spotprijs volstaat niet.",
+          "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
+          "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
+          "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
+          "energy_source_kind": "Session: meter reset per sessie. Total increasing: cumulatieve kWh; V2 berekent alleen gecontroleerde stijgingen sinds de expliciete verbinding. Onbekende metertypes leveren geen fictieve sessie-energie.",
+          "price_mode": "Effective slots: bron biedt geverifieerde EUR/kWh-slots. Spot with fees: Nord Pool/Frank/ENTSO-e marktprijzen worden pas bruikbaar na expliciete kosten en BTW.",
+          "spot_markup_eur_kwh": "Verplicht bij spot: bekende variabele leveranciers-, net- en heffingskosten per kWh samen, negatief indien korting. Geen fictief nultarief.",
+          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten.",
+          "max_ac_kw": "Voor fysieke aansturing en planning zonder voertuig-SoC verplicht: gekend duurzaam laadvermogen, bijvoorbeeld 2,0 kW voor een EV-geschikte smart plug. Gebruik geen geschatte huidige meting.",
+          "controller_uid": "Verplicht. Selecteer de bestaande V2 Charge Controller die de planning en elektrische limieten van dit laadpunt beheert."
+        }
+      },
+      "v2_controller": {
+        "title": "Laadcontroller toevoegen (één planner)",
+        "data": {
+          "name": "Controllernaam (verplicht)",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Harde kostenlimiet per actieve verbinding (€) — optioneel",
+          "physical_enabled": "Fysieke V2-laadsturing inschakelen (vereist afzonderlijke ownership)",
+          "peak_shaving_enabled": "Piekbewaking inschakelen",
+          "site_power_entity": "Huismeter netto netvermogen (W/kW)",
+          "peak_target_kw": "Maximaal netvermogen (kW)",
+          "peak_reserve_kw": "Veiligheidsreserve (kW)"
+        },
+        "data_description": {
+          "physical_enabled": "Optioneel, standaard uit. Alleen activeren wanneer dit laadpunt niet meer door V1 Local bediend wordt en echte connected/vermogen, effectieve tarieven, OEM-switch en Start/Stop-readback werken.",
+          "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
+          "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
+          "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
+          "cost_budget_eur": "Geldt voor de momenteel verbonden laadsessies, niet als automatisch dagbudget. V2 meet verbruik en effectieve tarieven en reserveert conservatief de volgende 15 minuten. Meter- of prijsgaten blokkeren fysieke Start; leeg laten voor geen limiet."
+        }
+      },
+      "v2_migrate": {
+        "title": "Stap 1 · Kies de bestaande laadpaal",
+        "data": {
+          "legacy_entry_id": "Bestaande Local Charger"
+        },
+        "description": "De oorspronkelijke laadpaal en configuratie blijven behouden."
+      },
+      "v2_migrate_confirm": {
+        "title": "Stap 3 · Controleer en maak de V2 Charger",
+        "description": "Bron: {legacy_name}. Oorspronkelijke Ready By: {legacy_ready_by} (alleen voorstel voor Vehicle). Nog in te stellen: {missing_sources}. Er wordt enkel een nieuw logisch V2-apparaat aangemaakt. De originele laadsturing blijft actief; fysieke V2-besturing blijft uitgeschakeld. Overige mappings kan je nadien bij de V2 Charger instellen.",
+        "data": {
+          "name": "V2 Charger name",
+          "connected_entity": "Cable/connected sensor (optional)",
+          "max_ac_kw": "Maximum AC charging power (kW)",
+          "confirmed": "Confirm non-physical mapping"
+        },
+        "data_description": {
+          "connected_entity": "Kies de sensor die een aangesloten laadkabel aangeeft (sensor of binary_sensor)."
+        }
+      },
+      "v2_setup": {
+        "title": "V2-apparaten toevoegen",
+        "menu_options": {
+          "v2_controller": "Charge Controller toevoegen",
+          "v2_vehicle": "Vehicle toevoegen",
+          "v2_charger": "Charger toevoegen",
+          "v2_convert_controller": "Oude Charge Controller veilig overzetten",
+          "v2_convert_vehicle": "Voertuigprofiel uit oude Controller overzetten"
+        }
+      },
+      "v2_migrate_bindings": {
+        "title": "Stap 2 · Koppel aan V2",
+        "description": "Kies een bestaande Charge Controller en optioneel een beschikbaar Vehicle. Nieuwe apparaten maak je via V2-apparaten toevoegen.",
+        "data": {
+          "controller_uid": "Charge Controller",
+          "vehicle_uid": "Vehicle (optional)"
+        }
+      },
+      "v2_migrate_target": {
+        "title": "Kies een V2 Charger",
+        "description": "Maak een nieuwe V2 Charger aan of gebruik een bestaande zonder V1-bron.",
+        "data": {
+          "existing_charger_uid": "Doel"
+        }
+      },
+      "v2_migrate_existing_confirm": {
+        "title": "Bevestig de koppeling",
+        "description": "Koppel {legacy_name} aan bestaande V2 Charger {v2_name}. Bestaande V2-instellingen blijven behouden; alleen ontbrekende bronbindings worden aangevuld. Er verandert niets aan de oorspronkelijke Local-laadsturing en er worden geen V2-laadcommando's verzonden.",
+        "data": {
+          "confirmed": "Koppeling bevestigen"
+        }
+      },
+      "v2_vehicle_source": {
+        "title": "Kies bestaand HA-device (vehicle)",
+        "description": "Selecteer optioneel een bestaand Home Assistant-device. We stellen alleen passende entiteiten voor; controleer elke voorgestelde koppeling. Laat leeg om alles manueel te kiezen.",
+        "data": {
+          "source_device_id": "Bestaand Home Assistant-device (optioneel)"
+        }
+      },
+      "v2_charger_source": {
+        "title": "Kies bestaand HA-device (charger)",
+        "description": "Selecteer optioneel een bestaand Home Assistant-device. We stellen alleen passende entiteiten voor; controleer elke voorgestelde koppeling. Laat leeg om alles manueel te kiezen.",
+        "data": {
+          "source_device_id": "Bestaand Home Assistant-device (optioneel)"
+        }
+      },
+      "v2_convert_controller": {
+        "title": "Oude Controller selecteren",
+        "description": "De oude Controller blijft ongewijzigd. We maken een nieuwe V2 Controller met gecontroleerde instellingen en fysieke besturing uitgeschakeld.",
+        "data": {
+          "intermediate_id": "Bestaande Controller"
+        }
+      },
+      "v2_convert_controller_review": {
+        "title": "Controller-conversie controleren",
+        "description": "Naam: {name}. Maximaal gelijktijdig: {parallel}. Planningshorizon: {horizon} dagen. {vehicles} bestaande voertuigen worden NIET automatisch toegevoegd; zet die afzonderlijk over. Waarschuwingen: {warnings}. De oude Controller en originele laadpunten blijven ongewijzigd.",
+        "data": {
+          "confirmed": "Nieuwe V2 Controller aanmaken"
+        }
+      },
+      "v2_convert_vehicle": {
+        "title": "Oud voertuigprofiel selecteren",
+        "description": "Gegevens worden vooraf ingevuld. Controleer Ready By, SoC-bron, capaciteit en gebruiker vóór bewaren. De oude bron blijft behouden.",
+        "data": {
+          "vehicle_uid": "Voertuig"
+        }
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "description": "Configuratie van de gekoppelde entities.",
-                "data": {
-                    "price_sensor": "Electriciteit prijs template entity",
-                    "ev_soc_sensor": "EV SOC sensor",
-                    "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
-                    "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
-                    "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
-                    "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen"
-                }
-            }
-        },
-        "error": {
-            "price_not_found": "Electriciteit prijs sensor niet gevonden.",
-            "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
-            "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
-            "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
-            "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
-            "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
-            "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
-            "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
-            "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
-            "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden."
-        }
+    "error": {
+      "price_not_found": "Electriciteit prijs sensor niet gevonden.",
+      "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
+      "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
+      "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
+      "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
+      "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
+      "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
+      "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
+      "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden.",
+      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
     },
-    "entity": {
-        "button": {
-            "manually_start_charging": { "name": "Handmatige start opladen" },
-            "manually_stop_charging": { "name": "Handmatige stop opladen" }
-        },
-        "number": {
-            "charging_speed": { "name": "Oplaadsnelheid" },
-            "electricity_price_limit": { "name": "Limiet elektriciteitsprijs" },
-            "opportunistic_level": { "name": "Opportunistisch niveau" },
-            "opportunistic_type2_level": { "name": "Opportunistisch type 2 niveau" },
-            "low_price_charging_level": { "name": "Lage prijs oplaadniveau" },
-            "low_soc_charging_level": { "name": "Lage SOC oplaadniveau" },
-            "minimum_ev_soc": { "name": "Minimum EV SOC" }
-        },
-        "select": {
-            "charge_start_time": { "name": "Oplaad starttijd" },
-            "charge_completion_time": { "name": "Oplaad voltooiingstijd" }
-        },
-        "sensor": {
-            "charging": {
-                "name": "Opladen",
-                "state_attributes": {
-                    "current_price": { "name": "Actuele prijs"},
-                    "ev_soc": {"name": "EV SOC"},
-                    "ev_target_soc": {"name": "EV instelwaarde SOC"},
-                    "charging_is_planned": {"name": "Opladen staat gepland"},
-                    "charging_start_time": {"name": "Starttijd opladen"},
-                    "charging_stop_time": {"name": "Tijd opladen gereed"},
-                    "charging_number_of_hours": {"name": "Aantal uren opladen"},
-                    "opportunistic": {"name": "Opportunistisch"},
-                    "raw_two_days": {"name": "Ruwe data van 2 dagen"},
-                    "charging_schedule": {"name": "Oplaad schema"}
-                }
-            },
-            "status": {
-                "name": "Status",
-                "state": {
-                    "waiting_for_new_prices": "Wachten op nieuwe prijzen",
-                    "no_charging_planned": "Geen opladen gepland",
-                    "waiting_for_charging_to_begin": "Wachten tot het opladen begint",
-                    "charging": "Aan het opladen",
-                    "keeping_charger_on": "Oplader ingeschakeld houden",
-                    "disconnected": "Losgekoppeld",
-                    "smart_charging_not_active": "Slim opladen niet actief",
-                    "low_price_charging": "Lage prijs opladen",
-                    "low_soc_charging": "Lage SOC opladen"
-                }
-            }
-        },
-        "switch": {
-            "smart_charging_activated": { "name": "Activeer slim opladen" },
-            "apply_price_limit": { "name": "Prijslimiet toepassen" },
-            "continuous_charging_preferred": { "name": "Bij voorkeur continu opladen" },
-            "ev_connected": { "name": "EV aangesloten" },
-            "keep_charger_on": { "name": "Oplader ingeschakeld houden" },
-            "opportunistic_charging": { "name": "Opportunistisch opladen" },
-            "opportunistic_type2_charging": { "name": "Opportunistisch type 2 opladen" },
-            "low_price_charging": { "name": "Lage prijs opladen" },
-            "low_soc_charging": { "name": "Lage SOC opladen" }
-        }
+    "abort": {
+      "create_controller_first": "Maak eerst een laadcontroller aan.",
+      "no_legacy_chargers_to_migrate": "Geen ongemigreerde Local-laders gevonden.",
+      "invalid_v2_migration_source": "Oorspronkelijke lader of laadcontroller ontbreekt.",
+      "already_migrated": "Deze Local-lader werd al aan V2 gekoppeld.",
+      "v2_existing_charger_linked": "Bestaande V2 Charger gekoppeld; Local blijft ongewijzigd.",
+      "v2_existing_charger_control_conflict": "De V1- en V2-laadpaal verwijzen naar een verschillend fysiek bedieningselement. Controleer de mapping.",
+      "no_intermediate_controller": "Geen historische Controller gevonden.",
+      "no_intermediate_vehicle": "Geen geschikte historische voertuigprofielen gevonden."
     }
+  },
+  "options": {
+    "step": {
+      "retire_to_v2": {
+        "title": "Tussenliggende Controller uitfaseren",
+        "description": "Alle Controller- en voertuigprofielen moeten eerst naar V2 zijn overgezet. Ontbreekt: {missing}. Historische gegevens en V1 Local-laadpunten blijven behouden.",
+        "data": {"confirm": "Ik bevestig dat de V2-import volledig is"}
+      },
+      "init": {
+        "description": "Configuratie van de gekoppelde entities.",
+        "data": {
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen",
+          "evsc_control_semantics": "Betekenis van de Charger-controlschakelaar",
+          "name": "Naam laadpunt",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Maximale indicatieve sessiekosten (EUR)",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Native controleschakelaar (alleen observeren tijdens P0)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Sessiemeter energie",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_current_a": "Maximale laadstroom (A)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
+        },
+        "menu_options": {
+          "retire_to_v2": "Tussenliggende Controller uitfaseren na V2-import",
+          "link_chargers": "Laadpunten koppelen"
+        }
+      },
+      "charger": {
+        "title": "Laadgegevens voor {charger}",
+        "data": {
+          "capacity_kwh": "Bruikbare batterijcapaciteit voertuig (kWh)",
+          "power_kw": "Verwacht laadvermogen (kW)",
+          "power_sensor": "Native laadsensor vermogen",
+          "energy_sensor": "Native sessie-energiemeter"
+        }
+      },
+      "controller": {
+        "description": "Selecteer laadpunten voor centrale planning. Niet geselecteerde laders behouden hun Local-planning. Vink gepauzeerde laders uit om ze opnieuw te starten.",
+        "data": {
+          "price_sensor": "Electriciteit prijs template entity",
+          "ev_soc_sensor": "EV SOC sensor",
+          "ev_target_soc_sensor": "EV doel SOC input (enkele spatie om niet te gebruiken)",
+          "charger_entity": "Entity voor de oplader bedieningsschakelaar (enkele spatie om niet te gebruiken)",
+          "charging_state_entity": "Entity voor de laadstatus (enkele spatie om niet te gebruiken)",
+          "ev_controlled": "Een EV integratie bediend het starten/stoppen van het opladen",
+          "participants": "Centraal geplande laadpunten",
+          "max_parallel": "Maximaal gelijktijdig laden",
+          "power_budget_kw": "Vermogensbudget laadpunten (kW, 0 = geen limiet)",
+          "paused_chargers": "Handmatig gepauzeerde laadpunten"
+        },
+        "title": "Instellingen Charge Controller"
+      },
+      "link_chargers": {
+        "title": "Laadpunten koppelen",
+        "description": "Koppel bestaande Chargers aan de Charge Controller. Hun oorspronkelijke Local-aansturing blijft actief.",
+        "data": {
+          "linked_chargers": "Gekoppelde laadpunten"
+        }
+      },
+      "add_vehicle": {
+        "title": "Voertuig toevoegen",
+        "data": {
+          "ready_by": "Klaar tegen (datum en uur, optioneel)"
+        }
+      },
+      "update_vehicle": {
+        "title": "Voertuig wijzigen",
+        "data": {
+          "ready_by": "Klaar tegen (datum en uur, optioneel)"
+        }
+      },
+      "v2_options": {
+        "title": "V2-apparaat configureren",
+        "description": "Configureer dit V2-apparaat. Kies bestaande Home Assistant-entiteiten; maak een optionele selectie leeg om de koppeling te verwijderen. Originele Local-laadsturing blijft onaangeraakt.",
+        "data": {
+          "name": "Naam laadpunt",
+          "max_parallel": "Maximaal gelijktijdige laadpunten",
+          "horizon_days": "Planningshorizon (dagen)",
+          "power_budget_kw": "Maximaal gezamenlijk laadvermogen (kW)",
+          "price_cap_eur_kwh": "Maximale effectieve prijs (EUR/kWh)",
+          "cost_budget_eur": "Harde kostenlimiet per actieve verbinding (€) — optioneel",
+          "soc_entity": "Laadstatus (SoC) sensor",
+          "target_soc": "Doel-SoC (%)",
+          "battery_kwh": "Bruikbare batterijcapaciteit (kWh)",
+          "max_ac_kw": "Maximaal AC-vermogen laadpunt (kW)",
+          "phase_count": "Aantal laadfasen",
+          "ready_by": "Eenmalig gereed tegen datum en tijdstip",
+          "user_id": "Gekoppelde Home Assistant-gebruiker (optioneel)",
+          "controller_uid": "Laadcontroller (verplicht)",
+          "vehicle_uid": "Toegewezen voertuig (optioneel)",
+          "control_entity": "Fysieke laadbediening (vereist voor echte Start/Stop)",
+          "connected_entity": "Sensor fysieke kabelverbinding",
+          "charging_entity": "Sensor daadwerkelijk laden",
+          "power_entity": "Gemeten laadvermogen",
+          "energy_entity": "Energiemeter bron (sessie of cumulatief)",
+          "tariff_entity": "Geverifieerd effectief EUR/kWh tarief",
+          "max_current_a": "Maximale laadstroom (A)",
+          "ready_mode": "Ready By patroon",
+          "ready_time": "Dagelijks gereed tegen hetzelfde tijdstip",
+          "ready_mon": "Maandag gereed tegen (leeg = geen deadline)",
+          "ready_tue": "Dinsdag gereed tegen (leeg = geen deadline)",
+          "ready_wed": "Woensdag gereed tegen (leeg = geen deadline)",
+          "ready_thu": "Donderdag gereed tegen (leeg = geen deadline)",
+          "ready_fri": "Vrijdag gereed tegen (leeg = geen deadline)",
+          "ready_sat": "Zaterdag gereed tegen (leeg = geen deadline)",
+          "ready_sun": "Zondag gereed tegen (leeg = geen deadline)",
+          "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen",
+          "physical_enabled": "Fysieke V2-laadsturing actief",
+          "connection_source": "Connected-status: HA-sensor of manueel",
+          "requested_grid_kwh": "Laadbehoefte zonder SoC (kWh)",
+          "requested_duration_quarters": "Laadduur zonder SoC (kwartieren)",
+          "charge_ready_time": "Uiterlijk klaar om (HH:MM)",
+          "energy_source_kind": "Energiemetertype",
+          "peak_shaving_enabled": "Piekbewaking inschakelen",
+          "site_power_entity": "Huismeter netto netvermogen (W/kW)",
+          "peak_target_kw": "Maximaal netvermogen (kW)",
+          "peak_reserve_kw": "Veiligheidsreserve (kW)",
+          "soc_source_mode": "SoC-bron en methode",
+          "manual_soc": "Manuele SoC (%)",
+          "charge_efficiency": "Gekende laadefficiëntie (0–1)",
+          "price_mode": "Tariefbron: effectieve prijs of marktprijs",
+          "spot_markup_eur_kwh": "Extra kosten per kWh (EUR/kWh)",
+          "price_vat_percent": "BTW op energieprijs (%)"
+        },
+        "data_description": {
+          "soc_entity": "Optioneel voor manuele of kWh/tijd-lading. Voor OEM-SoC-planning verplicht: kies een bestaande voertuigsensor (%) zoals sensor.audi_soc.",
+          "control_entity": "Voor fysieke bediening verplicht: kies de bestaande switch/input_boolean van de laadpaal of EV-geschikte smart plug. V2 stuurt alleen met expliciet geactiveerde Controller, exclusieve ownership en readback.",
+          "connected_entity": "Verplicht wanneer Connected source = Sensor. Kies de bestaande kabel-/voertuig-aangesloten sensor. Bij Manual verschijnt een aparte Connected Ja/Nee schakelaar.",
+          "charging_entity": "Kies de sensor die effectief laden aangeeft (sensor of binary_sensor).",
+          "power_entity": "Voor fysieke laadsturing verplicht: gemeten vermogen van het gekozen laadpunt in W/kW. Bijvoorbeeld sensor.peblar_charge_power. Geen huishoudtotaal.",
+          "energy_entity": "Voor gemeten sessiekWh en kosten: kies de echte kWh/Wh-meter van dit laadpunt, ook als die levenslang oploopt. Het type hieronder bepaalt de veilige sessieberekening.",
+          "tariff_entity": "Verplicht voor prijsplanning: sensor met controleerbare toekomstige effectieve EUR/kWh-prijsreeks of bron voor spotprijs met expliciete kosten. Een losse huidige spotprijs volstaat niet.",
+          "physical_enabled": "Optioneel, standaard uit. Alleen activeren wanneer dit laadpunt niet meer door V1 Local bediend wordt en echte connected/vermogen, effectieve tarieven, OEM-switch en Start/Stop-readback werken.",
+          "connection_source": "Kies Manual voor smart plugs zonder kabelsensor. Op het Charger-device verschijnt een aparte Connected Yes/No schakelaar.",
+          "requested_grid_kwh": "Optioneel: gewenste gridenergie, alleen nodig bij geen betrouwbare SoC. Kies kWh OF duur, niet beide.",
+          "requested_duration_quarters": "Optioneel aantal kwartieren bij geen betrouwbare SoC. 4 kwartieren = 1 uur.",
+          "charge_ready_time": "Uiterlijke dagelijkse deadline voor laden zonder Vehicle/SoC; bijvoorbeeld 08:00.",
+          "energy_source_kind": "Session: meter reset per sessie. Total increasing: cumulatieve kWh; V2 berekent alleen gecontroleerde stijgingen sinds de expliciete verbinding. Onbekende metertypes leveren geen fictieve sessie-energie.",
+          "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
+          "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
+          "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
+          "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
+          "soc_source_mode": "OEM: enkel verse sensor. Manual: zelf ingestelde SoC. Meter compensated: OEM + werkelijk gemeten sessie- of cumulatieve energie, met herkenbare Estimated status.",
+          "manual_soc": "Expliciet ingegeven SoC wanneer de voertuigcloud ontbreekt. Niet voorgesteld als OEM-meting.",
+          "charge_efficiency": "Verplicht voor compensatie; geef gekende verhouding batterij-kWh / gemeten net-kWh op, bv. 0,9 indien onderbouwd.",
+          "price_mode": "Effective slots: bron biedt geverifieerde EUR/kWh-slots. Spot with fees: Nord Pool/Frank/ENTSO-e marktprijzen worden pas bruikbaar na expliciete kosten en BTW.",
+          "spot_markup_eur_kwh": "Verplicht bij spot: bekende variabele leveranciers-, net- en heffingskosten per kWh samen, negatief indien korting. Geen fictief nultarief.",
+          "price_vat_percent": "Verplicht bij spot: juiste BTW % bovenop prijs en variabele toeslag. Controleer of bronprijzen reeds BTW bevatten.",
+          "cost_budget_eur": "Geldt voor de momenteel verbonden laadsessies, niet als automatisch dagbudget. V2 meet verbruik en effectieve tarieven en reserveert conservatief de volgende 15 minuten. Meter- of prijsgaten blokkeren fysieke Start; leeg laten voor geen limiet.",
+          "max_ac_kw": "Voor fysieke aansturing en planning zonder voertuig-SoC verplicht: gekend duurzaam laadvermogen, bijvoorbeeld 2,0 kW voor een EV-geschikte smart plug. Gebruik geen geschatte huidige meting.",
+          "battery_kwh": "Voor SoC-gebaseerde laadplanning verplicht: bruikbare capaciteit in kWh, bijvoorbeeld 20 kWh. Niet de volledige bruto capaciteit wanneer onbekend.",
+          "controller_uid": "Verplicht. Selecteer de bestaande V2 Charge Controller die de planning en elektrische limieten van dit laadpunt beheert."
+        }
+      }
+    },
+    "error": {
+      "price_not_found": "Electriciteit prijs sensor niet gevonden.",
+      "price_not_sensor": "De electriciteit prijs entity is geen sensor.",
+      "sensor_is_not_price": "De Electriciteit prijs sensor heeft niet de benodigde attributen.",
+      "ev_soc_not_found": "EV SOC sensor is niet gevonden.",
+      "ev_soc_invalid_data": "De SOC sensor heeft ongeldige data.",
+      "ev_target_soc_not_found": "EV doel SOC input niet gevonden.",
+      "ev_target_soc_invalid_data": "De EV doel SOC input heeft ongeldige data.",
+      "charger_control_switch_not_found": "Entity voor de oplader bedieningsschakelaar niet gevonden.",
+      "charger_control_switch_not_switch": "Oplader bedieningsschakelaar entity is geen switch of een input boolean.",
+      "charging_state_entity_not_found": "Entity voor de laadstatus niet gevonden.",
+      "invalid_charger_link": "Onbekend laadpunt",
+      "unlink_coordinated_first": "Zet de Charger eerst terug in Local-modus",
+      "charger_not_linked": "Koppel de Charger eerst aan de Controller",
+      "invalid_v2_configuration": "Ongeldige V2-configuratie of conflicterende toewijzing."
+    }
+  },
+  "entity": {
+    "button": {
+      "manually_start_charging": {
+        "name": "Handmatige start opladen"
+      },
+      "manually_stop_charging": {
+        "name": "Handmatige stop opladen"
+      },
+      "clear_absolute_ready_by": {
+        "name": "Klaar-tegen-datum wissen"
+      }
+    },
+    "number": {
+      "charging_speed": {
+        "name": "Oplaadsnelheid"
+      },
+      "electricity_price_limit": {
+        "name": "Limiet elektriciteitsprijs"
+      },
+      "opportunistic_level": {
+        "name": "Opportunistisch niveau"
+      },
+      "opportunistic_type2_level": {
+        "name": "Opportunistisch type 2 niveau"
+      },
+      "low_price_charging_level": {
+        "name": "Lage prijs oplaadniveau"
+      },
+      "low_soc_charging_level": {
+        "name": "Lage SOC oplaadniveau"
+      },
+      "minimum_ev_soc": {
+        "name": "Minimum EV SOC"
+      }
+    },
+    "select": {
+      "charge_start_time": {
+        "name": "Oplaad starttijd"
+      },
+      "charge_completion_time": {
+        "name": "Oplaad voltooiingstijd"
+      }
+    },
+    "sensor": {
+      "charging": {
+        "name": "Opladen",
+        "state_attributes": {
+          "current_price": {
+            "name": "Actuele prijs"
+          },
+          "ev_soc": {
+            "name": "EV SOC"
+          },
+          "ev_target_soc": {
+            "name": "EV instelwaarde SOC"
+          },
+          "charging_is_planned": {
+            "name": "Opladen staat gepland"
+          },
+          "charging_start_time": {
+            "name": "Starttijd opladen"
+          },
+          "charging_stop_time": {
+            "name": "Tijd opladen gereed"
+          },
+          "charging_number_of_hours": {
+            "name": "Aantal uren opladen"
+          },
+          "opportunistic": {
+            "name": "Opportunistisch"
+          },
+          "raw_two_days": {
+            "name": "Ruwe data van 2 dagen"
+          },
+          "charging_schedule": {
+            "name": "Oplaad schema"
+          }
+        }
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "waiting_for_new_prices": "Wachten op nieuwe prijzen",
+          "no_charging_planned": "Geen opladen gepland",
+          "waiting_for_charging_to_begin": "Wachten tot het opladen begint",
+          "charging": "Aan het opladen",
+          "keeping_charger_on": "Oplader ingeschakeld houden",
+          "disconnected": "Losgekoppeld",
+          "smart_charging_not_active": "Slim opladen niet actief",
+          "low_price_charging": "Lage prijs opladen",
+          "low_soc_charging": "Lage SOC opladen"
+        }
+      }
+    },
+    "switch": {
+      "smart_charging_activated": {
+        "name": "Activeer slim opladen"
+      },
+      "apply_price_limit": {
+        "name": "Prijslimiet toepassen"
+      },
+      "continuous_charging_preferred": {
+        "name": "Bij voorkeur continu opladen"
+      },
+      "ev_connected": {
+        "name": "EV aangesloten"
+      },
+      "keep_charger_on": {
+        "name": "Oplader ingeschakeld houden"
+      },
+      "opportunistic_charging": {
+        "name": "Opportunistisch opladen"
+      },
+      "opportunistic_type2_charging": {
+        "name": "Opportunistisch type 2 opladen"
+      },
+      "low_price_charging": {
+        "name": "Lage prijs opladen"
+      },
+      "low_soc_charging": {
+        "name": "Lage SOC opladen"
+      }
+    },
+    "datetime": {
+      "absolute_ready_by": {
+        "name": "Klaar tegen (datum en uur)"
+      }
+    }
+  }
 }

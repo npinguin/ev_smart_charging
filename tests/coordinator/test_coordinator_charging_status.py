@@ -28,13 +28,16 @@ async def test_periodic_check_charging_state_retries_when_entity_is_off(
 
     coordinator.charging_state_entity_id = "binary_sensor.ev_charging"
     coordinator.auto_charging_state = STATE_ON
+    coordinator.switch_active = True
+    coordinator.switch_ev_connected = True
     coordinator.turn_on_charging = AsyncMock()
 
     hass.states.async_set(coordinator.charging_state_entity_id, STATE_OFF)
+    hass.states.async_set(coordinator.charger_switch.entity_id, STATE_OFF)
 
     await coordinator.periodic_check_charging_state()
 
-    coordinator.turn_on_charging.assert_awaited_once_with()
+    coordinator.turn_on_charging.assert_awaited_once_with(reason="retry")
 
     # Unsubscribe to listeners
     coordinator.unsubscribe_listeners()

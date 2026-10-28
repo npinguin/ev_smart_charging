@@ -46,9 +46,15 @@ async def test_successful_config_flow(hass: HomeAssistant, bypass_validate_step_
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    # Check that the config flow shows the user form as the first step
-    assert result["type"] == FlowResultType.FORM  # From HA 2022.7
+    # The new-device menu still exposes the unchanged classic Local flow.
+    assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "user"
+    assert "legacy_local" in result["menu_options"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "legacy_local"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -73,9 +79,15 @@ async def test_unsuccessful_config_flow(hass: HomeAssistant):
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
-    # Check that the config flow shows the user form as the first step
-    assert result["type"] == FlowResultType.FORM
+    # Invalid original Local setup remains invalid after selecting Local.
+    assert result["type"] == FlowResultType.MENU
     assert result["step_id"] == "user"
+    assert "legacy_local" in result["menu_options"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "legacy_local"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -83,7 +95,7 @@ async def test_unsuccessful_config_flow(hass: HomeAssistant):
 
     # Check that the config flow is not complete and that there are errors
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "legacy_local"
     assert len(result["errors"]) > 0
 
 
@@ -96,6 +108,9 @@ async def test_successful_config_flow_option(
     # Initialize a config flow
     result: Dict[str, Any] = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -122,6 +137,7 @@ async def test_successful_config_flow_option(
     # Check that the option flow is complete and a new entry is created with
     # the input data
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    # The original upstream Local Options flow must not add V2 fields.
     assert result["data"] == MOCK_CONFIG_USER
     if "errors" in result.keys():
         assert len(result["errors"]) == 0
@@ -134,6 +150,9 @@ async def test_unsuccessful_config_flow_option(hass: HomeAssistant):
     # Initialize a config flow
     result: Dict[str, Any] = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "legacy_local"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_CONFIG_USER
@@ -161,3 +180,86 @@ async def test_unsuccessful_config_flow_option(hass: HomeAssistant):
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
     assert len(result["errors"]) > 0
+
+
+async def test_original_upstream_local_requires_real_soc(hass):
+    """V1 retains upstream SoC validation; no-SoC plans belong to V2 only."""
+    from custom_components.ev_smart_charging.helpers.config_flow import FlowValidator
+    from custom_components.ev_smart_charging.const import (
+        CONF_PRICE_SENSOR,
+        CONF_EV_SOC_SENSOR,
+        CONF_EV_TARGET_SOC_SENSOR,
+        CONF_CHARGER_ENTITY,
+        CONF_CHARGING_STATE_ENTITY,
+    )
+    from custom_components.ev_smart_charging.coordinator import (
+        EVSmartChargingCoordinator,
+    )
+    from types import SimpleNamespace
+
+    unbound = {
+        CONF_PRICE_SENSOR: "sensor.test_price",
+        CONF_EV_SOC_SENSOR: "",
+        CONF_EV_TARGET_SOC_SENSOR: "",
+        CONF_CHARGER_ENTITY: "",
+        CONF_CHARGING_STATE_ENTITY: "",
+    }
+    hass.states.async_set("sensor.test_price", "0.2")
+    with patch(
+        "custom_components.ev_smart_charging.helpers.config_flow.PriceAdaptor.validate_price_entity",
+        return_value=None,
+    ):
+        assert FlowValidator.validate_step_user(hass, dict(unbound)) == (
+            "base",
+            "ev_soc_not_found",
+        )
+        broken = {**unbound, CONF_EV_SOC_SENSOR: "sensor.nonexistent_soc"}
+        assert FlowValidator.validate_step_user(hass, broken) == (
+            "base",
+            "ev_soc_not_found",
+        )
+
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="unbound", data=unbound, version=8)
+    fake = SimpleNamespace(config_entry=entry, hass=hass)
+    assert (
+        EVSmartChargingCoordinator.validate_input_sensors(fake)
+        == "Input sensors not ready."
+    )
+    hass.states.async_set("sensor.test_soc", "40")
+    bound = {**unbound, CONF_EV_SOC_SENSOR: "sensor.test_soc"}
+    entry = MockConfigEntry(domain=DOMAIN, entry_id="bound", data=bound, version=8)
+    fake = SimpleNamespace(config_entry=entry, hass=hass)
+    assert EVSmartChargingCoordinator.validate_input_sensors(fake) is None
+    hass.states.async_remove("sensor.test_price")
+    assert (
+        EVSmartChargingCoordinator.validate_input_sensors(fake)
+        == "Input sensors not ready."
+    )
+
+
+async def test_upstream_local_options_save_preserves_hidden_pre_migration_state(
+    hass, bypass_validate_step_user
+):
+    """Changing a V1 input must not erase stored schedules or source evidence."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="retain_legacy_hidden",
+        data=MOCK_CONFIG_ALL,
+        options={
+            "ready_quarter": "08:00",
+            "maximum_price": 0.30,
+            "evsc_actual_power_entity": "sensor.previous_rc_meter",
+        },
+        version=8,
+    )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    assert form["type"] == FlowResultType.FORM
+    saved = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input=MOCK_CONFIG_USER
+    )
+    assert saved["type"] == FlowResultType.CREATE_ENTRY
+    assert saved["data"]["evsc_actual_power_entity"] == "sensor.previous_rc_meter"
+    assert saved["data"]["ready_quarter"] == "08:00"
+    assert saved["data"]["maximum_price"] == 0.30
+    assert entry.version == 8
