@@ -83,6 +83,8 @@ class V2Fact(SensorEntity):
             "required_battery_kwh",
             "known_actual_cost_eur",
             "known_energy_kwh",
+            "known_recorded_cost_eur",
+            "known_recorded_energy_kwh",
         ):
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -186,15 +188,31 @@ class V2Fact(SensorEntity):
                     ),
                     "None",
                 )
-            if self.key in ("known_actual_cost_eur", "known_energy_kwh"):
+            if self.key in (
+                "known_actual_cost_eur",
+                "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
+            ):
                 from .runtime import V2ControllerRuntime
 
+                historical = self.key.startswith("known_recorded_")
+                report_name = (
+                    "recorded_actual_cost_per_vehicle"
+                    if historical
+                    else "actual_cost_per_vehicle"
+                )
+                field = (
+                    "known_energy_kwh"
+                    if self.key.endswith("energy_kwh")
+                    else "known_cost_eur"
+                )
                 totals = [
-                    runtime.snapshot.get("actual_cost_per_vehicle", {}).get(obj.uid)
+                    runtime.snapshot.get(report_name, {}).get(obj.uid)
                     for runtime in self.hass.data.get(DOMAIN, {}).values()
                     if isinstance(runtime, V2ControllerRuntime)
                 ]
-                values = [item[self.key] for item in totals if item is not None]
+                values = [item[field] for item in totals if item is not None]
                 return round(sum(values), 4) if values else None
             # A cached OEM number is not a current SoC observation.
             soc = _number(
@@ -256,6 +274,8 @@ class V2Fact(SensorEntity):
                 "actual_cost_today",
                 "known_actual_cost_eur",
                 "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
             ):
                 from .runtime import V2ControllerRuntime
 
@@ -270,6 +290,8 @@ class V2Fact(SensorEntity):
                                     "actual_cost_today": "actual_cost_today",
                                     "known_actual_cost_eur": "known_subtotal_eur",
                                     "known_energy_kwh": "known_energy_kwh",
+                                    "known_recorded_cost_eur": "known_recorded_cost_eur",
+                                    "known_recorded_energy_kwh": "known_recorded_energy_kwh",
                                 }[self.key]
                             )
                 return None
@@ -369,6 +391,22 @@ def sensors_for_entry(entry):
                 SensorDeviceClass.MONETARY,
                 "EUR",
             ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_energy_kwh",
+                "Known recorded charged energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_cost_eur",
+                "Known recorded charge cost",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
             V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
             V2Fact(
                 entry,
@@ -403,6 +441,22 @@ def sensors_for_entry(entry):
                 "Known charged energy today",
                 SensorDeviceClass.ENERGY,
                 "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_energy_kwh",
+                "Known recorded charged energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_cost_eur",
+                "Known recorded charge cost",
+                SensorDeviceClass.MONETARY,
+                "EUR",
             ),
             V2Fact(entry, kind, "controller", "Charge Controller"),
             V2Fact(
