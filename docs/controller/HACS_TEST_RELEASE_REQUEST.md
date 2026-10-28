@@ -1,60 +1,28 @@
-# HACS v2.6.0-rc.18 — guarded native V2 shutdown field-test release
+# HACS RC18 — full V1 + V2 functional test release request
 
-Requested 27 October 2026. This release is an immutable hotfix on
-`fix/rc17-connected-off-race` based on published `v2.6.0-rc.17`.
-It is **not stable production acceptance** and does **not** close physical P0 #5.
+**Requested: 28 October 2026.** Package the entire installed integration from this exact tested commit as an immutable HACS **prerelease**, not a mock and not a stable tag. Run all 9 software checks on the **same publication SHA** before creating the release. Never change or overwrite a previously issued tag.
 
-## Scope
-- Preserve all original V1 Local Config Entries, unique IDs, upstream
-  charging behavior and 08:00 next-day Ready By logic.
-- Preserve the rc17 native V2 Vehicle, Charger and Controller setup,
-  manual smart-plug Connected Yes/No, full source selectors, kWh and
-  duration charging, OEM/estimated SoC, actual metering, Controller planning,
-  peak shaving and guarded budget.
-- Fix concurrent manual Connected No during planning: coalesce skipped
-  refreshes and check current authoritative manual status immediately before
-  the native control service call. A previous Yes cannot override a recent No.
-- On physical V2 Controller disable/reload/unload or Charger source handoff,
-  issue bounded OFF to an **already owned native control only**. Never touch
-  an unowned switch or original Local writer. Do not release ownership or
-  claim verified stop if actual OFF readback is absent or service fails.
-- HA-native provider/OEM control source, cable/connection status, actual
-  physical measured kWh, electrical limits and EUR/kWh pricing remain mandatory
-  for applicable control modes; never invent data.
+## Baseline: upstream original V1 Local is accepted
 
-## Publication gate
-- Exact full 9/9 CI validation on **the publication commit**, Python
-  3.11–3.14, >=90% coverage, Black, Hassfest/HACS, original Local smoke,
-  upstream parity and Controller regression.
-- Dedicated tests `test_rc17_refresh_coalescing.py`, plus physical
-  native writer shutdown/connection race regressions in
-  `tests/v2/test_execution.py` must pass.
-- No tag reuse, no changing rc17, main or stable release.
+- Original V1 Local is **the upstream product baseline**, not a new feature or an experimental physical controller. We must preserve its Config Entries, original entities and entity IDs, native start/stop buttons, charging switch, price scheduling, connection and SoC behavior, 08:00 next-day completion, and HA restart/reload/Options semantics.
+- Run the upstream baseline tests and the same representative V1 tests against the modified integration. The original upstream-required SoC source remains mandatory in **V1 Local**. No-SoC kWh/duration operation belongs to V2 only.
+- V1 Local needs no new hardware sign-off merely because we added V2; any *changed* old behavior is a release defect. No implicit conversion or deletion of original Local entries.
+- The custom historical `charge_controller` (old intermediate/Legacy Coordinated) was **not** part of upstream V1. Its prior HA-hang incident must not be confused with original Local. Its legacy physical writer must not operate concurrently with the V2 writer on the same charger.
 
-## Field acceptance (still missing from CI)
-Back up Home Assistant. Install rc18 via HACS prerelease selection, restart.
-First verify the original V1 installation unchanged with V2 physical control
-disabled. Check native HA source mappings, correct prices and quality, and
-valid plan. Only on one real EVSE, disable its V1 Local owner, then enable
-V2 Controller physical control with OEM stop access. Trigger Manual Connected
-No while the Charger is ON, disable Controller, reload V2 integration and
-verify **actual switch state, charging power, service response, HA responsiveness
-and task growth**. Repeat on Peblar, OCPP Wallboxes and utility smart plug
-before any stable promotion. If hardware remains ON or HA becomes unresponsive,
-stop via OEM and restore the HA backup; keep physical P0 #5 open.
+## Full V2 — no fake gates or disabled feature stubs
 
+The tag must include real HA-native Vehicle/Charger/Charge Controller setup and Configure, manual/device source selection, exclusive Vehicle assignment (including None), actual connected/charging/power/readback, kWh/duration & SoC planning, Ready By, dynamic tariff quality, peak and financial budget, and metered costs/energy per Charger and Vehicle. `V2_PHYSICAL_EXECUTION_AVAILABLE = True` and normal HA Controller `physical_enabled` control must remain functional. Services must operate the actual configured source; no simulated success, fake meter/price/SoC, or no-op physical control.
 
-## Additional native shutdown regression gate
-The hotfix must explicitly cover both adverse ownership situations:
-a former V2-owned HA control target becomes owned by an enabled original V1
-Local Config Entry before shutdown; V2 must send **no command** to it.
-If a previously-owned native control adapter becomes unavailable, shutdown
-must not claim verified OFF or release the V2 owner reservation. These cases
-are tested by `tests/v2/test_execution.py` and included in the full CI gate;
-they do not substitute for physical OEM feedback in the installation.
+Do not remove normal electrical/ownership/readback quality checks. A rejected command must have an understandable cause. The historical Legacy Coordinated path remains separately quarantined; that does **not** disable V1 Local or the new V2 writer.
 
-## Final packaging validation
-Format the new physical-ownership assertions with the repository's Black
-formatting gate, without changing any safety behavior or coverage threshold.
-The exact release SHA must pass both the reusable release workflow CI and
-the Pull Request CI before the immutable RC18 tag can be published.
+## Migration acceptance on existing HA configuration
+
+- V1 Local and its entities still work on **upgrade with no action**.
+- Create V2 Controller and Vehicle via reviewed import of historical intermediate Controller/Vehicle, preserving settings. Create V2 Charger from verified existing native source or explicitly map a former Local Charger; no implicit OEM, tariff or connected-source guesses.
+- No duplicate devices or second physical writer, no existing Config Entry overwritten, no lost Ready By, stable identities, repeatable migration without duplicate entries.
+- Explicitly retire the historical intermediate Controller only after its V2 contents and assignments are reviewed. Leave original V1 Local untouched until an operator chooses physical handover.
+- Test restart, reload, migration replay, rollback and entity registry changes.
+
+## Two release decisions
+
+**HACS prerelease**: publish after exact-head full CI passes; its purpose is to verify full behavior on the real HA installation. **Stable/main promotion**: only after the real native-source and one-charger-at-a-time field tests demonstrate no regression, correct stop/readback and no HA hangs. Do not claim the prerelease is field-certified. Keep a normal HA backup and independent OEM stop available for the physical test.
