@@ -56,13 +56,9 @@ async def test_native_vehicle_soc_controls_use_canonical_options(hass, monkeypat
     await mode.async_select_option("OEM")
     assert mode.current_option == "OEM"
 
-    assert target.device_info["identifiers"] == {
-        (DOMAIN, "v2:vehicle_v2:audi")
-    }
+    assert target.device_info["identifiers"] == {(DOMAIN, "v2:vehicle_v2:audi")}
     assert mode.device_info["identifiers"] == target.device_info["identifiers"]
-    assert "target_soc" not in {
-        entity.key for entity in sensors_for_entry(entry)
-    }
+    assert "target_soc" not in {entity.key for entity in sensors_for_entry(entry)}
 
 
 async def test_number_setup_registers_only_v2_vehicle_configuration(hass):
