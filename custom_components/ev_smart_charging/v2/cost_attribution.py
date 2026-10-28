@@ -54,6 +54,12 @@ class V2CostLedger(ActualCostLedger):
             valid = bool(source) and isfinite(reading) and reading >= 0
         except (TypeError, ValueError, OverflowError):
             valid = False
+        if not valid:
+            # The upstream ledger assumes a numeric reading. Missing or
+            # corrupt HA data must degrade completeness, not crash refresh
+            # or mutate previously certified energy/cost attribution.
+            self.complete = False
+            return
         if valid and (
             (previous_day is not None and dt.as_local(utc(when)).date() != previous_day)
             or (previous_source is not None and source != previous_source)
