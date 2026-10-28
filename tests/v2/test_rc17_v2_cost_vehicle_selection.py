@@ -270,15 +270,9 @@ def test_recorded_cost_survives_charger_meter_rebinding_without_double_count():
     slot = PriceSlot(when, when + timedelta(minutes=15), 0.2)
     ledger = V2CostLedger()
     ledger.observe(when, 10, "sensor.old_meter", [slot], "audi")
-    ledger.observe(
-        when + timedelta(minutes=2), 11, "sensor.old_meter", [slot], "audi"
-    )
-    ledger.observe(
-        when + timedelta(minutes=3), 250, "sensor.new_meter", [slot], "audi"
-    )
-    ledger.observe(
-        when + timedelta(minutes=5), 252, "sensor.new_meter", [slot], "audi"
-    )
+    ledger.observe(when + timedelta(minutes=2), 11, "sensor.old_meter", [slot], "audi")
+    ledger.observe(when + timedelta(minutes=3), 250, "sensor.new_meter", [slot], "audi")
+    ledger.observe(when + timedelta(minutes=5), 252, "sensor.new_meter", [slot], "audi")
     report = ledger.summary()
     assert report["known_recorded_energy_kwh"] == 3
     assert report["known_recorded_cost_eur"] == 0.6
@@ -290,9 +284,7 @@ def test_invalid_meter_observation_leaves_certified_ledger_intact():
     slot = PriceSlot(when, when + timedelta(minutes=15), 0.2)
     ledger = V2CostLedger()
     ledger.observe(when, 10, "sensor.meter", [slot], "audi")
-    ledger.observe(
-        when + timedelta(minutes=2), 11, "sensor.meter", [slot], "audi"
-    )
+    ledger.observe(when + timedelta(minutes=2), 11, "sensor.meter", [slot], "audi")
     before = ledger.summary()["known_recorded_cost_eur"]
     ledger.observe(when + timedelta(minutes=5), None, "sensor.meter", [slot], "audi")
     assert ledger.summary()["known_recorded_cost_eur"] == before
