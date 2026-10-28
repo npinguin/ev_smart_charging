@@ -26,3 +26,13 @@ Do not remove normal electrical/ownership/readback quality checks. A rejected co
 ## Two release decisions
 
 **HACS prerelease**: publish after exact-head full CI passes; its purpose is to verify full behavior on the real HA installation. **Stable/main promotion**: only after the real native-source and one-charger-at-a-time field tests demonstrate no regression, correct stop/readback and no HA hangs. Do not claim the prerelease is field-certified. Keep a normal HA backup and independent OEM stop available for the physical test.
+
+## Final original-Local parity closure
+
+The previously relaxed V1 Local SoC validation has been restored to the
+official upstream contract. The original FlowValidator module is byte-identical
+to upstream (blob `506d7eff7db41c056a1c65cf61a9ade9553f0e72`).
+The V1 add/configure flow again requires a real SoC entity. V2's independent
+Vehicle/Charger models continue to support explicitly metered kWh or duration
+demand when no OEM SoC exists. Both the upstream baseline and the modified
+Local runtime regressions must pass on this publication commit.
