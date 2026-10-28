@@ -137,7 +137,9 @@ async def test_native_charger_statuses_are_registered_and_follow_source_events(h
         assert vehicle_select is not None
         assert hass.states.get(connected).state == "on"
         assert hass.states.get(charging).state == "on"
-        hass.states.async_set("sensor.charger_power", "0", {"unit_of_measurement": "kW"})
+        hass.states.async_set(
+            "sensor.charger_power", "0", {"unit_of_measurement": "kW"}
+        )
         await hass.async_block_till_done()
         assert hass.states.get(charging).state == "off"
         hass.states.async_set("binary_sensor.cable", "off")
