@@ -194,3 +194,35 @@ def test_cost_attribution_storage_rejects_invalid_structures():
         saved = ledger.to_storage()
         saved["vehicle_breakdown"] = corrupt
         assert V2CostLedger.from_storage(saved).vehicle_breakdown == {}
+
+
+def test_same_named_vehicles_remain_distinguishable_in_charger_control(hass, store):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.ev_smart_charging.const import DOMAIN
+    from custom_components.ev_smart_charging.v2 import ENTRY_VEHICLE, MARKER
+
+    white, _, _ = make_catalog(hass)
+    duplicate = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="another_audi",
+        title="Audi",
+        data={MARKER: ENTRY_VEHICLE, "uid": "audi2", "name": "Audi"},
+        version=8,
+    )
+    duplicate.add_to_hass(hass)
+    control = V2VehicleSelection(white)
+    control.hass = hass
+    assert "Audi (audi)" in control.options
+    assert "Audi (audi2)" in control.options
+    assert control.current_option == "Audi (audi)"
+    assert "None" in control.options
+
+
+async def test_native_vehicle_control_rejects_unknown_choice(hass, store):
+    white, _, _ = make_catalog(hass)
+    control = V2VehicleSelection(white)
+    control.hass = hass
+    with pytest.raises(ValueError, match="unknown_vehicle"):
+        await control.async_select_option("nonexistent")
+    assert white.options.get("vehicle_uid", white.data["vehicle_uid"]) == "audi"
