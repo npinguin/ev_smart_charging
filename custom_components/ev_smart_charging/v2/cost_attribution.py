@@ -167,8 +167,7 @@ class V2CostLedger(ActualCostLedger):
                 )
                 > 1e-5
                 or abs(
-                    sum(item["cost_eur"] for item in parsed.values())
-                    - expected_cost
+                    sum(item["cost_eur"] for item in parsed.values()) - expected_cost
                 )
                 > 1e-5
             ):
