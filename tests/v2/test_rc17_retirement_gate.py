@@ -125,3 +125,47 @@ def test_v2_fact_keeps_methods_after_device_info_refactor():
     assert callable(V2Fact.async_added_to_hass)
     assert callable(V2Fact._source_changed)
     assert hasattr(V2Fact, "native_value")
+
+
+async def test_completed_retirement_requires_confirmation_and_preserves_source(hass):
+    from homeassistant.data_entry_flow import FlowResultType
+    from unittest.mock import patch
+
+    old = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="retirement_confirm_source",
+        title="Home",
+        data={MARKER: "charge_controller"},
+        options={"max_parallel": 2, "planning_horizon_days": 2, "vehicles": {}},
+        version=8,
+    )
+    old.add_to_hass(hass)
+    preview = preview_intermediate(old)
+    converted = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="retirement_converted",
+        title="Home V2",
+        data={MARKER: ENTRY_CONTROLLER, **preview["controller"]},
+        version=8,
+    )
+    converted.add_to_hass(hass)
+    assert retirement_gaps(hass, old) == []
+    with patch(
+        "custom_components.ev_smart_charging.async_setup_entry", return_value=True
+    ):
+        menu = await hass.config_entries.options.async_init(old.entry_id)
+        form = await hass.config_entries.options.async_configure(
+            menu["flow_id"], {"next_step_id": "retire_to_v2"}
+        )
+        assert form["type"] == FlowResultType.FORM
+        rejected = await hass.config_entries.options.async_configure(
+            form["flow_id"], {"confirm": False}
+        )
+        assert rejected["errors"]["base"] == "confirm_required"
+        accepted = await hass.config_entries.options.async_configure(
+            rejected["flow_id"], {"confirm": True}
+        )
+        assert accepted["type"] == FlowResultType.CREATE_ENTRY
+        assert old.options.get("retired_to_v2") is True
+        assert old.options["max_parallel"] == 2
+        assert old.data[MARKER] == "charge_controller"
