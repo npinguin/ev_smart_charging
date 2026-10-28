@@ -346,6 +346,7 @@ class V2ControllerRuntime:
                             oem_at=item["oem_at"],
                             energy_kwh=item["energy_kwh"],
                             energy_kind=charger.energy_source_kind,
+                            meter_source=charger.energy_entity,
                             now=observed_at,
                         )
                     elif vehicle.soc_source_mode == "manual":
