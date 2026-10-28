@@ -61,3 +61,62 @@ async def test_updates_during_inflight_refresh_coalesce_to_one_followup(hass):
                 first.cancel()
                 await asyncio.gather(first, return_exceptions=True)
             await runtime.async_stop()
+
+
+async def test_planner_failure_shutdown_attempts_all_owned_writers(hass):
+    """A failed planner may not leave a previously V2-owned EVSE running."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="failed_controller",
+        data={
+            MARKER: ENTRY_CONTROLLER,
+            "uid": "failed",
+            "name": "Failed controller",
+            "physical_enabled": True,
+        },
+        version=8,
+    )
+    entry.add_to_hass(hass)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = None
+    runtime = V2ControllerRuntime(hass, entry)
+
+    class OwnedWriter:
+        def __init__(self, result):
+            self.result = result
+            self.attempts = 0
+
+        async def async_shutdown(self):
+            self.attempts += 1
+            if self.result == "RAISE":
+                raise RuntimeError("EVSE failed during shutdown")
+            return self.result
+
+    verified = OwnedWriter("VERIFIED_OFF")
+    uncertain = OwnedWriter("STOP_SENT_AWAITING_READBACK")
+    broken = OwnedWriter("RAISE")
+    runtime._writers.update({
+        "verified": verified,
+        "uncertain": uncertain,
+        "broken": broken,
+    })
+    try:
+        with patch(
+            "custom_components.ev_smart_charging.v2.runtime.catalog",
+            side_effect=ValueError("bad planner input"),
+        ):
+            await runtime.async_refresh()
+
+        assert runtime.snapshot["status"] == "INVALID_CONFIGURATION"
+        assert runtime.snapshot["physical_actuation_authorized"] is False
+        assert runtime.snapshot["execution_status"] == "PLANNER_FAILED_SAFE_HOLD"
+        assert runtime.snapshot["native_shutdown"] == {
+            "verified": "VERIFIED_OFF",
+            "uncertain": "STOP_SENT_AWAITING_READBACK",
+            "broken": "STOP_EXCEPTION",
+        }
+        assert [verified.attempts, uncertain.attempts, broken.attempts] == [1, 1, 1]
+        # Unknown OFF must not be published as verified or silently retried.
+        assert set(runtime._writers) == {"verified", "uncertain", "broken"}
+    finally:
+        runtime._writers.clear()
+        await runtime.async_stop()
