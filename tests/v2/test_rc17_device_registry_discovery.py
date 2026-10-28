@@ -5,6 +5,7 @@ from homeassistant.helpers.entity_registry import async_get as entity_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_smart_charging.v2.source_discovery import (
+    compatible_source_devices,
     suggest_device_bindings,
 )
 
@@ -188,3 +189,31 @@ def test_manual_charger_source_reader_uses_explicit_boolean_not_switch(hass):
     manual_states(hass)["utility"] = True
     source = read_inputs(hass, {"utility": charger}, {})
     assert source["utility"]["connected"] is True
+
+
+def test_capability_filtered_device_picker_keeps_manual_setup_available(hass):
+    """No name-only suggestions and no unrelated HA lights in the EV picker."""
+    vehicle = add_device(hass, "Audi")
+    add_entity(hass, vehicle, "vehicle_soc", value="35", unit="%")
+    plug = add_device(hass, "Utility Smart Plug")
+    add_entity(hass, plug, "utility_power", value="0", unit="W")
+    add_entity(hass, plug, "utility_energy", value="3", unit="kWh")
+    add_entity(hass, plug, "utility_switch", domain="switch", value="off")
+    light = add_device(hass, "Living room")
+    add_entity(hass, light, "living_room", domain="switch", value="off")
+    assert vehicle.id in compatible_source_devices(hass, "vehicle")
+    assert plug.id in compatible_source_devices(hass, "charger")
+    assert light.id not in compatible_source_devices(hass, "charger")
+    assert plug.id not in compatible_source_devices(hass, "vehicle")
+    assert compatible_source_devices(hass, "unsupported") == {}
+
+
+def test_ambiguous_device_is_reviewed_without_inventing_prefill(hass):
+    device = add_device(hass, "Unverified EV")
+    add_entity(hass, device, "audi_soc_primary", value="44", unit="%")
+    add_entity(hass, device, "audi_soc_secondary", value="44", unit="%")
+    suggested, quality = suggest_device_bindings(hass, device.id, "vehicle")
+    assert "soc_entity" not in suggested
+    assert quality["soc_entity"] == "ambiguous"
+    assert quality["discovery"] == "no_unambiguous_bindings"
+    assert device.id not in compatible_source_devices(hass, "vehicle")
