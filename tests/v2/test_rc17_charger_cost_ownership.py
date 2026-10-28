@@ -42,9 +42,7 @@ async def test_charger_accounting_survives_controller_transfer_and_old_unload(ha
     first.__dict__.update(ledger.__dict__)
     await old._cost_stores["white"].async_save(first.to_storage())
 
-    hass.config_entries.async_update_entry(
-        white, options={"controller_uid": "south"}
-    )
+    hass.config_entries.async_update_entry(white, options={"controller_uid": "south"})
     new = V2ControllerRuntime(hass, _controller(hass, "south"))
     moved = await new._cost_ledger("white")
     assert moved.summary()["known_recorded_cost_eur"] == 0.2
@@ -65,9 +63,10 @@ async def test_charger_accounting_survives_controller_transfer_and_old_unload(ha
     recovered = await restarted._cost_ledger("white")
     assert recovered.summary()["known_recorded_energy_kwh"] == 2
     assert recovered.summary()["known_recorded_cost_eur"] == 0.4
-    assert recovered.summary()["recorded_vehicle_breakdown"]["audi"][
-        "known_energy_kwh"
-    ] == 2
+    assert (
+        recovered.summary()["recorded_vehicle_breakdown"]["audi"]["known_energy_kwh"]
+        == 2
+    )
 
 
 async def test_old_controller_cost_store_migrates_once_to_charger_uid(hass):
@@ -80,9 +79,10 @@ async def test_old_controller_cost_store_migrates_once_to_charger_uid(hass):
     upgraded._legacy_costs = await upgraded._cost_store.async_load()
     migrated = await upgraded._cost_ledger("white")
     assert migrated.summary()["known_recorded_cost_eur"] == 0.2
-    assert migrated.summary()["recorded_vehicle_breakdown"]["audi"][
-        "known_cost_eur"
-    ] == 0.2
+    assert (
+        migrated.summary()["recorded_vehicle_breakdown"]["audi"]["known_cost_eur"]
+        == 0.2
+    )
 
     # A stale legacy Controller archive must never supersede the new
     # authoritative Charger ledger when the integration reloads.
