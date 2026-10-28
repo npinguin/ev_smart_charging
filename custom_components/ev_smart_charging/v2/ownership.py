@@ -228,9 +228,7 @@ async def async_apply_charger_options(hass, charger_uid, changes):
         ):
             _, chargers, controllers = catalog(hass)
             has_owner = any(
-                isinstance(owner, tuple)
-                and len(owner) == 2
-                and owner[1] == charger_uid
+                isinstance(owner, tuple) and len(owner) == 2 and owner[1] == charger_uid
                 for owner in hass.data.get(f"{DOMAIN}.v2_native_writers", {}).values()
             )
             if (
