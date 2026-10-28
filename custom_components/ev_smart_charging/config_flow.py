@@ -760,9 +760,12 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Simple navigation, without an extra device or configuration layer."""
+        if self.config_entry.options.get("retired_to_v2"):
+            return self.async_abort(reason="intermediate_controller_retired")
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "retire_to_v2",
                 "policy",
                 "link_chargers",
                 "add_vehicle",
@@ -770,6 +773,56 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 "delete_vehicle",
                 "assign_vehicle",
             ],
+        )
+
+    async def async_step_retire_to_v2(self, user_input=None):
+        """Retire duplicate intermediate runtime after explicit complete import.
+
+        Do not delete the historical entry or its persisted source data.
+        Original Local Chargers are completely unaffected by this choice.
+        """
+        from .v2.intermediate_conversion import preview_intermediate
+
+        source = self.config_entry
+        try:
+            plan = preview_intermediate(source)
+        except (ValueError, TypeError, KeyError):
+            return self.async_abort(reason="intermediate_profiles_invalid")
+        migrated_controllers = {
+            entry.data.get("uid") for entry in v2_entries(self.hass, V2_CONTROLLER)
+        }
+        migrated_vehicles = {
+            entry.data.get("uid") for entry in v2_entries(self.hass, V2_VEHICLE)
+        }
+        missing = []
+        if plan["controller"]["uid"] not in migrated_controllers:
+            missing.append("Controller")
+        missing.extend(
+            vehicle["name"]
+            for vehicle in plan["vehicles"]
+            if vehicle["uid"] not in migrated_vehicles
+        )
+        if source.options.get("participants"):
+            missing.append("unlink old Coordinated participants")
+        if missing:
+            return self.async_show_form(
+                step_id="retire_to_v2",
+                data_schema=vol.Schema({}),
+                errors={"base": "intermediate_import_incomplete"},
+                description_placeholders={"missing": ", ".join(missing)},
+            )
+        if user_input is not None and user_input.get("confirm") is True:
+            return self.async_create_entry(
+                title="",
+                data={**source.options, "retired_to_v2": True},
+            )
+        return self.async_show_form(
+            step_id="retire_to_v2",
+            data_schema=vol.Schema(
+                {vol.Required("confirm", default=False): selector.BooleanSelector()}
+            ),
+            errors={"base": "confirm_required"} if user_input is not None else {},
+            description_placeholders={"missing": "None"},
         )
 
     async def async_step_link_chargers(self, user_input=None):
