@@ -248,9 +248,13 @@ class V2ControllerRuntime:
         self._peak_recovery_since = None
         self._soc_store = Store(hass, 1, f"{DOMAIN}.v2_soc_{entry.data['uid']}")
         self._soc_estimator = SocEstimator()
+        # Financial evidence follows the physical Charger across Controllers.
+        # The old per-Controller store is read only for safe RC migration.
         self._cost_store = Store(
             hass, 1, f"{DOMAIN}.v2_actual_cost_{entry.data['uid']}"
         )
+        self._legacy_costs = {}
+        self._cost_stores = {}
         self._cost_ledgers = {}
         self._session_store = Store(hass, 1, f"{DOMAIN}.v2_session_{entry.data['uid']}")
         self._session_progress = SessionProgress()
@@ -260,8 +264,28 @@ class V2ControllerRuntime:
         # One trailing refresh, not a task per source event.
         self._refresh_requested = False
 
-    def _cost_payload(self):
-        return {uid: ledger.to_storage() for uid, ledger in self._cost_ledgers.items()}
+    async def _cost_ledger(self, charger_uid):
+        """Restore one authoritative ledger from the Charger's stable UID.
+
+        Multiple Controllers may take turns owning a Charger; a Controller-
+        keyed ledger loses its historic totals after reassignment. The
+        physical Charger identity must instead own its financial evidence.
+        """
+        if charger_uid in self._cost_ledgers:
+            return self._cost_ledgers[charger_uid]
+        store = Store(
+            self.hass, 1, f"{DOMAIN}.v2_actual_cost_charger_{charger_uid}"
+        )
+        saved = await store.async_load()
+        if saved is None:
+            saved = self._legacy_costs.get(charger_uid)
+        ledger = V2CostLedger.from_storage(saved)
+        self._cost_stores[charger_uid] = store
+        self._cost_ledgers[charger_uid] = ledger
+        if saved is not None and await store.async_load() is None:
+            # Migrate the old Controller snapshot only once, non-destructively.
+            await store.async_save(ledger.to_storage())
+        return ledger
 
     @callback
     def subscribe(self, fn):
@@ -281,11 +305,9 @@ class V2ControllerRuntime:
         self._session_progress = SessionProgress(await self._session_store.async_load())
         self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
         stored_costs = await self._cost_store.async_load()
-        self._cost_ledgers = {
-            uid: V2CostLedger.from_storage(state)
-            for uid, state in (stored_costs or {}).items()
-            if isinstance(uid, str)
-        }
+        self._legacy_costs = (
+            stored_costs if isinstance(stored_costs, dict) else {}
+        )
         if self._unsub is None:
             self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
@@ -400,7 +422,7 @@ class V2ControllerRuntime:
                 cost_changed = False
                 for uid, charger in chargers.items():
                     item = observed[uid]
-                    ledger = self._cost_ledgers.setdefault(uid, V2CostLedger())
+                    ledger = await self._cost_ledger(uid)
                     previous = ledger.to_storage()
                     meter = item.get("energy_kwh")
                     stamp = item.get("energy_observed_at")
@@ -422,7 +444,13 @@ class V2ControllerRuntime:
                         ledger.complete = False
                     cost_changed |= previous != ledger.to_storage()
                 if cost_changed:
-                    self._cost_store.async_delay_save(self._cost_payload, 30)
+                    # Save by stable Charger UID, not by today's Controller.
+                    # Keep the certified interval evidence across a transfer
+                    # and never depend on a previous Controller remaining.
+                    for uid in chargers:
+                        await self._cost_stores[uid].async_save(
+                            self._cost_ledgers[uid].to_storage()
+                        )
                 result["session_sources"] = {
                     uid: {
                         "delivered_kwh": item["session_grid_kwh"],
@@ -705,7 +733,8 @@ class V2ControllerRuntime:
                             status,
                         )
                 await self._soc_store.async_save(self._soc_estimator.snapshot())
-                await self._cost_store.async_save(self._cost_payload())
+                for uid, ledger in self._cost_ledgers.items():
+                    await self._cost_stores[uid].async_save(ledger.to_storage())
                 await self._session_store.async_save(self._session_progress.snapshot())
                 await self._budget_store.async_save(self._budget_guard.snapshot())
         finally:
