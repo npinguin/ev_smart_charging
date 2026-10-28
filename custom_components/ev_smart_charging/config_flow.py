@@ -280,12 +280,43 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             setattr(self, f"_v2_{kind}_defaults", defaults)
             setattr(self, f"_v2_{kind}_source_selected", True)
             return await getattr(self, f"async_step_v2_{kind}")()
-        return self.async_show_form(
+        return self.async_show_menu(
             step_id=f"v2_{kind}_source",
+            menu_options=[
+                f"v2_{kind}_source_device",
+                f"v2_{kind}_source_manual",
+            ],
+        )
+
+    async def async_step_v2_vehicle_source_device(self, user_input=None):
+        return await self._v2_select_device("vehicle", user_input)
+
+    async def async_step_v2_charger_source_device(self, user_input=None):
+        return await self._v2_select_device("charger", user_input)
+
+    async def _v2_select_device(self, kind, user_input):
+        if user_input is not None:
+            if not user_input.get("source_device_id"):
+                return self.async_show_form(
+                    step_id=f"v2_{kind}_source_device",
+                    data_schema=vol.Schema(
+                        {vol.Required("source_device_id"): selector.DeviceSelector()}
+                    ),
+                    errors={"source_device_id": "required"},
+                )
+            return await self._v2_select_source(kind, user_input)
+        return self.async_show_form(
+            step_id=f"v2_{kind}_source_device",
             data_schema=vol.Schema(
-                {vol.Optional("source_device_id"): selector.DeviceSelector()}
+                {vol.Required("source_device_id"): selector.DeviceSelector()}
             ),
         )
+
+    async def async_step_v2_vehicle_source_manual(self, user_input=None):
+        return await self._v2_select_source("vehicle", {})
+
+    async def async_step_v2_charger_source_manual(self, user_input=None):
+        return await self._v2_select_source("charger", {})
 
     async def async_step_v2_migrate(self, user_input=None):
         """Choose only the original source; no V1 setting is ever written."""
