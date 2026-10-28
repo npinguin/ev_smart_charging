@@ -336,9 +336,6 @@ def sensors_for_entry(entry):
             ),
             V2Fact(entry, kind, "soc_quality", "SoC basis"),
             V2Fact(
-                entry, kind, "target_soc", "Target SoC", SensorDeviceClass.BATTERY, "%"
-            ),
-            V2Fact(
                 entry,
                 kind,
                 "required_battery_kwh",
