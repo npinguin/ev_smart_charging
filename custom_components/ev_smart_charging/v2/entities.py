@@ -36,7 +36,6 @@ def logical_device_info(entry):
     }
 
 
-
 class V2Fact(SensorEntity):
     """Stable V2 logical device, no physical device identifiers/connections."""
 
@@ -58,7 +57,6 @@ class V2Fact(SensorEntity):
     @property
     def device_info(self):
         return logical_device_info(self.entry)
-
 
     @callback
     def _source_changed(self, _event=None):
