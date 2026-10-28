@@ -226,3 +226,73 @@ async def test_native_vehicle_control_rejects_unknown_choice(hass, store):
     with pytest.raises(ValueError, match="unknown_vehicle"):
         await control.async_select_option("nonexistent")
     assert white.options.get("vehicle_uid", white.data["vehicle_uid"]) == "audi"
+
+
+def test_recorded_cost_survives_day_boundary_and_restarts_without_reassignment():
+    morning = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    tomorrow = morning + timedelta(days=1)
+    yesterday_price = PriceSlot(morning, morning + timedelta(minutes=15), 0.2)
+    tomorrow_price = PriceSlot(tomorrow, tomorrow + timedelta(minutes=15), 0.3)
+    ledger = V2CostLedger()
+    ledger.observe(morning, 3, "sensor.meter", [yesterday_price], "audi")
+    ledger.observe(
+        morning + timedelta(minutes=5), 4, "sensor.meter", [yesterday_price], "audi"
+    )
+    assert ledger.summary()["known_recorded_energy_kwh"] == 1
+    ledger = V2CostLedger.from_storage(ledger.to_storage())
+    ledger.observe(tomorrow, 4, "sensor.meter", [tomorrow_price], "audi")
+    ledger.observe(
+        tomorrow + timedelta(minutes=5),
+        5,
+        "sensor.meter",
+        [tomorrow_price],
+        "guest",
+    )
+    ledger.observe(
+        tomorrow + timedelta(minutes=8),
+        5.5,
+        "sensor.meter",
+        [tomorrow_price],
+        "guest",
+    )
+    report = ledger.summary()
+    assert report["known_recorded_energy_kwh"] == 2.5
+    assert report["known_recorded_cost_eur"] == 0.65
+    assert report["recorded_vehicle_breakdown"]["audi"]["known_cost_eur"] == 0.2
+    assert report["recorded_vehicle_breakdown"]["guest"]["known_cost_eur"] == 0.15
+    assert report["recorded_vehicle_breakdown"][""]["known_cost_eur"] == 0.3
+    restored = V2CostLedger.from_storage(ledger.to_storage())
+    assert restored.summary()["known_recorded_cost_eur"] == 0.65
+
+
+def test_recorded_cost_survives_charger_meter_rebinding_without_double_count():
+    when = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    slot = PriceSlot(when, when + timedelta(minutes=15), 0.2)
+    ledger = V2CostLedger()
+    ledger.observe(when, 10, "sensor.old_meter", [slot], "audi")
+    ledger.observe(
+        when + timedelta(minutes=2), 11, "sensor.old_meter", [slot], "audi"
+    )
+    ledger.observe(
+        when + timedelta(minutes=3), 250, "sensor.new_meter", [slot], "audi"
+    )
+    ledger.observe(
+        when + timedelta(minutes=5), 252, "sensor.new_meter", [slot], "audi"
+    )
+    report = ledger.summary()
+    assert report["known_recorded_energy_kwh"] == 3
+    assert report["known_recorded_cost_eur"] == 0.6
+    assert report["recorded_vehicle_breakdown"]["audi"]["known_energy_kwh"] == 3
+
+
+def test_invalid_meter_observation_leaves_certified_ledger_intact():
+    when = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    slot = PriceSlot(when, when + timedelta(minutes=15), 0.2)
+    ledger = V2CostLedger()
+    ledger.observe(when, 10, "sensor.meter", [slot], "audi")
+    ledger.observe(
+        when + timedelta(minutes=2), 11, "sensor.meter", [slot], "audi"
+    )
+    before = ledger.summary()["known_recorded_cost_eur"]
+    ledger.observe(when + timedelta(minutes=5), None, "sensor.meter", [slot], "audi")
+    assert ledger.summary()["known_recorded_cost_eur"] == before
