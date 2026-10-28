@@ -684,22 +684,34 @@ class V2ControllerRuntime:
             await asyncio.gather(task, return_exceptions=True)
         # Operator-initiated refreshes may not be the timer task. Wait for
         # their critical section before saving and stopping physical writers.
-        async with self._lock:
-            await self._soc_store.async_save(self._soc_estimator.snapshot())
-            await self._cost_store.async_save(self._cost_payload())
-            await self._session_store.async_save(self._session_progress.snapshot())
-            await self._budget_store.async_save(self._budget_guard.snapshot())
-            for uid, writer in tuple(self._writers.items()):
-                status = await writer.async_shutdown()
-                if status not in ("NOT_OWNED", "VERIFIED_OFF"):
-                    _LOGGER.error(
-                        "V2 Controller unload: physical OFF not verified "
-                        "for %s (%s); check OEM/EVSE immediately",
-                        uid,
-                        status,
-                    )
+        try:
+            async with self._lock:
+                # Physical shutdown takes precedence over disk writes. A
+                # failing HA Store must never leave a V2-owned charger ON.
+                for uid, writer in tuple(self._writers.items()):
+                    try:
+                        status = await writer.async_shutdown()
+                    except Exception:
+                        _LOGGER.exception(
+                            "V2 Controller unload: shutdown exception for %s", uid
+                        )
+                        status = "STOP_EXCEPTION"
+                    if status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                        _LOGGER.error(
+                            "V2 Controller unload: physical OFF not verified "
+                            "for %s (%s); check OEM/EVSE immediately",
+                            uid,
+                            status,
+                        )
+                await self._soc_store.async_save(self._soc_estimator.snapshot())
+                await self._cost_store.async_save(self._cost_payload())
+                await self._session_store.async_save(self._session_progress.snapshot())
+                await self._budget_store.async_save(self._budget_guard.snapshot())
+        finally:
+            # Uncertain physical OFF keeps the native ownership reservation.
+            # Clean up HA listeners/tasks even when persistence fails.
             self._writers.clear()
-        self.stop()
+            self.stop()
 
     @callback
     def stop(self):
