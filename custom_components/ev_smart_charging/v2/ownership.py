@@ -165,7 +165,6 @@ async def async_recover_ownership(hass):
         return await _recover_locked(hass)
 
 
-
 def _ensure_vehicle_change_safe(hass, charger_uids):
     """Never reattribute an active physical charging interval to another car."""
     _, chargers, _ = catalog(hass)
