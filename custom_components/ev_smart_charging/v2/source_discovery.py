@@ -178,17 +178,14 @@ def compatible_source_devices(hass, kind):
             capable = "soc_entity" in suggestions
         else:
             capabilities = set(suggestions)
-            capable = (
-                "control_entity" in capabilities
-                and bool(
-                    capabilities
-                    & {
-                        "power_entity",
-                        "energy_entity",
-                        "connected_entity",
-                        "charging_entity",
-                    }
-                )
+            capable = "control_entity" in capabilities and bool(
+                capabilities
+                & {
+                    "power_entity",
+                    "energy_entity",
+                    "connected_entity",
+                    "charging_entity",
+                }
             )
         if capable:
             name = device.name_by_user or device.name or device.id
