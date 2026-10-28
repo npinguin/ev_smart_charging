@@ -201,6 +201,34 @@ async def async_apply_charger_options(hass, charger_uid, changes):
         await _recover_locked(hass)
         destination = _entry_by_uid(hass, charger_uid)
         source_uid, old_vehicle, requested = _preview_target(hass, charger_uid, changes)
+        # Rebinding an active native writer can strand the old EVSE ON while
+        # the Controller begins managing a different source. Require an
+        # explicit disable/shutdown, and reject any retained uncertain owner.
+        rebind_fields = (
+            "controller_uid",
+            "control_entity",
+            "control_semantics",
+            "connection_source",
+            "connected_entity",
+            "charging_entity",
+            "power_entity",
+            "energy_entity",
+            "energy_source_kind",
+        )
+        current = details(destination)
+        if any(
+            field in changes and changes[field] != current.get(field)
+            for field in rebind_fields
+        ):
+            _, chargers, controllers = catalog(hass)
+            has_owner = any(
+                isinstance(owner, tuple)
+                and len(owner) == 2
+                and owner[1] == charger_uid
+                for owner in hass.data.get(f"{DOMAIN}.v2_native_writers", {}).values()
+            )
+            if controllers[chargers[charger_uid].controller_uid].physical_enabled or has_owner:
+                raise ConfigurationError("disable_controller_before_rebinding")
         if requested != old_vehicle or source_uid is not None:
             _ensure_vehicle_change_safe(
                 hass, {charger_uid} | ({source_uid} if source_uid else set())
