@@ -175,3 +175,30 @@ def preview_intermediate(entry):
         "physical_cutover_permitted": False,
         "destructive_changes": False,
     }
+
+
+def retirement_gaps(hass, entry):
+    """List incomplete reviewed V2 imports before retiring the old supervisor.
+
+    This shares exactly the same deterministic identity contract as the
+    existing Controller/Vehicle conversion preview; no second importer.
+    """
+    from . import ENTRY_CONTROLLER, ENTRY_VEHICLE
+    from .catalog import entries_of
+
+    plan = preview_intermediate(entry)
+    controllers = {
+        item.data["uid"] for item in entries_of(hass, ENTRY_CONTROLLER)
+    }
+    vehicles = {item.data["uid"] for item in entries_of(hass, ENTRY_VEHICLE)}
+    missing = []
+    if plan["controller"]["uid"] not in controllers:
+        missing.append("Controller")
+    missing.extend(
+        vehicle["name"]
+        for vehicle in plan["vehicles"]
+        if vehicle["uid"] not in vehicles
+    )
+    if entry.options.get("participants"):
+        missing.append("unlink old Coordinated participants")
+    return missing
