@@ -56,3 +56,30 @@ async def test_local_button_registration_and_stop_do_not_touch_controller(hass):
     ]
     await captured[-1].async_press()
     coordinator.turn_off_charging.assert_awaited_once()
+
+
+async def test_original_local_setup_still_requires_soc_entity(hass):
+    """V1 keeps the upstream required SoC contract; V2 alone supports no-SoC."""
+    import voluptuous as vol
+    from homeassistant import config_entries
+    from homeassistant.data_entry_flow import FlowResultType
+    from custom_components.ev_smart_charging.const import CONF_EV_SOC_SENSOR
+
+    started = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert started["type"] == FlowResultType.MENU
+    assert "legacy_local" in started["menu_options"]
+    form = await hass.config_entries.flow.async_configure(
+        started["flow_id"], {"next_step_id": "legacy_local"}
+    )
+    assert form["type"] == FlowResultType.FORM
+    assert form["step_id"] == "legacy_local"
+    required = {
+        key.schema
+        for key in form["data_schema"].schema
+        if isinstance(key, vol.Required)
+    }
+    assert CONF_EV_SOC_SENSOR in required
+    # Unlike classic Local, the new V2 Charger never needs a fabricated SoC:
+    # it can plan from observed kWh or an explicitly requested duration.
