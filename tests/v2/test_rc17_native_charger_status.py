@@ -114,13 +114,15 @@ def test_trusted_native_charging_state_and_power_agree(hass):
 
 async def test_native_charger_statuses_are_registered_and_follow_source_events(hass):
     """Exercise HA entity registry and event listeners, not just Python getters."""
+    from homeassistant.config_entries import ConfigEntryState
     from homeassistant.helpers.entity_registry import async_get as get_registry
     from tests.v2.test_ha_v2_runtime import _setup_entries
 
     controller, second, vehicle, charger = _setup_entries(hass)
     try:
         for entry in (controller, second, vehicle, charger):
-            assert await hass.config_entries.async_setup(entry.entry_id)
+            if entry.state != ConfigEntryState.LOADED:
+                assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
         registry = get_registry(hass)
         connected = registry.async_get_entity_id(
