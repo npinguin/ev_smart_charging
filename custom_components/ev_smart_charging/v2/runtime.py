@@ -273,9 +273,7 @@ class V2ControllerRuntime:
         """
         if charger_uid in self._cost_ledgers:
             return self._cost_ledgers[charger_uid]
-        store = Store(
-            self.hass, 1, f"{DOMAIN}.v2_actual_cost_charger_{charger_uid}"
-        )
+        store = Store(self.hass, 1, f"{DOMAIN}.v2_actual_cost_charger_{charger_uid}")
         saved = await store.async_load()
         legacy_migration = saved is None and charger_uid in self._legacy_costs
         if legacy_migration:
@@ -306,9 +304,7 @@ class V2ControllerRuntime:
         self._session_progress = SessionProgress(await self._session_store.async_load())
         self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
         stored_costs = await self._cost_store.async_load()
-        self._legacy_costs = (
-            stored_costs if isinstance(stored_costs, dict) else {}
-        )
+        self._legacy_costs = stored_costs if isinstance(stored_costs, dict) else {}
         if self._unsub is None:
             self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
