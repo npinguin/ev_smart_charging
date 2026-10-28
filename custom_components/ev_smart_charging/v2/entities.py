@@ -16,7 +16,7 @@ from homeassistant.util import dt
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE
 from .catalog import details, model
-from .runtime import _connected, _number, _meter, _fresh_state
+from .runtime import _number, _meter, _fresh_state
 from .ready_schedule import next_ready_deadline, normalized_mode
 
 
@@ -243,25 +243,6 @@ class V2Fact(SensorEntity):
         elif self.kind == ENTRY_CHARGER:
             if self.key == "controller":
                 return obj.controller_uid
-            if self.key == "vehicle":
-                return obj.vehicle_uid or "None"
-            if self.key == "connected":
-                from .manual_connection import manual_connected
-
-                status = (
-                    manual_connected(self.hass, obj.uid)
-                    if obj.connection_source == "manual"
-                    else _connected(
-                        self.hass.states.get(obj.connected_entity)
-                        if obj.connected_entity
-                        else None
-                    )
-                )
-                return (
-                    "connected"
-                    if status is True
-                    else ("disconnected" if status is False else "unknown")
-                )
             if self.key == "power_kw":
                 return _meter(
                     (
