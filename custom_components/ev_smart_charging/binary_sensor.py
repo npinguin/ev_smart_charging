@@ -77,18 +77,18 @@ class V2ChargerBinary(BinarySensorEntity):
 
 class V2Connected(V2ChargerBinary):
     def __init__(self, entry):
-        super().__init__(
-            entry, "connected", "Connected", BinarySensorDeviceClass.PLUG
-        )
+        super().__init__(entry, "connected", "Connected", BinarySensorDeviceClass.PLUG)
 
     @property
     def is_on(self):
         charger = model(self.entry)
         return _connected(
             _fresh_state(
-                self.hass.states.get(charger.connected_entity)
-                if charger.connected_entity
-                else None,
+                (
+                    self.hass.states.get(charger.connected_entity)
+                    if charger.connected_entity
+                    else None
+                ),
                 max_age=timedelta(minutes=2),
             )
         )
@@ -105,17 +105,21 @@ class V2Charging(V2ChargerBinary):
         charger = model(self.entry)
         status = _connected(
             _fresh_state(
-                self.hass.states.get(charger.charging_entity)
-                if charger.charging_entity
-                else None,
+                (
+                    self.hass.states.get(charger.charging_entity)
+                    if charger.charging_entity
+                    else None
+                ),
                 max_age=timedelta(minutes=2),
             )
         )
         power = _meter(
             _fresh_state(
-                self.hass.states.get(charger.power_entity)
-                if charger.power_entity
-                else None,
+                (
+                    self.hass.states.get(charger.power_entity)
+                    if charger.power_entity
+                    else None
+                ),
                 max_age=timedelta(minutes=2),
             ),
             "power",
