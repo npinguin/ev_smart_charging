@@ -17,7 +17,7 @@ from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory
 from .tariffs import source_tariff_slots
 from .group_facts import group_facts
-from ..controller.costs import ActualCostLedger
+from .cost_attribution import V2CostLedger
 from .soc_estimation import SocEstimator
 from .session_progress import SessionProgress
 from .budget import CostBudgetGuard
@@ -282,7 +282,7 @@ class V2ControllerRuntime:
         self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
         stored_costs = await self._cost_store.async_load()
         self._cost_ledgers = {
-            uid: ActualCostLedger.from_storage(state)
+            uid: V2CostLedger.from_storage(state)
             for uid, state in (stored_costs or {}).items()
             if isinstance(uid, str)
         }
@@ -399,7 +399,7 @@ class V2ControllerRuntime:
                 cost_changed = False
                 for uid, charger in chargers.items():
                     item = observed[uid]
-                    ledger = self._cost_ledgers.setdefault(uid, ActualCostLedger())
+                    ledger = self._cost_ledgers.setdefault(uid, V2CostLedger())
                     previous = ledger.to_storage()
                     meter = item.get("energy_kwh")
                     stamp = item.get("energy_observed_at")
@@ -415,6 +415,7 @@ class V2ControllerRuntime:
                             meter,
                             charger.energy_entity,
                             item.get("prices", []),
+                            vehicle_uid=charger.vehicle_uid,
                         )
                     elif ledger.day is not None:
                         ledger.complete = False
@@ -434,6 +435,28 @@ class V2ControllerRuntime:
                     uid: ledger.summary()
                     for uid, ledger in self._cost_ledgers.items()
                     if uid in chargers
+                }
+                # Derived projections of the same per-Charger financial
+                # evidence. Do not infer a Vehicle from cable connection.
+                attributed = {}
+                for charger_report in result["actual_cost_per_charger"].values():
+                    for vehicle_uid, values in charger_report.get(
+                        "vehicle_breakdown", {}
+                    ).items():
+                        if not vehicle_uid:
+                            continue
+                        item = attributed.setdefault(
+                            vehicle_uid,
+                            {"known_energy_kwh": 0.0, "known_cost_eur": 0.0},
+                        )
+                        item["known_energy_kwh"] += values["known_energy_kwh"]
+                        item["known_cost_eur"] += values["known_cost_eur"]
+                result["actual_cost_per_vehicle"] = {
+                    uid: {
+                        "known_energy_kwh": round(item["known_energy_kwh"], 4),
+                        "known_cost_eur": round(item["known_cost_eur"], 4),
+                    }
+                    for uid, item in attributed.items()
                 }
                 result["vehicle_sources"] = {
                     charger.vehicle_uid: {
