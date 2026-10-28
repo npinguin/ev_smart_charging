@@ -14,7 +14,7 @@ from custom_components.ev_smart_charging.v2 import (
     MARKER,
 )
 from custom_components.ev_smart_charging.v2.execution import NativeChargeWriter
-from custom_components.ev_smart_charging.v2.model import Charger
+from custom_components.ev_smart_charging.v2.model import Charger, ConfigurationError
 
 NOW = datetime(2026, 10, 26, 14, 0, tzinfo=timezone.utc)
 
@@ -366,10 +366,10 @@ async def test_stale_plan_revokes_an_already_running_v2_evse(
         await writer.async_close()
 
 
-async def test_charger_transfer_waits_for_in_flight_native_command(
+async def test_charger_transfer_is_rejected_during_in_flight_native_command(
     hass, charger, monkeypatch
 ):
-    """No ownership handoff may overlap a physical service call."""
+    """Physical rebinding is forbidden while its original Controller is armed."""
     from custom_components.ev_smart_charging.v2 import ownership
 
     monkeypatch.setattr(safety, "COORDINATED_ACTUATION_ENABLED", True)
@@ -419,14 +419,15 @@ async def test_charger_transfer_waits_for_in_flight_native_command(
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)
         moved = asyncio.create_task(ownership.async_move_charger(hass, "ch", "new"))
-        await asyncio.sleep(0)
-        assert not moved.done()
-        # The native command completes under the same global lock as
-        # persistent ownership changes, so two owners cannot overlap.
+        # Rebinding is now prohibited while physical control is armed,
+        # including during an in-flight Start. No intermediate owner exists.
+        with pytest.raises(
+            ConfigurationError, match="disable_controller_before_rebinding"
+        ):
+            await moved
+        assert ownership.catalog(hass)[1]["ch"].controller_uid == "main"
         release.set()
         assert await command == "COMMAND_SENT_AWAITING_READBACK"
-        assert await moved is True
-        assert ownership.catalog(hass)[1]["ch"].controller_uid == "new"
     finally:
         release.set()
         if moved and not moved.done():
