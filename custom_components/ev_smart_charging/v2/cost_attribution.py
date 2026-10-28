@@ -49,7 +49,11 @@ class V2CostLedger(ActualCostLedger):
 
         # Archive before the parent resets current-day counters. Invalid
         # source/readings must not archive or imply a period boundary.
-        valid = bool(source) and isfinite(float(cumulative_kwh)) and float(cumulative_kwh) >= 0
+        try:
+            reading = float(cumulative_kwh)
+            valid = bool(source) and isfinite(reading) and reading >= 0
+        except (TypeError, ValueError, OverflowError):
+            valid = False
         if valid and (
             (previous_day is not None and dt.as_local(utc(when)).date() != previous_day)
             or (previous_source is not None and source != previous_source)
