@@ -307,16 +307,12 @@ def test_vehicle_soc_follows_canonical_charger_not_stale_controller_snapshot(has
     north = object.__new__(V2ControllerRuntime)
     north.entry = SimpleNamespace(data={"uid": "north"})
     north.snapshot = {
-        "vehicle_sources": {
-            "audi": {"charger_uid": "white", "effective_soc": 40}
-        }
+        "vehicle_sources": {"audi": {"charger_uid": "white", "effective_soc": 40}}
     }
     south = object.__new__(V2ControllerRuntime)
     south.entry = SimpleNamespace(data={"uid": "south"})
     south.snapshot = {
-        "vehicle_sources": {
-            "audi": {"charger_uid": "black", "effective_soc": 75}
-        }
+        "vehicle_sources": {"audi": {"charger_uid": "black", "effective_soc": 75}}
     }
     hass.data.setdefault(DOMAIN, {})["stale_south"] = south
     hass.data[DOMAIN]["current_north"] = north
