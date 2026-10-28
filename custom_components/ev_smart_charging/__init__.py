@@ -164,6 +164,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         return True
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        if entry.options.get("retired_to_v2"):
+            # Historical metadata is retained for audit/rollback. No third
+            # Controller runtime, timer, sensor or physical writer is started.
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+            return True
         from .vehicle_sensors import cleanup_orphan_vehicle_registry
 
         cleanup_orphan_vehicle_registry(hass, entry)
@@ -269,6 +274,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return unloaded
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        if entry.options.get("retired_to_v2"):
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            return True
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
         )
