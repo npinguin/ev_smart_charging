@@ -112,6 +112,8 @@ class V2Fact(SensorEntity):
                 "actual_cost_today",
                 "known_actual_cost_eur",
                 "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
                 "energy_kwh",
                 "session_elapsed_minutes",
                 "session_meter_quality",
