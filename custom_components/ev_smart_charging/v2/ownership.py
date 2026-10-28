@@ -215,9 +215,15 @@ async def async_apply_charger_options(hass, charger_uid, changes):
             "energy_entity",
             "energy_source_kind",
         )
-        current = details(destination)
+        previous = model(destination)
+        proposed = model(
+            SimpleNamespace(
+                data=destination.data,
+                options={**destination.options, **changes},
+            )
+        )
         if any(
-            field in changes and changes[field] != current.get(field)
+            getattr(previous, field) != getattr(proposed, field)
             for field in rebind_fields
         ):
             _, chargers, controllers = catalog(hass)
@@ -227,7 +233,10 @@ async def async_apply_charger_options(hass, charger_uid, changes):
                 and owner[1] == charger_uid
                 for owner in hass.data.get(f"{DOMAIN}.v2_native_writers", {}).values()
             )
-            if controllers[chargers[charger_uid].controller_uid].physical_enabled or has_owner:
+            if (
+                controllers[chargers[charger_uid].controller_uid].physical_enabled
+                or has_owner
+            ):
                 raise ConfigurationError("disable_controller_before_rebinding")
         if requested != old_vehicle or source_uid is not None:
             _ensure_vehicle_change_safe(
