@@ -149,9 +149,7 @@ async def test_vehicle_change_when_charger_verified_off_is_permitted(hass, store
         },
     )
     hass.states.async_set("binary_sensor.white_charging", "off")
-    hass.states.async_set(
-        "sensor.white_power", "0", {"unit_of_measurement": "W"}
-    )
+    hass.states.async_set("sensor.white_power", "0", {"unit_of_measurement": "W"})
     hass.states.async_set("switch.white", "off")
     assert await async_apply_charger_options(hass, "white", {"vehicle_uid": "guest"})
     assert white.options["vehicle_uid"] == "guest"
