@@ -81,9 +81,7 @@ class SocEstimator:
         if quarantined and (
             stamp is None or stamp.isoformat() == anchor["invalidated_oem_at"]
         ):
-            return None, anchor.get(
-                "invalidated_reason", "METER_RESET_REQUIRES_OEM"
-            )
+            return None, anchor.get("invalidated_reason", "METER_RESET_REQUIRES_OEM")
         # Changing the physical energy source invalidates the delta origin.
         # Never add two unrelated meters, even when both counters increase.
         source = meter_source or ""
