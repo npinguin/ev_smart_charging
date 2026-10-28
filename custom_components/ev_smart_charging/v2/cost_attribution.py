@@ -216,6 +216,19 @@ class V2CostLedger(ActualCostLedger):
                     )
                     total["energy_kwh"] += item["energy_kwh"]
                     total["cost_eur"] += item["cost_eur"]
+                # The upstream ledger retains yesterday's daily counters
+                # in memory (its actual_cost_today property hides them).
+                # Once archived here, clear the old daily state as well:
+                # otherwise summary() counts yesterday both as prior and
+                # as the current period after a reboot.
+                result.day = None
+                result.last_time = None
+                result.last_kwh = None
+                result.source = None
+                result.known_energy = 0.0
+                result.known_cost = 0.0
+                result.intervals = 0
+                result.complete = False
                 result.vehicle_breakdown = {}
                 result.last_vehicle_uid = None
             else:
