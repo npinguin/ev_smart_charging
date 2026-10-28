@@ -21,6 +21,17 @@ from .v2.runtime import _connected, _fresh_state, _meter
 async def async_setup_entry(hass, entry, async_add_entities):
     if entry.data.get("__evsc_entry_type") != ENTRY_CHARGER:
         return
+    # The old V2 string-valued Connection sensor is replaced by the
+    # physical binary sensor (or manual Connected switch). Remove only
+    # this integration's obsolete V2 registry row, never source entities.
+    from homeassistant.helpers.entity_registry import async_get as entity_registry
+
+    registry = entity_registry(hass)
+    retired_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{DOMAIN}_v2_charger_{entry.data['uid']}_connected"
+    )
+    if retired_id:
+        registry.async_remove(retired_id)
     charger = model(entry)
     entities = [V2Charging(entry)]
     if charger.connection_source != "manual":
@@ -39,9 +50,7 @@ class V2ChargerBinary(BinarySensorEntity):
         self.key = key
         self._attr_name = name
         self._attr_device_class = device_class
-        self._attr_unique_id = (
-            f"{DOMAIN}_v2_charger_{entry.data['uid']}_{key}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_v2_charger_{entry.data['uid']}_{key}"
 
     @property
     def device_info(self):
