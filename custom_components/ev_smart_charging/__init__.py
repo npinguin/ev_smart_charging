@@ -140,9 +140,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await hass.config_entries.async_forward_entry_setups(
                     entry,
                     (
-                        [Platform.SENSOR, Platform.SWITCH]
+                        (
+                            [Platform.SENSOR, Platform.SELECT, Platform.SWITCH]
+                            if obj.connection_source == "manual"
+                            else [Platform.SENSOR, Platform.SELECT]
+                        )
                         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
-                        and obj.connection_source == "manual"
                         else [Platform.SENSOR]
                     ),
                 )
