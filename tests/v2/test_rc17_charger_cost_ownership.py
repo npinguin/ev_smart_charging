@@ -21,9 +21,7 @@ def _controller(hass, uid):
 
 def _charged_ledger():
     stamp = dt.utcnow()
-    now = stamp.replace(
-        minute=(stamp.minute // 15) * 15, second=0, microsecond=0
-    )
+    now = stamp.replace(minute=(stamp.minute // 15) * 15, second=0, microsecond=0)
     prices = [PriceSlot(now, now + timedelta(minutes=15), 0.2)]
     ledger = V2CostLedger()
     ledger.observe(now, 10, "sensor.charger_meter", prices, "audi")
