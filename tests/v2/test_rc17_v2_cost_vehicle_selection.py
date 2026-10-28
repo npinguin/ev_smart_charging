@@ -382,6 +382,7 @@ def test_corrupt_recorded_vehicle_history_fails_closed(bad_archive):
     assert restored.summary()["recorded_vehicle_breakdown"] == {}
     assert restored.summary()["known_recorded_cost_eur"] is None
 
+
 def test_midnight_reboot_archives_unfinished_day_once_without_losing_vehicle_cost():
     from homeassistant.util import dt
 
@@ -392,9 +393,7 @@ def test_midnight_reboot_archives_unfinished_day_once_without_losing_vehicle_cos
     prices = [PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)]
     ledger = V2CostLedger()
     ledger.observe(anchor, 10, "sensor.meter", prices, "audi")
-    ledger.observe(
-        anchor + timedelta(minutes=5), 12, "sensor.meter", prices, "audi"
-    )
+    ledger.observe(anchor + timedelta(minutes=5), 12, "sensor.meter", prices, "audi")
     assert ledger.summary()["known_recorded_cost_eur"] == 0.4
 
     restored = V2CostLedger.from_storage(ledger.to_storage())
@@ -427,6 +426,6 @@ def test_old_unattributed_charger_intervals_survive_midnight_reboot():
     old_snapshot.pop("vehicle_breakdown")
     recovered = V2CostLedger.from_storage(old_snapshot)
     assert recovered.summary()["known_recorded_cost_eur"] == 0.3
-    assert recovered.summary()["recorded_vehicle_breakdown"][""][
-        "known_energy_kwh"
-    ] == 1
+    assert (
+        recovered.summary()["recorded_vehicle_breakdown"][""]["known_energy_kwh"] == 1
+    )
