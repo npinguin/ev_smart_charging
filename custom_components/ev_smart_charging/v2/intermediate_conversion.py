@@ -187,9 +187,7 @@ def retirement_gaps(hass, entry):
     from .catalog import entries_of
 
     plan = preview_intermediate(entry)
-    controllers = {
-        item.data["uid"] for item in entries_of(hass, ENTRY_CONTROLLER)
-    }
+    controllers = {item.data["uid"] for item in entries_of(hass, ENTRY_CONTROLLER)}
     vehicles = {item.data["uid"] for item in entries_of(hass, ENTRY_VEHICLE)}
     missing = []
     if plan["controller"]["uid"] not in controllers:
