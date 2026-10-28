@@ -250,6 +250,11 @@
   },
   "options": {
     "step": {
+      "retire_to_v2": {
+        "title": "Retire intermediate Controller",
+        "description": "All Controller and Vehicle profiles must be imported before the old runtime is stopped. Missing: {missing}. Historical data and V1 Local Chargers remain untouched.",
+        "data": {"confirm": "I confirm the V2 import is complete"}
+      },
       "init": {
         "description": "Configuration of external entities.",
         "data": {
@@ -296,6 +301,7 @@
           "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         },
         "menu_options": {
+          "retire_to_v2": "Retire interim Controller after V2 import",
           "policy": "Charge Controller policy",
           "add_vehicle": "Add Vehicle",
           "edit_vehicle": "Edit Vehicle",
