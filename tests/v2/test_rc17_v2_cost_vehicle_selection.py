@@ -288,3 +288,44 @@ def test_invalid_meter_observation_leaves_certified_ledger_intact():
     before = ledger.summary()["known_recorded_cost_eur"]
     ledger.observe(when + timedelta(minutes=5), None, "sensor.meter", [slot], "audi")
     assert ledger.summary()["known_recorded_cost_eur"] == before
+
+
+def test_vehicle_soc_follows_canonical_charger_not_stale_controller_snapshot(hass):
+    from types import SimpleNamespace
+
+    from custom_components.ev_smart_charging.const import DOMAIN
+    from custom_components.ev_smart_charging.v2 import ENTRY_VEHICLE
+    from custom_components.ev_smart_charging.v2.entities import V2Fact
+    from custom_components.ev_smart_charging.v2.runtime import V2ControllerRuntime
+
+    white, black, _ = make_catalog(hass)
+    vehicle = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "audi"
+    )
+    north = object.__new__(V2ControllerRuntime)
+    north.entry = SimpleNamespace(data={"uid": "north"})
+    north.snapshot = {
+        "vehicle_sources": {
+            "audi": {"charger_uid": "white", "effective_soc": 40}
+        }
+    }
+    south = object.__new__(V2ControllerRuntime)
+    south.entry = SimpleNamespace(data={"uid": "south"})
+    south.snapshot = {
+        "vehicle_sources": {
+            "audi": {"charger_uid": "black", "effective_soc": 75}
+        }
+    }
+    hass.data.setdefault(DOMAIN, {})["stale_south"] = south
+    hass.data[DOMAIN]["current_north"] = north
+    fact = V2Fact(vehicle, ENTRY_VEHICLE, "effective_soc", "Effective SoC")
+    fact.hass = hass
+    assert fact._vehicle_observed()["effective_soc"] == 40
+
+    hass.config_entries.async_update_entry(white, options={"vehicle_uid": ""})
+    hass.config_entries.async_update_entry(black, options={"vehicle_uid": "audi"})
+    assert fact._vehicle_observed()["effective_soc"] == 75
+    south.snapshot["vehicle_sources"]["audi"]["charger_uid"] = "white"
+    assert fact._vehicle_observed() is None
