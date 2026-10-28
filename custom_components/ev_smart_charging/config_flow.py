@@ -269,7 +269,11 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_show_form(
                         step_id=f"v2_{kind}_source_device",
                         data_schema=vol.Schema(
-                            {vol.Required("source_device_id"): selector.DeviceSelector()}
+                            {
+                                vol.Required(
+                                    "source_device_id"
+                                ): selector.DeviceSelector()
+                            }
                         ),
                         errors={"base": "invalid_v2_configuration"},
                     )
