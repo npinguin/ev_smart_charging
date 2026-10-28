@@ -64,11 +64,19 @@ class V2Fact(SensorEntity):
                 self.async_on_remove(manager.subscribe(self._source_changed))
             return
         obj = model(self.entry)
+        if self.kind == ENTRY_VEHICLE and self.key == "charger":
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass, f"{DOMAIN}_v2_relationships", self._source_changed
+                )
+            )
         if self.kind == ENTRY_VEHICLE and self.key in (
             "effective_soc",
             "soc_quality",
             "source_quality",
             "required_battery_kwh",
+            "known_actual_cost_eur",
+            "known_energy_kwh",
         ):
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -95,6 +103,7 @@ class V2Fact(SensorEntity):
             if self.key in (
                 "actual_cost_today",
                 "known_actual_cost_eur",
+                "known_energy_kwh",
                 "energy_kwh",
                 "session_elapsed_minutes",
                 "session_meter_quality",
@@ -159,6 +168,28 @@ class V2Fact(SensorEntity):
     def native_value(self):
         obj = model(self.entry)
         if self.kind == ENTRY_VEHICLE:
+            if self.key == "charger":
+                from .catalog import catalog
+
+                _, chargers, _ = catalog(self.hass)
+                return next(
+                    (
+                        charger.name
+                        for charger in chargers.values()
+                        if charger.vehicle_uid == obj.uid
+                    ),
+                    "None",
+                )
+            if self.key in ("known_actual_cost_eur", "known_energy_kwh"):
+                from .runtime import V2ControllerRuntime
+
+                totals = [
+                    runtime.snapshot.get("actual_cost_per_vehicle", {}).get(obj.uid)
+                    for runtime in self.hass.data.get(DOMAIN, {}).values()
+                    if isinstance(runtime, V2ControllerRuntime)
+                ]
+                values = [item[self.key] for item in totals if item is not None]
+                return round(sum(values), 4) if values else None
             # A cached OEM number is not a current SoC observation.
             soc = _number(
                 _fresh_state(
@@ -234,7 +265,11 @@ class V2Fact(SensorEntity):
                     ),
                     "power",
                 )
-            if self.key in ("actual_cost_today", "known_actual_cost_eur"):
+            if self.key in (
+                "actual_cost_today",
+                "known_actual_cost_eur",
+                "known_energy_kwh",
+            ):
                 from .runtime import V2ControllerRuntime
 
                 for runtime in self.hass.data.get(DOMAIN, {}).values():
@@ -244,9 +279,11 @@ class V2Fact(SensorEntity):
                         ).get(obj.uid)
                         if report is not None:
                             return report.get(
-                                "actual_cost_today"
-                                if self.key == "actual_cost_today"
-                                else "known_subtotal_eur"
+                                {
+                                    "actual_cost_today": "actual_cost_today",
+                                    "known_actual_cost_eur": "known_subtotal_eur",
+                                    "known_energy_kwh": "known_energy_kwh",
+                                }[self.key]
                             )
                 return None
             if self.key in (
@@ -331,6 +368,23 @@ def sensors_for_entry(entry):
                 "kWh",
             ),
             V2Fact(entry, kind, "source_quality", "Source quality"),
+            V2Fact(entry, kind, "charger", "Charger"),
+            V2Fact(
+                entry,
+                kind,
+                "known_energy_kwh",
+                "Known charged energy today",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_actual_cost_eur",
+                "Known charge cost today",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
             V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
             V2Fact(
                 entry,
@@ -358,8 +412,15 @@ def sensors_for_entry(entry):
                 SensorDeviceClass.MONETARY,
                 "EUR",
             ),
+            V2Fact(
+                entry,
+                kind,
+                "known_energy_kwh",
+                "Known charged energy today",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
             V2Fact(entry, kind, "controller", "Charge Controller"),
-            V2Fact(entry, kind, "vehicle", "Assigned Vehicle"),
             V2Fact(entry, kind, "connected", "Connection"),
             V2Fact(
                 entry,
