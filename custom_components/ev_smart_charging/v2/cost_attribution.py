@@ -185,7 +185,7 @@ class V2CostLedger(ActualCostLedger):
             bucket["cost_eur"] += value["cost_eur"]
         # An empty ledger has no measured price/energy evidence. Publishing
         # EUR 0 or 0 kWh here would disguise missing sources as free charging.
-        recorded = bool(
+        has_evidence = bool(
             self.intervals
             or self.prior_known_energy_kwh
             or self.prior_known_cost_eur
@@ -195,12 +195,12 @@ class V2CostLedger(ActualCostLedger):
             **super().summary(),
             "known_recorded_energy_kwh": (
                 round(self.prior_known_energy_kwh + self.known_energy, 4)
-                if recorded
+                if has_evidence
                 else None
             ),
             "known_recorded_cost_eur": (
                 round(self.prior_known_cost_eur + self.known_cost, 4)
-                if recorded
+                if has_evidence
                 else None
             ),
             "recorded_vehicle_breakdown": {
