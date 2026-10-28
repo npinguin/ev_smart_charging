@@ -123,6 +123,7 @@ def test_invalid_historical_ready_is_not_autoconverted_to_daily_0800():
     assert plan["vehicle_ready_review_required"] == ["q8"]
     assert "ready_by" not in plan["vehicles"][0]
 
+
 def test_malformed_legacy_numeric_policy_requires_review_not_uncaught_error():
     for options in (
         {"max_parallel": "not-a-number"},
