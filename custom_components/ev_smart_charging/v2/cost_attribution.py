@@ -7,6 +7,7 @@ the interval remains on the Charger but is unassigned: never guess a split.
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from math import isfinite
 
 from ..controller.costs import ActualCostLedger
@@ -97,16 +98,50 @@ class V2CostLedger(ActualCostLedger):
         result.__dict__.update(baseline.__dict__)
         if not isinstance(value, dict):
             return result
+        # The upstream daily ledger deliberately rejects yesterday's meter
+        # baseline after a reboot. Its certified intervals still belong in
+        # the Charger's historical account, even when HA was down at midnight.
+        # Archive exactly once and start a fresh current-day meter baseline.
+        from homeassistant.util import dt
+        from ..controller.planner import utc
+
+        stale_energy = stale_cost = 0.0
+        previous_unarchived = False
+        try:
+            old_day = date.fromisoformat(value["day"]) if value.get("day") else None
+            if old_day is not None and old_day < dt.as_local(dt.utcnow()).date():
+                stamp = utc(datetime.fromisoformat(value["last_time"]))
+                stale_energy = float(value["known_energy"])
+                stale_cost = float(value["known_cost"])
+                count = int(value["intervals"])
+                if (
+                    dt.as_local(stamp).date() != old_day
+                    or not isinstance(value.get("source"), str)
+                    or not value["source"]
+                    or not all(map(isfinite, (stale_energy, stale_cost)))
+                    or stale_energy < 0
+                    or count < 0
+                ):
+                    return cls()
+                previous_unarchived = count > 0
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return cls()
         buckets = value.get("vehicle_breakdown", {})
         if not isinstance(buckets, dict):
             return result
-        if "vehicle_breakdown" not in value and result.intervals:
+        if "vehicle_breakdown" not in value and (
+            result.intervals or previous_unarchived
+        ):
             # Previously persisted V2 Charger cost remains valid, but its
             # unknown historical Vehicle must not be guessed.
             buckets = {
                 "": {
-                    "energy_kwh": result.known_energy,
-                    "cost_eur": result.known_cost,
+                    "energy_kwh": (
+                        stale_energy if previous_unarchived else result.known_energy
+                    ),
+                    "cost_eur": (
+                        stale_cost if previous_unarchived else result.known_cost
+                    ),
                 }
             }
         try:
@@ -121,15 +156,19 @@ class V2CostLedger(ActualCostLedger):
                 parsed[uid] = {"energy_kwh": energy, "cost_eur": cost}
             # No financial projection may exceed or contradict the one
             # authoritative per-Charger actual-energy and cost ledger.
+            expected_energy = (
+                stale_energy if previous_unarchived else result.known_energy
+            )
+            expected_cost = stale_cost if previous_unarchived else result.known_cost
             if parsed and (
                 abs(
                     sum(item["energy_kwh"] for item in parsed.values())
-                    - result.known_energy
+                    - expected_energy
                 )
                 > 1e-5
                 or abs(
                     sum(item["cost_eur"] for item in parsed.values())
-                    - result.known_cost
+                    - expected_cost
                 )
                 > 1e-5
             ):
@@ -169,8 +208,20 @@ class V2CostLedger(ActualCostLedger):
             result.prior_known_energy_kwh = recorded_energy
             result.prior_known_cost_eur = recorded_cost
             result.prior_vehicle_totals = parsed_history
-            vehicle = value.get("last_vehicle_uid")
-            result.last_vehicle_uid = vehicle if isinstance(vehicle, str) else None
+            if previous_unarchived:
+                result.prior_known_energy_kwh += stale_energy
+                result.prior_known_cost_eur += stale_cost
+                for uid, item in parsed.items():
+                    total = result.prior_vehicle_totals.setdefault(
+                        uid, {"energy_kwh": 0.0, "cost_eur": 0.0}
+                    )
+                    total["energy_kwh"] += item["energy_kwh"]
+                    total["cost_eur"] += item["cost_eur"]
+                result.vehicle_breakdown = {}
+                result.last_vehicle_uid = None
+            else:
+                vehicle = value.get("last_vehicle_uid")
+                result.last_vehicle_uid = vehicle if isinstance(vehicle, str) else None
         except (KeyError, TypeError, ValueError, OverflowError):
             return cls()
         return result
