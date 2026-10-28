@@ -175,3 +175,22 @@ def test_corrupt_cost_bucket_never_creates_financial_truth():
     legacy = ledger.to_storage()
     legacy.pop("vehicle_breakdown")
     assert V2CostLedger.from_storage(legacy).vehicle_breakdown[""]["energy_kwh"] == 1
+
+
+def test_cost_attribution_storage_rejects_invalid_structures():
+    assert V2CostLedger.from_storage("not a ledger").vehicle_breakdown == {}
+    anchor = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    slot = PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)
+    ledger = V2CostLedger()
+    ledger.observe(anchor, 3, "sensor.meter", [slot], vehicle_uid="car")
+    ledger.observe(anchor + timedelta(minutes=1), 4, "sensor.meter", [slot], "car")
+    for corrupt in (
+        [],
+        {123: {"energy_kwh": 1, "cost_eur": 0.2}},
+        {"car": {"energy_kwh": "not_a_number", "cost_eur": 0.2}},
+        {"car": {"energy_kwh": 1, "cost_eur": float("inf")}},
+        {"car": {"energy_kwh": 1}},
+    ):
+        saved = ledger.to_storage()
+        saved["vehicle_breakdown"] = corrupt
+        assert V2CostLedger.from_storage(saved).vehicle_breakdown == {}
