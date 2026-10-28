@@ -141,9 +141,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     entry,
                     (
                         (
-                            [Platform.SENSOR, Platform.SELECT, Platform.SWITCH]
+                            [
+                                Platform.SENSOR,
+                                Platform.SELECT,
+                                Platform.BINARY_SENSOR,
+                                Platform.SWITCH,
+                            ]
                             if obj.connection_source == "manual"
-                            else [Platform.SENSOR, Platform.SELECT]
+                            else [
+                                Platform.SENSOR,
+                                Platform.SELECT,
+                                Platform.BINARY_SENSOR,
+                            ]
                         )
                         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
                         else [Platform.SENSOR]
@@ -258,7 +267,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await obj.async_stop()
         platforms = [Platform.SENSOR]
         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2":
-            platforms.append(Platform.SELECT)
+            platforms.extend([Platform.SELECT, Platform.BINARY_SENSOR])
             if obj.connection_source == "manual":
                 platforms.append(Platform.SWITCH)
         unloaded = all(
