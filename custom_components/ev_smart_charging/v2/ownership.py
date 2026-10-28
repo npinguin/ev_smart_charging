@@ -133,6 +133,12 @@ async def _recover_locked(hass):
     async with AsyncExitStack() as stack:
         for uid in sorted(targets):
             await stack.enter_async_context(control_lock(hass, uid))
+        # The first safety check can precede an in-flight native Start.
+        # Recheck AFTER its physical service call releases these locks,
+        # before changing either persisted assignment. Never back-attribute
+        # a just-started charging interval to a newly selected Vehicle.
+        if source_uid is not None or desired_vehicle != before_target_vehicle:
+            _ensure_vehicle_change_safe(hass, targets)
         if source_uid is not None and source_uid != target_uid:
             source = _entry_by_uid(hass, source_uid)
             current_source = details(source).get("vehicle_uid", "")
