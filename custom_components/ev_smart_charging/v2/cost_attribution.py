@@ -65,7 +65,7 @@ class V2CostLedger(ActualCostLedger):
             or (previous_source is not None and source != previous_source)
         ):
             self._archive_daily()
-        super().observe(when, cumulative_kwh, source, prices)
+        super().observe(when, reading, source, prices)
         if self.day != previous_day or self.source != previous_source:
             before_kwh = before_eur = 0.0
             before_vehicle = vehicle_uid
