@@ -381,3 +381,52 @@ def test_corrupt_recorded_vehicle_history_fails_closed(bad_archive):
     restored = V2CostLedger.from_storage(old)
     assert restored.summary()["recorded_vehicle_breakdown"] == {}
     assert restored.summary()["known_recorded_cost_eur"] is None
+
+def test_midnight_reboot_archives_unfinished_day_once_without_losing_vehicle_cost():
+    from homeassistant.util import dt
+
+    yesterday_local = dt.as_local(dt.utcnow()).replace(
+        hour=12, minute=0, second=0, microsecond=0
+    ) - timedelta(days=1)
+    anchor = yesterday_local.astimezone(timezone.utc)
+    prices = [PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)]
+    ledger = V2CostLedger()
+    ledger.observe(anchor, 10, "sensor.meter", prices, "audi")
+    ledger.observe(
+        anchor + timedelta(minutes=5), 12, "sensor.meter", prices, "audi"
+    )
+    assert ledger.summary()["known_recorded_cost_eur"] == 0.4
+
+    restored = V2CostLedger.from_storage(ledger.to_storage())
+    assert restored.summary()["known_recorded_energy_kwh"] == 2
+    assert restored.summary()["known_recorded_cost_eur"] == 0.4
+    assert restored.summary()["recorded_vehicle_breakdown"]["audi"] == {
+        "known_energy_kwh": 2,
+        "known_cost_eur": 0.4,
+    }
+    assert restored.summary()["known_subtotal_eur"] is None
+
+    # A second reboot must not count yesterday again.
+    again = V2CostLedger.from_storage(restored.to_storage())
+    assert again.summary()["known_recorded_energy_kwh"] == 2
+    assert again.summary()["known_recorded_cost_eur"] == 0.4
+
+
+def test_old_unattributed_charger_intervals_survive_midnight_reboot():
+    from homeassistant.util import dt
+
+    yesterday_local = dt.as_local(dt.utcnow()).replace(
+        hour=12, minute=0, second=0, microsecond=0
+    ) - timedelta(days=1)
+    anchor = yesterday_local.astimezone(timezone.utc)
+    prices = [PriceSlot(anchor, anchor + timedelta(minutes=15), 0.3)]
+    ledger = V2CostLedger()
+    ledger.observe(anchor, 1, "sensor.meter", prices, "")
+    ledger.observe(anchor + timedelta(minutes=5), 2, "sensor.meter", prices, "")
+    old_snapshot = ledger.to_storage()
+    old_snapshot.pop("vehicle_breakdown")
+    recovered = V2CostLedger.from_storage(old_snapshot)
+    assert recovered.summary()["known_recorded_cost_eur"] == 0.3
+    assert recovered.summary()["recorded_vehicle_breakdown"][""][
+        "known_energy_kwh"
+    ] == 1
