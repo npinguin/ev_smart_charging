@@ -20,6 +20,23 @@ from .runtime import _connected, _number, _meter, _fresh_state
 from .ready_schedule import next_ready_deadline, normalized_mode
 
 
+def logical_device_info(entry):
+    """One stable HA Device identity shared by V2 entity platforms."""
+    kind = entry.data["__evsc_entry_type"]
+    info = details(entry)
+    return {
+        "identifiers": {(DOMAIN, f"v2:{kind}:{entry.data['uid']}")},
+        "name": info["name"],
+        "manufacturer": "EV Smart Charging",
+        "model": {
+            ENTRY_VEHICLE: "Vehicle V2",
+            ENTRY_CHARGER: "Charger V2",
+            ENTRY_CONTROLLER: "Charge Controller V2",
+        }[kind],
+    }
+
+
+
 class V2Fact(SensorEntity):
     """Stable V2 logical device, no physical device identifiers/connections."""
 
@@ -42,21 +59,6 @@ class V2Fact(SensorEntity):
     def device_info(self):
         return logical_device_info(self.entry)
 
-
-def logical_device_info(entry):
-    """One stable HA Device identity shared by V2 entity platforms."""
-    kind = entry.data["__evsc_entry_type"]
-    info = details(entry)
-    return {
-        "identifiers": {(DOMAIN, f"v2:{kind}:{entry.data['uid']}")},
-        "name": info["name"],
-        "manufacturer": "EV Smart Charging",
-        "model": {
-            ENTRY_VEHICLE: "Vehicle V2",
-            ENTRY_CHARGER: "Charger V2",
-            ENTRY_CONTROLLER: "Charge Controller V2",
-        }[kind],
-    }
 
     @callback
     def _source_changed(self, _event=None):
