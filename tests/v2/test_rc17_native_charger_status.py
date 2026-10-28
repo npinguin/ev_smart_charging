@@ -110,3 +110,43 @@ def test_trusted_native_charging_state_and_power_agree(hass):
     hass.states.async_set("binary_sensor.garage_charging", "unavailable")
     hass.states.async_set("sensor.garage_power", "0", {"unit_of_measurement": "kW"})
     assert charging.is_on is False
+
+
+async def test_native_charger_statuses_are_registered_and_follow_source_events(hass):
+    """Exercise HA entity registry and event listeners, not just Python getters."""
+    from homeassistant.helpers.entity_registry import async_get as get_registry
+    from tests.v2.test_ha_v2_runtime import _setup_entries
+
+    controller, second, vehicle, charger = _setup_entries(hass)
+    try:
+        for entry in (controller, second, vehicle, charger):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        registry = get_registry(hass)
+        connected = registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{DOMAIN}_v2_charger_garage_connected"
+        )
+        charging = registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{DOMAIN}_v2_charger_garage_charging"
+        )
+        vehicle_select = registry.async_get_entity_id(
+            "select", DOMAIN, f"{DOMAIN}_v2_charger_garage_vehicle_selection"
+        )
+        assert connected is not None
+        assert charging is not None
+        assert vehicle_select is not None
+        assert hass.states.get(connected).state == "on"
+        assert hass.states.get(charging).state == "on"
+        hass.states.async_set(
+            "sensor.charger_power", "0", {"unit_of_measurement": "kW"}
+        )
+        await hass.async_block_till_done()
+        assert hass.states.get(charging).state == "off"
+        hass.states.async_set("binary_sensor.cable", "off")
+        await hass.async_block_till_done()
+        assert hass.states.get(connected).state == "off"
+    finally:
+        for entry in (charger, vehicle, second, controller):
+            if entry.entry_id in hass.data.get(DOMAIN, {}):
+                await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
