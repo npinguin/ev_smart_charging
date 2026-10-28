@@ -66,6 +66,9 @@ def _write_charger(hass, entry, options):
     if "uid" in options or "__evsc_entry_type" in options:
         raise ConfigurationError("immutable_identity_update")
     hass.config_entries.async_update_entry(entry, options={**entry.options, **options})
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    async_dispatcher_send(hass, f"{DOMAIN}_v2_relationships")
 
 
 def _preview_target(hass, target_uid, options):
@@ -162,6 +165,30 @@ async def async_recover_ownership(hass):
         return await _recover_locked(hass)
 
 
+
+def _ensure_vehicle_change_safe(hass, charger_uids):
+    """Never reattribute an active physical charging interval to another car."""
+    _, chargers, _ = catalog(hass)
+    for uid in charger_uids:
+        charger = chargers[uid]
+        if charger.charging_entity:
+            state = hass.states.get(charger.charging_entity)
+            if state is not None and state.state.lower() in ("on", "charging", "true"):
+                raise ConfigurationError("stop_charging_before_vehicle_change")
+        if charger.power_entity:
+            state = hass.states.get(charger.power_entity)
+            if state is not None:
+                from .runtime import _meter
+
+                power = _meter(state, "power")
+                if power is not None and power > 0.05:
+                    raise ConfigurationError("stop_charging_before_vehicle_change")
+        if charger.control_entity:
+            state = hass.states.get(charger.control_entity)
+            if state is not None and state.state.lower() in ("on", "true"):
+                raise ConfigurationError("stop_charging_before_vehicle_change")
+
+
 async def async_apply_charger_options(hass, charger_uid, changes):
     """Apply one validated relationship update, potentially across 2 entries.
 
@@ -175,6 +202,10 @@ async def async_apply_charger_options(hass, charger_uid, changes):
         await _recover_locked(hass)
         destination = _entry_by_uid(hass, charger_uid)
         source_uid, old_vehicle, requested = _preview_target(hass, charger_uid, changes)
+        if requested != old_vehicle or source_uid is not None:
+            _ensure_vehicle_change_safe(
+                hass, {charger_uid} | ({source_uid} if source_uid else set())
+            )
         options = {**destination.options, **changes}
         # Persist only options (not Config Entry immutable source fields).
         options.pop("uid", None)
