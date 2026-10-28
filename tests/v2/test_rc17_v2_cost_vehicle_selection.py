@@ -354,3 +354,32 @@ def test_numeric_meter_string_is_normalized_and_corrupt_history_is_rejected():
     invalid = ledger.to_storage()
     invalid["prior_vehicle_totals"] = {"audi": {"energy_kwh": "invalid", "cost_eur": 1}}
     assert V2CostLedger.from_storage(invalid).vehicle_breakdown == {}
+
+
+@pytest.mark.parametrize(
+    "bad_archive",
+    [
+        {"prior_known_energy_kwh": "not-numeric"},
+        {"prior_known_cost_eur": float("inf")},
+        {"prior_vehicle_totals": []},
+        {"prior_vehicle_totals": {"audi": {"energy_kwh": -1, "cost_eur": 0}}},
+        {"prior_vehicle_totals": {"audi": {"energy_kwh": 2, "cost_eur": 5}}},
+        {"prior_vehicle_totals": {"audi": {"energy_kwh": "broken"}}},
+    ],
+)
+def test_corrupt_recorded_vehicle_history_fails_closed(bad_archive):
+    """An inconsistent restored charge history cannot publish known cost."""
+    old = V2CostLedger().to_storage()
+    old.update(
+        {
+            "prior_known_energy_kwh": 1,
+            "prior_known_cost_eur": 0.2,
+            "prior_vehicle_totals": {
+                "audi": {"energy_kwh": 1, "cost_eur": 0.2}
+            },
+        }
+    )
+    old.update(bad_archive)
+    restored = V2CostLedger.from_storage(old)
+    assert restored.summary()["recorded_vehicle_breakdown"] == {}
+    assert restored.summary()["known_recorded_cost_eur"] is None
