@@ -162,16 +162,35 @@ class V2Fact(SensorEntity):
             )
 
     def _vehicle_observed(self):
-        """Read latest single-owner Controller source, not a parallel planner."""
+        """Read only the Vehicle's currently assigned Charger/Controller.
+
+        A prior Controller snapshot can linger briefly during HA entry reload.
+        Never display its stale SoC after a native Vehicle reassignment.
+        """
+        from .catalog import catalog
         from .runtime import V2ControllerRuntime
 
+        _, chargers, _ = catalog(self.hass)
+        current = next(
+            (
+                charger
+                for charger in chargers.values()
+                if charger.vehicle_uid == self.entry.data["uid"]
+            ),
+            None,
+        )
+        if current is None:
+            return None
         for runtime in self.hass.data.get(DOMAIN, {}).values():
-            if isinstance(runtime, V2ControllerRuntime):
-                source = runtime.snapshot.get("vehicle_sources", {}).get(
-                    self.entry.data["uid"]
-                )
-                if source is not None:
-                    return source
+            if not isinstance(runtime, V2ControllerRuntime):
+                continue
+            if runtime.entry.data.get("uid") != current.controller_uid:
+                continue
+            source = runtime.snapshot.get("vehicle_sources", {}).get(
+                self.entry.data["uid"]
+            )
+            if source is not None and source.get("charger_uid") == current.uid:
+                return source
         return None
 
     @property
