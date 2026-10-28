@@ -252,11 +252,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Stop command-owner first, then release sensors and Config Entry.
             await obj.async_stop()
         platforms = [Platform.SENSOR]
-        if (
-            entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
-            and obj.connection_source == "manual"
-        ):
-            platforms.append(Platform.SWITCH)
+        if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2":
+            platforms.append(Platform.SELECT)
+            if obj.connection_source == "manual":
+                platforms.append(Platform.SWITCH)
         unloaded = all(
             await asyncio.gather(
                 *[
