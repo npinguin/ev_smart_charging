@@ -2,12 +2,12 @@
 
 **Scope:** V2 native Home Assistant *Settings → Devices & services → EV Smart Charging → Add entry / Configure*. This is **not** a dashboard or daily-use wizard. V1 original Local remains a separate, upstream-compatible mode. V2 uses its own **Vehicle, Charger and Charge Controller** Config Entries and HA Devices.
 
-RC17 is a **field-test prerelease**, not a claim of verified Peblar, Wallbox or smart-plug command execution in the user's installation. CI exercises HA and simulated failure paths; only live OEM and actual meter readback closes physical acceptance. Keep the original Local *in service* until its replacement has been proven on exactly one EVSE.
+**Release status: NO-GO.** RC17 remains a draft development candidate, **not** an authorized HACS prerelease, stable release, or physical field deployment. CI exercises HA and simulated failure paths; only live OEM and actual meter readback closes physical acceptance. Keep the original Local *in service* until its replacement has been proven on exactly one EVSE.
 
 ## Before installation
 
 1. Make a full HA backup, including the original Local Charger Config Entries and historical intermediate Charge Controller/Vehicle profiles. Verify that the original physical OEM/EVSE controls still operate independently.
-2. Select the explicit HACS prerelease version, reinstall, and restart Home Assistant.
+2. Do **not** install a draft branch as an ordinary HACS release. Only after a separately approved, immutable, safety-reviewed staging build exists, install it on a backed-up test HA and restart Home Assistant.
 3. Confirm the original V1 devices and existing 08:00-next-day Ready By, selects and native Start/Stop remain intact. V1 will never automatically generate a transitional Controller.
 4. Create a **V2 Charge Controller** with physical execution **disabled**. It is the one planner for its assigned Chargers. Each Charger has exactly one Controller; Vehicle assignment is optional and exclusive.
 
@@ -62,7 +62,7 @@ Prices from **Frank Energie**, **Nord Pool** and **ENTSO-e** may be only spot/ma
 
 A historical `charge_controller` Config Entry may contain policies, Vehicle profiles and assignments that **must not be deleted before review**. Only when such an entry is present, V2 Setup provides **Import prior Charge Controller settings** and **Import Vehicle profile**. This creates separate V2 Config Entries, retains stable import identities and leaves the original entry untouched. Physical control is **off** in the new Controller. Unverified Ready By must be selected explicitly.
 
-Historical Local Charger associations are informational; create or link physical V2 Chargers from their **real HA Device sources**. Never assume an old Local source contains all necessary capabilities. After checking every policy, Vehicle and Charger association, remove the old intermediate Config Entry through HA's normal Config Entry removal. The original V1 Local entries are not deleted as part of metadata import.
+Historical Local Charger associations are informational; create or link physical V2 Chargers from their **real HA Device sources**. Never assume an old Local source contains all necessary capabilities. After checking every policy and matching Vehicle/Charger association, use the historical Controller's **Configure → Retire to V2** action. It requires all V2 imports and removal of old Coordinated participants before the old supervisor stops. Keep the historical Config Entry for audit/rollback; do **not** delete it as a substitute for the reviewed retirement gate. The original V1 Local entries are not deleted as part of metadata import.
 
 ## Required physical acceptance (one charger at a time)
 
@@ -77,7 +77,8 @@ Historical Local Charger associations are informational; create or link physical
 | Peak shaving | Actual site import/headroom and stable recovery; unavailable site meter prevents Start |
 | Physical control | Disable original Local writer for this EVSE; opt-in V2; OEM readback; real Start and Stop; no HA event-loop hangs |
 | Data integrity | Source change, reload, timezone/DST, partial meter coverage, price gaps and HA backup/rollback |
+| Vehicle + Charger costs | Compare native session meter against verified EUR/kWh over time; validate per-Charger/Vehicle totals, unassigned EV, no fabricated €0, transfer to another Controller and midnight restart |
 
 If a charger unexpectedly continues drawing power, **use the OEM/native hardware controls** and revert V2 control to disabled. For rollback, restore the complete HA backup and immutable HACS `v2.6.0-rc.16`; downgrading code alone may not reverse HA entity-registry changes.
 
-**Release classification:** this document is a guide for the *RC17 HACS field test*. CI passing does not close open real-hardware incident #5, and cannot certify no crashes in the user's installation.
+**Release classification:** this document is the acceptance procedure for a **draft** V2 software candidate. **Release remains blocked** until the exact-head CI, target HA onboarding/registry, reference integration mappings, Mobility Basic functional parity, migration/rollback and measured one-EVSE hardware tests all have evidence. CI passing does not close incident #5 or certify that the target installation cannot hang.
