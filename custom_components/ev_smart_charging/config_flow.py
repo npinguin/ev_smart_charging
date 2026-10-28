@@ -256,36 +256,46 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Choose existing physical Charger/Plug Device, or manual mode."""
         return await self._v2_select_source("charger", user_input)
 
+    def _v2_device_schema(self, kind):
+        from .v2.source_discovery import compatible_source_devices
+
+        return vol.Schema(
+            {
+                vol.Required("source_device_id"): vol.In(
+                    compatible_source_devices(self.hass, kind)
+                )
+            }
+        )
+
     async def _v2_select_source(self, kind, user_input):
-        from .v2.source_discovery import suggest_device_bindings
+        from .v2.source_discovery import (
+            compatible_source_devices,
+            suggest_device_bindings,
+        )
 
         if user_input is not None:
             defaults = {}
             device = user_input.get("source_device_id")
             if device:
                 try:
+                    if device not in compatible_source_devices(self.hass, kind):
+                        raise ValueError("incompatible_source_device")
                     defaults, _review = suggest_device_bindings(self.hass, device, kind)
                 except ValueError:
                     return self.async_show_form(
                         step_id=f"v2_{kind}_source_device",
-                        data_schema=vol.Schema(
-                            {
-                                vol.Required(
-                                    "source_device_id"
-                                ): selector.DeviceSelector()
-                            }
-                        ),
+                        data_schema=self._v2_device_schema(kind),
                         errors={"base": "invalid_v2_configuration"},
                     )
             setattr(self, f"_v2_{kind}_defaults", defaults)
             setattr(self, f"_v2_{kind}_source_selected", True)
             return await getattr(self, f"async_step_v2_{kind}")()
+        options = [f"v2_{kind}_source_manual"]
+        if compatible_source_devices(self.hass, kind):
+            options.insert(0, f"v2_{kind}_source_device")
         return self.async_show_menu(
             step_id=f"v2_{kind}_source",
-            menu_options=[
-                f"v2_{kind}_source_device",
-                f"v2_{kind}_source_manual",
-            ],
+            menu_options=options,
         )
 
     async def async_step_v2_vehicle_source_device(self, user_input=None):
@@ -299,17 +309,13 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not user_input.get("source_device_id"):
                 return self.async_show_form(
                     step_id=f"v2_{kind}_source_device",
-                    data_schema=vol.Schema(
-                        {vol.Required("source_device_id"): selector.DeviceSelector()}
-                    ),
+                    data_schema=self._v2_device_schema(kind),
                     errors={"source_device_id": "required"},
                 )
             return await self._v2_select_source(kind, user_input)
         return self.async_show_form(
             step_id=f"v2_{kind}_source_device",
-            data_schema=vol.Schema(
-                {vol.Required("source_device_id"): selector.DeviceSelector()}
-            ),
+            data_schema=self._v2_device_schema(kind),
         )
 
     async def async_step_v2_vehicle_source_manual(self, user_input=None):
