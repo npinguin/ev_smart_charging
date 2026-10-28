@@ -47,6 +47,17 @@ async def async_setup_entry(
 
     if entry.data.get("__evsc_entry_type") in V2_TYPES:
         if entry.data["__evsc_entry_type"] == ENTRY_VEHICLE:
+            # No duplicate read-only Target SoC sensor after upgrading V2.
+            from homeassistant.helpers.entity_registry import async_get as get_registry
+
+            registry = get_registry(hass)
+            obsolete = registry.async_get_entity_id(
+                "sensor",
+                DOMAIN,
+                f"{DOMAIN}_v2_vehicle_v2_{entry.data['uid']}_target_soc",
+            )
+            if obsolete:
+                registry.async_remove(obsolete)
             async_add_devices(
                 [
                     V2VehicleNumber(entry, "target_soc", "Target SoC"),
