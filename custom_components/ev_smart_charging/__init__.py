@@ -155,7 +155,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                             ]
                         )
                         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
-                        else [Platform.SENSOR]
+                        else (
+                            [Platform.SENSOR, Platform.SELECT, Platform.NUMBER]
+                            if entry.data[CONTROLLER_ENTRY_MARKER] == "vehicle_v2"
+                            else [Platform.SENSOR]
+                        )
                     ),
                 )
             else:
@@ -266,6 +270,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Stop command-owner first, then release sensors and Config Entry.
             await obj.async_stop()
         platforms = [Platform.SENSOR]
+        if entry.data[CONTROLLER_ENTRY_MARKER] == "vehicle_v2":
+            platforms.extend([Platform.SELECT, Platform.NUMBER])
         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2":
             platforms.extend([Platform.SELECT, Platform.BINARY_SENSOR])
             if obj.connection_source == "manual":
