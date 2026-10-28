@@ -83,9 +83,15 @@ class V2CostLedger(ActualCostLedger):
             # No financial projection may exceed or contradict the one
             # authoritative per-Charger actual-energy and cost ledger.
             if parsed and (
-                abs(sum(item["energy_kwh"] for item in parsed.values()) - result.known_energy)
+                abs(
+                    sum(item["energy_kwh"] for item in parsed.values())
+                    - result.known_energy
+                )
                 > 1e-5
-                or abs(sum(item["cost_eur"] for item in parsed.values()) - result.known_cost)
+                or abs(
+                    sum(item["cost_eur"] for item in parsed.values())
+                    - result.known_cost
+                )
                 > 1e-5
             ):
                 return result
