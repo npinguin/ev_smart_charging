@@ -458,6 +458,26 @@ class V2ControllerRuntime:
                     }
                     for uid, item in attributed.items()
                 }
+                historical = {}
+                for charger_report in result["actual_cost_per_charger"].values():
+                    for vehicle_uid, values in charger_report.get(
+                        "recorded_vehicle_breakdown", {}
+                    ).items():
+                        if not vehicle_uid:
+                            continue
+                        item = historical.setdefault(
+                            vehicle_uid,
+                            {"known_energy_kwh": 0.0, "known_cost_eur": 0.0},
+                        )
+                        item["known_energy_kwh"] += values["known_energy_kwh"]
+                        item["known_cost_eur"] += values["known_cost_eur"]
+                result["recorded_actual_cost_per_vehicle"] = {
+                    uid: {
+                        "known_energy_kwh": round(item["known_energy_kwh"], 4),
+                        "known_cost_eur": round(item["known_cost_eur"], 4),
+                    }
+                    for uid, item in historical.items()
+                }
                 result["vehicle_sources"] = {
                     charger.vehicle_uid: {
                         "effective_soc": observed[uid]["soc"],
