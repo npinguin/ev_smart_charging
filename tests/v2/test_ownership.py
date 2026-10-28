@@ -1,5 +1,7 @@
 """Durable exclusive ownership across independent HA Config Entries."""
 
+import asyncio
+
 from unittest.mock import patch
 
 import pytest
@@ -169,4 +171,92 @@ async def test_no_implicit_vehicle_and_idempotent_recovery(hass, store):
     make_catalog(hass)
     assert not await ownership.async_move_vehicle(hass, "guest", None)
     assert not await ownership.async_recover_ownership(hass)
+    assert store.saved is None
+
+
+async def test_native_binding_change_requires_disabled_controller_and_no_owner(
+    hass, store
+):
+    """A live EVSE may not be silently rebound to another native writer."""
+    white, _, _ = make_catalog(hass)
+    controller = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "north"
+    )
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": True}
+    )
+    with pytest.raises(ConfigurationError, match="disable_controller_before_rebinding"):
+        await ownership.async_apply_charger_options(
+            hass, "white", {"control_entity": "switch.new"}
+        )
+    assert store.saves == 0
+    assert details(white)["control_entity"] == "switch.white"
+
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": False}
+    )
+    hass.data[f"{DOMAIN}.v2_native_writers"] = {"switch.white": ("north", "white")}
+    with pytest.raises(ConfigurationError, match="disable_controller_before_rebinding"):
+        await ownership.async_apply_charger_options(
+            hass, "white", {"control_entity": "switch.new"}
+        )
+    assert store.saves == 0
+
+    hass.data[f"{DOMAIN}.v2_native_writers"].clear()
+    assert await ownership.async_apply_charger_options(
+        hass, "white", {"control_entity": "switch.new"}
+    )
+    assert details(white)["control_entity"] == "switch.new"
+
+
+async def test_equivalent_implicit_native_binding_may_be_saved_while_enabled(
+    hass, store
+):
+    """An explicit default isn't a physical writer change."""
+    white, _, _ = make_catalog(hass)
+    controller = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "north"
+    )
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": True}
+    )
+    old_semantics = ownership.model(white).control_semantics
+    assert await ownership.async_apply_charger_options(
+        hass, "white", {"control_semantics": old_semantics}
+    )
+    assert details(white)["control_entity"] == "switch.white"
+
+
+async def test_vehicle_assignment_rechecks_charging_after_native_lock(hass, store):
+    """An EVSE that starts while the operator changes Vehicle stays untouched."""
+    white, _, _ = make_catalog(hass)
+    hass.states.async_set("switch.white", "off")
+
+    async with ownership.control_lock(hass, "white"):
+        moving = asyncio.create_task(
+            ownership.async_apply_charger_options(
+                hass, "white", {"vehicle_uid": "guest"}
+            )
+        )
+        for _ in range(20):
+            if store.saved is not None:
+                break
+            await asyncio.sleep(0)
+        assert store.saved is not None
+        # Simulate readback of a native Start completing after the early
+        # options validator, while the transaction is waiting on its lock.
+        hass.states.async_set("switch.white", "on")
+
+    with pytest.raises(ConfigurationError, match="stop_charging_before_vehicle_change"):
+        await moving
+    assert details(white)["vehicle_uid"] == "audi"
+    assert store.saved is not None  # Recoverable, not silently half-applied.
+
+    hass.states.async_set("switch.white", "off")
+    assert await ownership.async_recover_ownership(hass)
+    assert details(white)["vehicle_uid"] == "guest"
     assert store.saved is None

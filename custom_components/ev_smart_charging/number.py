@@ -6,6 +6,7 @@ from typing import Union
 from homeassistant.components.number import (
     RestoreNumber,
     NumberExtraStoredData,
+    NumberEntity,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -42,6 +43,28 @@ async def async_setup_entry(
 ):  # pylint: disable=unused-argument
     """Setup number platform."""
     _LOGGER.debug("EVSmartCharging.number.py")
+    from .v2 import ENTRY_VEHICLE, TYPES as V2_TYPES
+
+    if entry.data.get("__evsc_entry_type") in V2_TYPES:
+        if entry.data["__evsc_entry_type"] == ENTRY_VEHICLE:
+            # No duplicate read-only Target SoC sensor after upgrading V2.
+            from homeassistant.helpers.entity_registry import async_get as get_registry
+
+            registry = get_registry(hass)
+            obsolete = registry.async_get_entity_id(
+                "sensor",
+                DOMAIN,
+                f"{DOMAIN}_v2_vehicle_v2_{entry.data['uid']}_target_soc",
+            )
+            if obsolete:
+                registry.async_remove(obsolete)
+            async_add_devices(
+                [
+                    V2VehicleNumber(entry, "target_soc", "Target SoC"),
+                    V2VehicleNumber(entry, "manual_soc", "Manual SoC"),
+                ]
+            )
+        return
     coordinator = hass.data[DOMAIN][entry.entry_id]
     numbers = []
     numbers.append(EVSmartChargingNumberChargingSpeed(entry, coordinator))
@@ -269,3 +292,43 @@ class EVSmartChargingNumberLowSocCharging(EVSmartChargingNumber):
         await super().async_set_native_value(value)
         self.coordinator.low_soc_charging = value
         await self.coordinator.update_configuration()
+
+
+class V2VehicleNumber(NumberEntity):
+    """Native Vehicle SoC edit; config options remain the only canonical store."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, entry, key, label):
+        self.entry = entry
+        self.key = key
+        self._attr_name = label
+        self._attr_unique_id = f"{DOMAIN}_v2_vehicle_{entry.data['uid']}_{key}"
+
+    @property
+    def device_info(self):
+        from .v2.entities import logical_device_info
+
+        return logical_device_info(self.entry)
+
+    @property
+    def native_value(self):
+        from .v2.catalog import model
+
+        return getattr(model(self.entry), self.key)
+
+    async def async_set_native_value(self, value):
+        from types import SimpleNamespace
+
+        from .v2.catalog import model
+
+        options = {**self.entry.options, self.key: float(value)}
+        # Validate before persistence so other Vehicle settings are not lost.
+        model(SimpleNamespace(data=self.entry.data, options=options))
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+        self.async_write_ha_state()

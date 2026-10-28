@@ -66,6 +66,9 @@ def _write_charger(hass, entry, options):
     if "uid" in options or "__evsc_entry_type" in options:
         raise ConfigurationError("immutable_identity_update")
     hass.config_entries.async_update_entry(entry, options={**entry.options, **options})
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    async_dispatcher_send(hass, f"{DOMAIN}_v2_relationships")
 
 
 def _preview_target(hass, target_uid, options):
@@ -130,6 +133,12 @@ async def _recover_locked(hass):
     async with AsyncExitStack() as stack:
         for uid in sorted(targets):
             await stack.enter_async_context(control_lock(hass, uid))
+        # The first safety check can precede an in-flight native Start.
+        # Recheck AFTER its physical service call releases these locks,
+        # before changing either persisted assignment. Never back-attribute
+        # a just-started charging interval to a newly selected Vehicle.
+        if source_uid is not None or desired_vehicle != before_target_vehicle:
+            _ensure_vehicle_change_safe(hass, targets)
         if source_uid is not None and source_uid != target_uid:
             source = _entry_by_uid(hass, source_uid)
             current_source = details(source).get("vehicle_uid", "")
@@ -162,6 +171,29 @@ async def async_recover_ownership(hass):
         return await _recover_locked(hass)
 
 
+def _ensure_vehicle_change_safe(hass, charger_uids):
+    """Never reattribute an active physical charging interval to another car."""
+    _, chargers, _ = catalog(hass)
+    for uid in charger_uids:
+        charger = chargers[uid]
+        if charger.charging_entity:
+            state = hass.states.get(charger.charging_entity)
+            if state is not None and state.state.lower() in ("on", "charging", "true"):
+                raise ConfigurationError("stop_charging_before_vehicle_change")
+        if charger.power_entity:
+            state = hass.states.get(charger.power_entity)
+            if state is not None:
+                from .runtime import _meter
+
+                power = _meter(state, "power")
+                if power is not None and power > 0.05:
+                    raise ConfigurationError("stop_charging_before_vehicle_change")
+        if charger.control_entity:
+            state = hass.states.get(charger.control_entity)
+            if state is not None and state.state.lower() in ("on", "true"):
+                raise ConfigurationError("stop_charging_before_vehicle_change")
+
+
 async def async_apply_charger_options(hass, charger_uid, changes):
     """Apply one validated relationship update, potentially across 2 entries.
 
@@ -175,6 +207,45 @@ async def async_apply_charger_options(hass, charger_uid, changes):
         await _recover_locked(hass)
         destination = _entry_by_uid(hass, charger_uid)
         source_uid, old_vehicle, requested = _preview_target(hass, charger_uid, changes)
+        # Rebinding an active native writer can strand the old EVSE ON while
+        # the Controller begins managing a different source. Require an
+        # explicit disable/shutdown, and reject any retained uncertain owner.
+        rebind_fields = (
+            "controller_uid",
+            "control_entity",
+            "control_semantics",
+            "connection_source",
+            "connected_entity",
+            "charging_entity",
+            "power_entity",
+            "energy_entity",
+            "energy_source_kind",
+        )
+        previous = model(destination)
+        proposed = model(
+            SimpleNamespace(
+                data=destination.data,
+                options={**destination.options, **changes},
+            )
+        )
+        if any(
+            getattr(previous, field) != getattr(proposed, field)
+            for field in rebind_fields
+        ):
+            _, chargers, controllers = catalog(hass)
+            has_owner = any(
+                isinstance(owner, tuple) and len(owner) == 2 and owner[1] == charger_uid
+                for owner in hass.data.get(f"{DOMAIN}.v2_native_writers", {}).values()
+            )
+            if (
+                controllers[chargers[charger_uid].controller_uid].physical_enabled
+                or has_owner
+            ):
+                raise ConfigurationError("disable_controller_before_rebinding")
+        if requested != old_vehicle or source_uid is not None:
+            _ensure_vehicle_change_safe(
+                hass, {charger_uid} | ({source_uid} if source_uid else set())
+            )
         options = {**destination.options, **changes}
         # Persist only options (not Config Entry immutable source fields).
         options.pop("uid", None)

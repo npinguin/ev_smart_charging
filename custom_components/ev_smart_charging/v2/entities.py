@@ -16,8 +16,24 @@ from homeassistant.util import dt
 from ..const import DOMAIN
 from . import ENTRY_CHARGER, ENTRY_CONTROLLER, ENTRY_VEHICLE
 from .catalog import details, model
-from .runtime import _connected, _number, _meter, _fresh_state
+from .runtime import _number, _meter, _fresh_state
 from .ready_schedule import next_ready_deadline, normalized_mode
+
+
+def logical_device_info(entry):
+    """One stable HA Device identity shared by V2 entity platforms."""
+    kind = entry.data["__evsc_entry_type"]
+    info = details(entry)
+    return {
+        "identifiers": {(DOMAIN, f"v2:{kind}:{entry.data['uid']}")},
+        "name": info["name"],
+        "manufacturer": "EV Smart Charging",
+        "model": {
+            ENTRY_VEHICLE: "Vehicle V2",
+            ENTRY_CHARGER: "Charger V2",
+            ENTRY_CONTROLLER: "Charge Controller V2",
+        }[kind],
+    }
 
 
 class V2Fact(SensorEntity):
@@ -40,17 +56,7 @@ class V2Fact(SensorEntity):
 
     @property
     def device_info(self):
-        info = details(self.entry)
-        return {
-            "identifiers": {(DOMAIN, f"v2:{self.kind}:{self.entry.data['uid']}")},
-            "name": info["name"],
-            "manufacturer": "EV Smart Charging",
-            "model": {
-                ENTRY_VEHICLE: "Vehicle V2",
-                ENTRY_CHARGER: "Charger V2",
-                ENTRY_CONTROLLER: "Charge Controller V2",
-            }[self.kind],
-        }
+        return logical_device_info(self.entry)
 
     @callback
     def _source_changed(self, _event=None):
@@ -64,11 +70,21 @@ class V2Fact(SensorEntity):
                 self.async_on_remove(manager.subscribe(self._source_changed))
             return
         obj = model(self.entry)
+        if self.kind == ENTRY_VEHICLE and self.key == "charger":
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass, f"{DOMAIN}_v2_relationships", self._source_changed
+                )
+            )
         if self.kind == ENTRY_VEHICLE and self.key in (
             "effective_soc",
             "soc_quality",
             "source_quality",
             "required_battery_kwh",
+            "known_actual_cost_eur",
+            "known_energy_kwh",
+            "known_recorded_cost_eur",
+            "known_recorded_energy_kwh",
         ):
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -95,6 +111,9 @@ class V2Fact(SensorEntity):
             if self.key in (
                 "actual_cost_today",
                 "known_actual_cost_eur",
+                "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
                 "energy_kwh",
                 "session_elapsed_minutes",
                 "session_meter_quality",
@@ -143,22 +162,79 @@ class V2Fact(SensorEntity):
             )
 
     def _vehicle_observed(self):
-        """Read latest single-owner Controller source, not a parallel planner."""
+        """Read only the Vehicle's currently assigned Charger/Controller.
+
+        A prior Controller snapshot can linger briefly during HA entry reload.
+        Never display its stale SoC after a native Vehicle reassignment.
+        """
+        from .catalog import catalog
         from .runtime import V2ControllerRuntime
 
+        _, chargers, _ = catalog(self.hass)
+        current = next(
+            (
+                charger
+                for charger in chargers.values()
+                if charger.vehicle_uid == self.entry.data["uid"]
+            ),
+            None,
+        )
+        if current is None:
+            return None
         for runtime in self.hass.data.get(DOMAIN, {}).values():
-            if isinstance(runtime, V2ControllerRuntime):
-                source = runtime.snapshot.get("vehicle_sources", {}).get(
-                    self.entry.data["uid"]
-                )
-                if source is not None:
-                    return source
+            if not isinstance(runtime, V2ControllerRuntime):
+                continue
+            if runtime.entry.data.get("uid") != current.controller_uid:
+                continue
+            source = runtime.snapshot.get("vehicle_sources", {}).get(
+                self.entry.data["uid"]
+            )
+            if source is not None and source.get("charger_uid") == current.uid:
+                return source
         return None
 
     @property
     def native_value(self):
         obj = model(self.entry)
         if self.kind == ENTRY_VEHICLE:
+            if self.key == "charger":
+                from .catalog import catalog
+
+                _, chargers, _ = catalog(self.hass)
+                return next(
+                    (
+                        charger.name
+                        for charger in chargers.values()
+                        if charger.vehicle_uid == obj.uid
+                    ),
+                    "None",
+                )
+            if self.key in (
+                "known_actual_cost_eur",
+                "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
+            ):
+                from .runtime import V2ControllerRuntime
+
+                historical = self.key.startswith("known_recorded_")
+                report_name = (
+                    "recorded_actual_cost_per_vehicle"
+                    if historical
+                    else "actual_cost_per_vehicle"
+                )
+                field = (
+                    "known_energy_kwh"
+                    if self.key.endswith("energy_kwh")
+                    else "known_cost_eur"
+                )
+                totals = [
+                    runtime.snapshot.get(report_name, {}).get(obj.uid)
+                    for runtime in self.hass.data.get(DOMAIN, {}).values()
+                    if isinstance(runtime, V2ControllerRuntime)
+                ]
+                values = [item[field] for item in totals if item is not None]
+                return round(sum(values), 4) if values else None
             # A cached OEM number is not a current SoC observation.
             soc = _number(
                 _fresh_state(
@@ -206,25 +282,6 @@ class V2Fact(SensorEntity):
         elif self.kind == ENTRY_CHARGER:
             if self.key == "controller":
                 return obj.controller_uid
-            if self.key == "vehicle":
-                return obj.vehicle_uid or "None"
-            if self.key == "connected":
-                from .manual_connection import manual_connected
-
-                status = (
-                    manual_connected(self.hass, obj.uid)
-                    if obj.connection_source == "manual"
-                    else _connected(
-                        self.hass.states.get(obj.connected_entity)
-                        if obj.connected_entity
-                        else None
-                    )
-                )
-                return (
-                    "connected"
-                    if status is True
-                    else ("disconnected" if status is False else "unknown")
-                )
             if self.key == "power_kw":
                 return _meter(
                     (
@@ -234,7 +291,13 @@ class V2Fact(SensorEntity):
                     ),
                     "power",
                 )
-            if self.key in ("actual_cost_today", "known_actual_cost_eur"):
+            if self.key in (
+                "actual_cost_today",
+                "known_actual_cost_eur",
+                "known_energy_kwh",
+                "known_recorded_cost_eur",
+                "known_recorded_energy_kwh",
+            ):
                 from .runtime import V2ControllerRuntime
 
                 for runtime in self.hass.data.get(DOMAIN, {}).values():
@@ -244,9 +307,13 @@ class V2Fact(SensorEntity):
                         ).get(obj.uid)
                         if report is not None:
                             return report.get(
-                                "actual_cost_today"
-                                if self.key == "actual_cost_today"
-                                else "known_subtotal_eur"
+                                {
+                                    "actual_cost_today": "actual_cost_today",
+                                    "known_actual_cost_eur": "known_subtotal_eur",
+                                    "known_energy_kwh": "known_energy_kwh",
+                                    "known_recorded_cost_eur": "known_recorded_cost_eur",
+                                    "known_recorded_energy_kwh": "known_recorded_energy_kwh",
+                                }[self.key]
                             )
                 return None
             if self.key in (
@@ -312,9 +379,6 @@ def sensors_for_entry(entry):
             ),
             V2Fact(entry, kind, "soc_quality", "SoC basis"),
             V2Fact(
-                entry, kind, "target_soc", "Target SoC", SensorDeviceClass.BATTERY, "%"
-            ),
-            V2Fact(
                 entry,
                 kind,
                 "required_battery_kwh",
@@ -331,6 +395,39 @@ def sensors_for_entry(entry):
                 "kWh",
             ),
             V2Fact(entry, kind, "source_quality", "Source quality"),
+            V2Fact(entry, kind, "charger", "Charger"),
+            V2Fact(
+                entry,
+                kind,
+                "known_energy_kwh",
+                "Known charged energy today",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_actual_cost_eur",
+                "Known charge cost today",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_energy_kwh",
+                "Known recorded charged energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_cost_eur",
+                "Known recorded charge cost",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
             V2Fact(entry, kind, "ready_mode", "Ready By pattern"),
             V2Fact(
                 entry,
@@ -358,9 +455,31 @@ def sensors_for_entry(entry):
                 SensorDeviceClass.MONETARY,
                 "EUR",
             ),
+            V2Fact(
+                entry,
+                kind,
+                "known_energy_kwh",
+                "Known charged energy today",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_energy_kwh",
+                "Known recorded charged energy",
+                SensorDeviceClass.ENERGY,
+                "kWh",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "known_recorded_cost_eur",
+                "Known recorded charge cost",
+                SensorDeviceClass.MONETARY,
+                "EUR",
+            ),
             V2Fact(entry, kind, "controller", "Charge Controller"),
-            V2Fact(entry, kind, "vehicle", "Assigned Vehicle"),
-            V2Fact(entry, kind, "connected", "Connection"),
             V2Fact(
                 entry,
                 kind,

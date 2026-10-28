@@ -150,7 +150,44 @@ def suggest_device_bindings(hass, device_id, kind):
             review[role] = "suggested"
         else:
             review[role] = "ambiguous" if scores else "not_available"
+    # A matching display name alone is not evidence of a supported device.
+    # Report absent/ambiguous mappings for manual review, never fake a match.
+    if not suggestions:
+        review["discovery"] = "no_unambiguous_bindings"
     name = getattr(dev, "name_by_user", None) or getattr(dev, "name", None)
     if name:
         suggestions["name"] = name
     return suggestions, review
+
+
+def compatible_source_devices(hass, kind):
+    """Filter the HA device picker by observed capabilities, not names/brands.
+
+    This is only a discovery convenience; users may still configure any
+    arbitrary manual EntitySelector binding through the manual setup route.
+    """
+    if kind not in _ROLES:
+        return {}
+    registry = device_registry(hass)
+    eligible = {}
+    for device in registry.devices.values():
+        if getattr(device, "disabled_by", None) is not None:
+            continue
+        suggestions, _quality = suggest_device_bindings(hass, device.id, kind)
+        if kind == "vehicle":
+            capable = "soc_entity" in suggestions
+        else:
+            capabilities = set(suggestions)
+            capable = "control_entity" in capabilities and bool(
+                capabilities
+                & {
+                    "power_entity",
+                    "energy_entity",
+                    "connected_entity",
+                    "charging_entity",
+                }
+            )
+        if capable:
+            name = device.name_by_user or device.name or device.id
+            eligible[device.id] = name
+    return eligible

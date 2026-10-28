@@ -17,7 +17,7 @@ from .execution import NativeChargeWriter, _desired_now
 from .planning import compile_advisory
 from .tariffs import source_tariff_slots
 from .group_facts import group_facts
-from ..controller.costs import ActualCostLedger
+from .cost_attribution import V2CostLedger
 from .soc_estimation import SocEstimator
 from .session_progress import SessionProgress
 from .budget import CostBudgetGuard
@@ -256,6 +256,9 @@ class V2ControllerRuntime:
         self._session_progress = SessionProgress()
         self._budget_store = Store(hass, 1, f"{DOMAIN}.v2_budget_{entry.data['uid']}")
         self._budget_guard = CostBudgetGuard()
+        # Coalesce source/operator updates arriving during a running plan.
+        # One trailing refresh, not a task per source event.
+        self._refresh_requested = False
 
     def _cost_payload(self):
         return {uid: ledger.to_storage() for uid, ledger in self._cost_ledgers.items()}
@@ -279,7 +282,7 @@ class V2ControllerRuntime:
         self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
         stored_costs = await self._cost_store.async_load()
         self._cost_ledgers = {
-            uid: ActualCostLedger.from_storage(state)
+            uid: V2CostLedger.from_storage(state)
             for uid, state in (stored_costs or {}).items()
             if isinstance(uid, str)
         }
@@ -299,7 +302,10 @@ class V2ControllerRuntime:
         self._tick_task = self.hass.async_create_task(self.async_refresh())
 
     async def async_refresh(self):
-        if self._stopped or self._lock.locked():
+        if self._stopped:
+            return
+        if self._lock.locked():
+            self._refresh_requested = True
             return
         async with self._lock:
             try:
@@ -393,7 +399,7 @@ class V2ControllerRuntime:
                 cost_changed = False
                 for uid, charger in chargers.items():
                     item = observed[uid]
-                    ledger = self._cost_ledgers.setdefault(uid, ActualCostLedger())
+                    ledger = self._cost_ledgers.setdefault(uid, V2CostLedger())
                     previous = ledger.to_storage()
                     meter = item.get("energy_kwh")
                     stamp = item.get("energy_observed_at")
@@ -409,6 +415,7 @@ class V2ControllerRuntime:
                             meter,
                             charger.energy_entity,
                             item.get("prices", []),
+                            vehicle_uid=charger.vehicle_uid,
                         )
                     elif ledger.day is not None:
                         ledger.complete = False
@@ -429,8 +436,51 @@ class V2ControllerRuntime:
                     for uid, ledger in self._cost_ledgers.items()
                     if uid in chargers
                 }
+                # Derived projections of the same per-Charger financial
+                # evidence. Do not infer a Vehicle from cable connection.
+                attributed = {}
+                for charger_report in result["actual_cost_per_charger"].values():
+                    for vehicle_uid, values in charger_report.get(
+                        "vehicle_breakdown", {}
+                    ).items():
+                        if not vehicle_uid:
+                            continue
+                        item = attributed.setdefault(
+                            vehicle_uid,
+                            {"known_energy_kwh": 0.0, "known_cost_eur": 0.0},
+                        )
+                        item["known_energy_kwh"] += values["known_energy_kwh"]
+                        item["known_cost_eur"] += values["known_cost_eur"]
+                result["actual_cost_per_vehicle"] = {
+                    uid: {
+                        "known_energy_kwh": round(item["known_energy_kwh"], 4),
+                        "known_cost_eur": round(item["known_cost_eur"], 4),
+                    }
+                    for uid, item in attributed.items()
+                }
+                historical = {}
+                for charger_report in result["actual_cost_per_charger"].values():
+                    for vehicle_uid, values in charger_report.get(
+                        "recorded_vehicle_breakdown", {}
+                    ).items():
+                        if not vehicle_uid:
+                            continue
+                        item = historical.setdefault(
+                            vehicle_uid,
+                            {"known_energy_kwh": 0.0, "known_cost_eur": 0.0},
+                        )
+                        item["known_energy_kwh"] += values["known_energy_kwh"]
+                        item["known_cost_eur"] += values["known_cost_eur"]
+                result["recorded_actual_cost_per_vehicle"] = {
+                    uid: {
+                        "known_energy_kwh": round(item["known_energy_kwh"], 4),
+                        "known_cost_eur": round(item["known_cost_eur"], 4),
+                    }
+                    for uid, item in historical.items()
+                }
                 result["vehicle_sources"] = {
                     charger.vehicle_uid: {
+                        "charger_uid": uid,
                         "effective_soc": observed[uid]["soc"],
                         "soc_quality": observed[uid]["soc_quality"],
                     }
@@ -482,20 +532,46 @@ class V2ControllerRuntime:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # Never leave a stale grant/status after a planner exception.
-                # Log traceback for defect correction; no native write occurs.
+                # An invalid plan is not sufficient to stop an EVSE that this
+                # Controller previously started. Explicitly shut down only
+                # already-owned V2 targets, and keep closed writers reserved
+                # until a deliberate reload/repair; never silently resume.
                 _LOGGER.exception("EVSC V2 planner failed: %s", exc)
+                shutdown = {}
+                for uid, writer in tuple(self._writers.items()):
+                    try:
+                        status = await writer.async_shutdown()
+                    except Exception:
+                        _LOGGER.exception(
+                            "V2 planner failure: native OFF raised for %s", uid
+                        )
+                        status = "STOP_EXCEPTION"
+                    shutdown[uid] = status
+                    if status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                        _LOGGER.error(
+                            "V2 planner failure: OFF not verified for %s (%s); "
+                            "check the physical EVSE immediately",
+                            uid,
+                            status,
+                        )
                 result = {
                     "status": "INVALID_CONFIGURATION",
                     "reason": type(exc).__name__,
                     "controller_uid": self.entry.data["uid"],
                     "advisory_only": True,
                     "physical_actuation_authorized": False,
+                    "execution_status": "PLANNER_FAILED_SAFE_HOLD",
+                    "native_shutdown": shutdown,
                 }
             if not self._stopped:
                 self.snapshot = result
                 self._notify()
                 async_dispatcher_send(self.hass, f"{DOMAIN}_v2_vehicle_sources")
+        if self._refresh_requested and not self._stopped:
+            self._refresh_requested = False
+            # At most one follow-up per in-flight refresh, even if multiple
+            # operator actions/sources changed during expensive planning.
+            self.hass.async_create_task(self.async_refresh())
 
     async def _apply_native_plan(self, controller, chargers, observed, result):
         """One physically serialized writer per owned Charger, not per event."""
@@ -506,7 +582,13 @@ class V2ControllerRuntime:
                 or writer.charger.control_entity != current.control_entity
                 or writer.controller_uid != controller.uid
             ):
-                await writer.async_close()
+                stop_status = await writer.async_shutdown()
+                if stop_status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                    _LOGGER.error(
+                        "V2 Charger %s transfer OFF not verified: %s",
+                        uid,
+                        stop_status,
+                    )
                 self._writers.pop(uid, None)
 
         # Single conservative reservation pass across the entire Controller.
@@ -590,21 +672,46 @@ class V2ControllerRuntime:
         return native_results
 
     async def async_stop(self):
-        """HA unload must wait for any native-service critical section."""
-        # HA Store's delayed save is normally enough, but explicit flush
-        # prevents losing a charging interval on integration reload.
-        await self._soc_store.async_save(self._soc_estimator.snapshot())
-        await self._cost_store.async_save(self._cost_payload())
-        await self._session_store.async_save(self._session_progress.snapshot())
-        await self._budget_store.async_save(self._budget_guard.snapshot())
-        task = self._tick_task
+        """Stop executing, persist evidence, then safely release owned EVSEs.
+
+        Never drop physical ownership while the last V2 command may still be
+        ON. Existing Local/manual targets not owned by V2 are not touched.
+        """
         self._stopped = True
+        task = self._tick_task
         if task is not None and not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-        for writer in tuple(self._writers.values()):
-            await writer.async_close()
-        self.stop()
+        # Operator-initiated refreshes may not be the timer task. Wait for
+        # their critical section before saving and stopping physical writers.
+        try:
+            async with self._lock:
+                # Physical shutdown takes precedence over disk writes. A
+                # failing HA Store must never leave a V2-owned charger ON.
+                for uid, writer in tuple(self._writers.items()):
+                    try:
+                        status = await writer.async_shutdown()
+                    except Exception:
+                        _LOGGER.exception(
+                            "V2 Controller unload: shutdown exception for %s", uid
+                        )
+                        status = "STOP_EXCEPTION"
+                    if status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                        _LOGGER.error(
+                            "V2 Controller unload: physical OFF not verified "
+                            "for %s (%s); check OEM/EVSE immediately",
+                            uid,
+                            status,
+                        )
+                await self._soc_store.async_save(self._soc_estimator.snapshot())
+                await self._cost_store.async_save(self._cost_payload())
+                await self._session_store.async_save(self._session_progress.snapshot())
+                await self._budget_store.async_save(self._budget_guard.snapshot())
+        finally:
+            # Uncertain physical OFF keeps the native ownership reservation.
+            # Clean up HA listeners/tasks even when persistence fails.
+            self._writers.clear()
+            self.stop()
 
     @callback
     def stop(self):

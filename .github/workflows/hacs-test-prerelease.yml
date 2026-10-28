@@ -1,11 +1,11 @@
-name: HACS V1-parity / V2 end-to-end RC17 field-test prerelease
+name: HACS RC18 guarded native shutdown field-test prerelease
 
 # Explicitly operator-requested guarded Local-capable test packaging only.
 # Never publish on ordinary code pushes: one release request file gates this.
 on:
   push:
     branches:
-      - feature/rc17-consolidated-v2
+      - fix/rc17-connected-off-race
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
@@ -22,14 +22,15 @@ jobs:
   publish_test_prerelease:
     name: Publish isolated HACS test prerelease
     needs: full_ci_gate
-    # Operator explicitly requested another HACS build. P0 stays OPEN:
-    # publish only a Local-capable quarantine build; no Coordinated actuation.
-    if: ${{ github.ref == 'refs/heads/feature/rc17-consolidated-v2' }}
+    # Release gate #11 and physical P0 #5 remain OPEN. An RC, including
+    # a guarded HACS prerelease, must not be published by CI alone.
+    # Re-enable only after exact-head software + actual HA/EVSE acceptance.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.17
+      VERSION: 2.6.0-rc.18
     steps:
       - uses: actions/checkout@v7
 
@@ -235,14 +236,12 @@ jobs:
             cd custom_components/ev_smart_charging
             zip -q -r "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" . -x '*/__pycache__/*' '*.pyc'
           )
-          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^manifest.json$'
-          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml$'
-          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^manifest\.json          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services\.yaml          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
 
       - name: Retain the manually usable ZIP as a workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: evsc-rc17-v1-parity-v2-native-manual-zip
+          name: evsc-rc18-native-shutdown-manual-zip
           path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
           if-no-files-found: error
 
@@ -266,5 +265,103 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — consolidated V1/V2 field test" \
-            --notes "EVSC $tag — V2 CONFIGURATION AND PHYSICAL FIELD TEST ONLY. Immutable tested SHA: $GITHUB_SHA. Original upstream Local V1 remains unchanged including next-day 08:00 and native Local actuation. V2 now provides independent Vehicle/Charger/Controller Config Entries, device-assisted source suggestions, searchable native HA selectors, manual smart-plug Connected Yes/No, real on/off + feedback, no-SoC grid-kWh/duration planning, daily/weekly/once Ready By, timestamped OEM/manual/meter-compensated SoC with explicit quality, persisted charging-session progress, measured session cost and conservative cost ceilings, multi-day Controller totals and whole-house power peak shedding. Old intermediate Controller and Vehicle profiles can be reviewed and imported into independent V2 Config Entries without mutating V1; physical control starts disabled. You MUST separately retire historical intermediate entries after verifying their profiles and Charger links. Original Local and V2 must never concurrently control the same physical device. Previous Local Coordinated remains quarantined; V2 physical control is deliberate per-Controller opt-in, one Charger at a time with native readback. Real Peblar/Wallbox/smart-plug OEM field acceptance is NOT proven by CI and P0 #5 remains open until physical evidence exists. Test with a complete Home Assistant backup, start read-only, verify data quality/pricing, only then disable a given original Local writer and enable that V2 Controller. This is not stable; do not assume that HA-only budget limits can cut off charging if the HA host itself hangs or loses power. Restore the HA backup plus v2.6.0-rc.16 for rollback."
+            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
+            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
+
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml
+          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+
+      - name: Retain the manually usable ZIP as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: evsc-rc18-native-shutdown-manual-zip
+          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
+          if-no-files-found: error
+
+      - name: Create prerelease without changing main or stable versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          # Publish tag once. The existing default-branch publish workflow
+          # attaches the optional ZIP after the release event; never race its
+          # release asset upload. HACS already uses the source tree.
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
+            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
+
+          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+
+      - name: Retain the manually usable ZIP as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: evsc-rc18-native-shutdown-manual-zip
+          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
+          if-no-files-found: error
+
+      - name: Create prerelease without changing main or stable versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          # Publish tag once. The existing default-branch publish workflow
+          # attaches the optional ZIP after the release event; never race its
+          # release asset upload. HACS already uses the source tree.
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
+            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
+
+          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml
+          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+
+      - name: Retain the manually usable ZIP as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: evsc-rc18-native-shutdown-manual-zip
+          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
+          if-no-files-found: error
+
+      - name: Create prerelease without changing main or stable versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          # Publish tag once. The existing default-branch publish workflow
+          # attaches the optional ZIP after the release event; never race its
+          # release asset upload. HACS already uses the source tree.
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
+            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."

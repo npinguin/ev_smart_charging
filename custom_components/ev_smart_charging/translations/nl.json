@@ -236,6 +236,11 @@
   },
   "options": {
     "step": {
+      "retire_to_v2": {
+        "title": "Tussenliggende Controller uitfaseren",
+        "description": "Alle Controller- en voertuigprofielen moeten eerst naar V2 zijn overgezet. Ontbreekt: {missing}. Historische gegevens en V1 Local-laadpunten blijven behouden.",
+        "data": {"confirm": "Ik bevestig dat de V2-import volledig is"}
+      },
       "init": {
         "description": "Configuratie van de gekoppelde entities.",
         "data": {
@@ -280,6 +285,7 @@
           "nominal_phase_voltage_v": "Nominale fasespanning (V); nodig om vermogen uit een stroomlimiet te berekenen"
         },
         "menu_options": {
+          "retire_to_v2": "Tussenliggende Controller uitfaseren na V2-import",
           "link_chargers": "Laadpunten koppelen"
         }
       },

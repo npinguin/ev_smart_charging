@@ -256,36 +256,73 @@ class EVSmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Choose existing physical Charger/Plug Device, or manual mode."""
         return await self._v2_select_source("charger", user_input)
 
+    def _v2_device_schema(self, kind):
+        from .v2.source_discovery import compatible_source_devices
+
+        return vol.Schema(
+            {
+                vol.Required("source_device_id"): vol.In(
+                    compatible_source_devices(self.hass, kind)
+                )
+            }
+        )
+
     async def _v2_select_source(self, kind, user_input):
-        from .v2.source_discovery import suggest_device_bindings
+        from .v2.source_discovery import (
+            compatible_source_devices,
+            suggest_device_bindings,
+        )
 
         if user_input is not None:
             defaults = {}
             device = user_input.get("source_device_id")
             if device:
                 try:
+                    if device not in compatible_source_devices(self.hass, kind):
+                        raise ValueError("incompatible_source_device")
                     defaults, _review = suggest_device_bindings(self.hass, device, kind)
                 except ValueError:
                     return self.async_show_form(
-                        step_id=f"v2_{kind}_source",
-                        data_schema=vol.Schema(
-                            {
-                                vol.Optional(
-                                    "source_device_id"
-                                ): selector.DeviceSelector()
-                            }
-                        ),
+                        step_id=f"v2_{kind}_source_device",
+                        data_schema=self._v2_device_schema(kind),
                         errors={"base": "invalid_v2_configuration"},
                     )
             setattr(self, f"_v2_{kind}_defaults", defaults)
             setattr(self, f"_v2_{kind}_source_selected", True)
             return await getattr(self, f"async_step_v2_{kind}")()
-        return self.async_show_form(
+        options = [f"v2_{kind}_source_manual"]
+        if compatible_source_devices(self.hass, kind):
+            options.insert(0, f"v2_{kind}_source_device")
+        return self.async_show_menu(
             step_id=f"v2_{kind}_source",
-            data_schema=vol.Schema(
-                {vol.Optional("source_device_id"): selector.DeviceSelector()}
-            ),
+            menu_options=options,
         )
+
+    async def async_step_v2_vehicle_source_device(self, user_input=None):
+        return await self._v2_select_device("vehicle", user_input)
+
+    async def async_step_v2_charger_source_device(self, user_input=None):
+        return await self._v2_select_device("charger", user_input)
+
+    async def _v2_select_device(self, kind, user_input):
+        if user_input is not None:
+            if not user_input.get("source_device_id"):
+                return self.async_show_form(
+                    step_id=f"v2_{kind}_source_device",
+                    data_schema=self._v2_device_schema(kind),
+                    errors={"source_device_id": "required"},
+                )
+            return await self._v2_select_source(kind, user_input)
+        return self.async_show_form(
+            step_id=f"v2_{kind}_source_device",
+            data_schema=self._v2_device_schema(kind),
+        )
+
+    async def async_step_v2_vehicle_source_manual(self, user_input=None):
+        return await self._v2_select_source("vehicle", {})
+
+    async def async_step_v2_charger_source_manual(self, user_input=None):
+        return await self._v2_select_source("charger", {})
 
     async def async_step_v2_migrate(self, user_input=None):
         """Choose only the original source; no V1 setting is ever written."""
@@ -723,9 +760,12 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Simple navigation, without an extra device or configuration layer."""
+        if self.config_entry.options.get("retired_to_v2"):
+            return self.async_abort(reason="intermediate_controller_retired")
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "retire_to_v2",
                 "policy",
                 "link_chargers",
                 "add_vehicle",
@@ -733,6 +773,36 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
                 "delete_vehicle",
                 "assign_vehicle",
             ],
+        )
+
+    async def async_step_retire_to_v2(self, user_input=None):
+        """Retire duplicate runtime after explicit complete V2 import."""
+        from .v2.intermediate_conversion import retirement_gaps
+
+        source = self.config_entry
+        try:
+            missing = retirement_gaps(self.hass, source)
+        except (ValueError, TypeError, KeyError):
+            return self.async_abort(reason="intermediate_profiles_invalid")
+        if missing:
+            return self.async_show_form(
+                step_id="retire_to_v2",
+                data_schema=vol.Schema({}),
+                errors={"base": "intermediate_import_incomplete"},
+                description_placeholders={"missing": ", ".join(missing)},
+            )
+        if user_input is not None and user_input.get("confirm") is True:
+            return self.async_create_entry(
+                title="",
+                data={**source.options, "retired_to_v2": True},
+            )
+        return self.async_show_form(
+            step_id="retire_to_v2",
+            data_schema=vol.Schema(
+                {vol.Required("confirm", default=False): selector.BooleanSelector()}
+            ),
+            errors={"base": "confirm_required"} if user_input is not None else {},
+            description_placeholders={"missing": "None"},
         )
 
     async def async_step_link_chargers(self, user_input=None):

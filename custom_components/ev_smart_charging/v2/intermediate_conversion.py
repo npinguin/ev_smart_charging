@@ -47,11 +47,16 @@ def preview_intermediate(entry):
     options = dict(entry.options)
     warnings = []
     source = entry.entry_id
+    try:
+        max_parallel = int(options.get("max_parallel", 1))
+        horizon_days = int(options.get("planning_horizon_days", 2))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigurationError("intermediate_controller_requires_review") from exc
     controller = {
         "uid": _uid(source, "controller"),
         "name": entry.title or "Home charging",
-        "max_parallel": int(options.get("max_parallel", 1)),
-        "horizon_days": int(options.get("planning_horizon_days", 2)),
+        "max_parallel": max_parallel,
+        "horizon_days": horizon_days,
         "physical_enabled": False,
         "peak_shaving_enabled": False,
     }
@@ -61,7 +66,11 @@ def preview_intermediate(entry):
             controller[key] = positive
     site = options.get("site_power_sensor")
     if options.get("peak_shaving_enabled"):
-        if site and controller.get("peak_target_kw"):
+        if (
+            isinstance(site, str)
+            and site.startswith("sensor.")
+            and controller.get("peak_target_kw")
+        ):
             controller.update(
                 {
                     "site_power_entity": site,
@@ -175,3 +184,28 @@ def preview_intermediate(entry):
         "physical_cutover_permitted": False,
         "destructive_changes": False,
     }
+
+
+def retirement_gaps(hass, entry):
+    """List incomplete reviewed V2 imports before retiring the old supervisor.
+
+    This shares exactly the same deterministic identity contract as the
+    existing Controller/Vehicle conversion preview; no second importer.
+    """
+    from . import ENTRY_CONTROLLER, ENTRY_VEHICLE
+    from .catalog import entries_of
+
+    plan = preview_intermediate(entry)
+    controllers = {item.data["uid"] for item in entries_of(hass, ENTRY_CONTROLLER)}
+    vehicles = {item.data["uid"] for item in entries_of(hass, ENTRY_VEHICLE)}
+    missing = []
+    if plan["controller"]["uid"] not in controllers:
+        missing.append("Controller")
+    missing.extend(
+        vehicle["name"]
+        for vehicle in plan["vehicles"]
+        if vehicle["uid"] not in vehicles
+    )
+    if entry.options.get("participants"):
+        missing.append("unlink old Coordinated participants")
+    return missing

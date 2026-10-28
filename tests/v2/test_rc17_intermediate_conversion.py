@@ -122,3 +122,28 @@ def test_invalid_historical_ready_is_not_autoconverted_to_daily_0800():
     assert plan["ready_for_automatic_vehicle_creation"] is False
     assert plan["vehicle_ready_review_required"] == ["q8"]
     assert "ready_by" not in plan["vehicles"][0]
+
+
+def test_malformed_legacy_numeric_policy_requires_review_not_uncaught_error():
+    for options in (
+        {"max_parallel": "not-a-number"},
+        {"planning_horizon_days": None},
+        {"max_parallel": float("inf")},
+    ):
+        with pytest.raises(ConfigurationError, match="requires_review"):
+            preview_intermediate(interim(options))
+
+
+def test_unverified_peak_meter_entity_never_enables_peak_shaving():
+    plan = preview_intermediate(
+        interim(
+            {
+                "peak_shaving_enabled": True,
+                "site_power_sensor": "switch.unrelated_device",
+                "peak_target_kw": 8,
+            }
+        )
+    )
+    assert plan["controller"]["peak_shaving_enabled"] is False
+    assert "site_power_entity" not in plan["controller"]
+    assert any("Peak shaving requested" in item for item in plan["warnings"])

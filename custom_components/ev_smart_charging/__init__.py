@@ -140,10 +140,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await hass.config_entries.async_forward_entry_setups(
                     entry,
                     (
-                        [Platform.SENSOR, Platform.SWITCH]
+                        (
+                            [
+                                Platform.SENSOR,
+                                Platform.SELECT,
+                                Platform.BINARY_SENSOR,
+                                Platform.SWITCH,
+                            ]
+                            if obj.connection_source == "manual"
+                            else [
+                                Platform.SENSOR,
+                                Platform.SELECT,
+                                Platform.BINARY_SENSOR,
+                            ]
+                        )
                         if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
-                        and obj.connection_source == "manual"
-                        else [Platform.SENSOR]
+                        else (
+                            [Platform.SENSOR, Platform.SELECT, Platform.NUMBER]
+                            if entry.data[CONTROLLER_ENTRY_MARKER] == "vehicle_v2"
+                            else [Platform.SENSOR]
+                        )
                     ),
                 )
             else:
@@ -161,6 +177,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         return True
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        if entry.options.get("retired_to_v2"):
+            # Historical metadata is retained for audit/rollback. No third
+            # Controller runtime, timer, sensor or physical writer is started.
+            entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+            return True
         from .vehicle_sensors import cleanup_orphan_vehicle_registry
 
         cleanup_orphan_vehicle_registry(hass, entry)
@@ -249,11 +270,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Stop command-owner first, then release sensors and Config Entry.
             await obj.async_stop()
         platforms = [Platform.SENSOR]
-        if (
-            entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2"
-            and obj.connection_source == "manual"
-        ):
-            platforms.append(Platform.SWITCH)
+        if entry.data[CONTROLLER_ENTRY_MARKER] == "vehicle_v2":
+            platforms.extend([Platform.SELECT, Platform.NUMBER])
+        if entry.data[CONTROLLER_ENTRY_MARKER] == "charger_v2":
+            platforms.extend([Platform.SELECT, Platform.BINARY_SENSOR])
+            if obj.connection_source == "manual":
+                platforms.append(Platform.SWITCH)
         unloaded = all(
             await asyncio.gather(
                 *[
@@ -267,6 +289,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return unloaded
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
+        if entry.options.get("retired_to_v2") and not isinstance(
+            hass.data[DOMAIN].get(entry.entry_id), ChargeSupervisor
+        ):
+            # Already retired, no platform/runtime was ever registered.
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            return True
+        # During the retirement Options reload the new options are already
+        # visible. The old live supervisor must still be explicitly stopped.
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
         )

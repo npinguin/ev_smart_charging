@@ -175,17 +175,17 @@
         }
       },
       "v2_vehicle_source": {
-        "title": "Select existing HA vehicle device",
-        "description": "Optionally select a native Home Assistant device. Only uniquely matching source entities are suggested; review each mapping. Leave blank for manual configuration.",
-        "data": {
-          "source_device_id": "Existing Home Assistant device (optional)"
+        "title": "Add vehicle",
+        "menu_options": {
+          "v2_vehicle_source_device": "Use existing Home Assistant device",
+          "v2_vehicle_source_manual": "Configure manually"
         }
       },
       "v2_charger_source": {
-        "title": "Select existing HA charger device",
-        "description": "Optionally select a native Home Assistant device. Only uniquely matching source entities are suggested; review each mapping. Leave blank for manual configuration.",
-        "data": {
-          "source_device_id": "Existing Home Assistant device (optional)"
+        "title": "Add charger",
+        "menu_options": {
+          "v2_charger_source_device": "Use existing Home Assistant device",
+          "v2_charger_source_manual": "Configure manually"
         }
       },
       "v2_convert_controller": {
@@ -207,6 +207,20 @@
         "description": "Profile data is suggested. Verify Ready By, SoC source, battery capacity and user before Save. The original source remains untouched.",
         "data": {
           "vehicle_uid": "Vehicle"
+        }
+      },
+      "v2_charger_source_device": {
+        "title": "Select existing HA charger device",
+        "description": "Select a device to suggest entity mappings. Review each suggestion in the next step. Go back to choose manual configuration.",
+        "data": {
+          "source_device_id": "Home Assistant device"
+        }
+      },
+      "v2_vehicle_source_device": {
+        "title": "Select existing HA vehicle device",
+        "description": "Select a device to suggest entity mappings. Review each suggestion in the next step. Go back to choose manual configuration.",
+        "data": {
+          "source_device_id": "Home Assistant device"
         }
       }
     },
@@ -236,6 +250,11 @@
   },
   "options": {
     "step": {
+      "retire_to_v2": {
+        "title": "Retire intermediate Controller",
+        "description": "All Controller and Vehicle profiles must be imported before the old runtime is stopped. Missing: {missing}. Historical data and V1 Local Chargers remain untouched.",
+        "data": {"confirm": "I confirm the V2 import is complete"}
+      },
       "init": {
         "description": "Configuration of external entities.",
         "data": {
@@ -282,6 +301,7 @@
           "nominal_phase_voltage_v": "Nominal supply voltage per phase (V); required to derive power from a current limit"
         },
         "menu_options": {
+          "retire_to_v2": "Retire interim Controller after V2 import",
           "policy": "Charge Controller policy",
           "add_vehicle": "Add Vehicle",
           "edit_vehicle": "Edit Vehicle",
