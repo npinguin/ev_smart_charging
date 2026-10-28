@@ -131,7 +131,10 @@ class V2CostLedger(ActualCostLedger):
             result.vehicle_breakdown = parsed
             recorded_energy = float(value.get("prior_known_energy_kwh", 0))
             recorded_cost = float(value.get("prior_known_cost_eur", 0))
-            if not all(map(isfinite, (recorded_energy, recorded_cost))) or recorded_energy < 0:
+            if (
+                not all(map(isfinite, (recorded_energy, recorded_cost)))
+                or recorded_energy < 0
+            ):
                 return cls()
             history = value.get("prior_vehicle_totals", {})
             if not isinstance(history, dict):
@@ -146,9 +149,14 @@ class V2CostLedger(ActualCostLedger):
                     return cls()
                 parsed_history[uid] = {"energy_kwh": energy, "cost_eur": cost}
             if parsed_history and (
-                abs(sum(v["energy_kwh"] for v in parsed_history.values()) - recorded_energy)
+                abs(
+                    sum(v["energy_kwh"] for v in parsed_history.values())
+                    - recorded_energy
+                )
                 > 1e-5
-                or abs(sum(v["cost_eur"] for v in parsed_history.values()) - recorded_cost)
+                or abs(
+                    sum(v["cost_eur"] for v in parsed_history.values()) - recorded_cost
+                )
                 > 1e-5
             ):
                 return cls()
@@ -166,9 +174,7 @@ class V2CostLedger(ActualCostLedger):
             uid: dict(value) for uid, value in self.prior_vehicle_totals.items()
         }
         for uid, value in self.vehicle_breakdown.items():
-            bucket = recorded.setdefault(
-                uid, {"energy_kwh": 0.0, "cost_eur": 0.0}
-            )
+            bucket = recorded.setdefault(uid, {"energy_kwh": 0.0, "cost_eur": 0.0})
             bucket["energy_kwh"] += value["energy_kwh"]
             bucket["cost_eur"] += value["cost_eur"]
         return {
