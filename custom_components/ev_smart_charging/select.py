@@ -317,15 +317,9 @@ class V2VehicleSelection(SelectEntity):
 
     @property
     def device_info(self):
-        from .v2.catalog import details
+        from .v2.entities import logical_device_info
 
-        info = details(self.entry)
-        return {
-            "identifiers": {(DOMAIN, f"v2:charger:{self.entry.data['uid']}")},
-            "name": info["name"],
-            "manufacturer": "EV Smart Charging",
-            "model": "Charger V2",
-        }
+        return logical_device_info(self.entry)
 
     def _choices(self):
         from .v2.catalog import catalog
