@@ -113,7 +113,14 @@ def test_trusted_native_charging_state_and_power_agree(hass):
 
 
 async def test_native_charger_statuses_are_registered_and_follow_source_events(hass):
-    """Exercise HA entity registry and event listeners, not just Python getters."""
+    """Exercise supported HA registry platforms and their source listeners."""
+    from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+
+    # Older HA test matrix versions only forward the original Sensor platform
+    # (explicit compatibility fallback in __init__.py). V2 multi-platform
+    # device UX is tested on HA >= 2024.7; upstream V1 remains supported.
+    if (MAJOR_VERSION, MINOR_VERSION) < (2024, 7):
+        return
     from homeassistant.config_entries import ConfigEntryState
     from homeassistant.helpers.entity_registry import async_get as get_registry
     from tests.v2.test_ha_v2_runtime import _setup_entries
