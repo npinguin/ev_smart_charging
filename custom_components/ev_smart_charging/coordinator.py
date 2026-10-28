@@ -1395,11 +1395,10 @@ class EVSmartChargingCoordinator:
         if price_state is None or price_state.state is None:
             return "Input sensors not ready."
 
-        ev_soc = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR) or ""
-        if ev_soc:
-            ev_soc_state = self.hass.states.get(ev_soc)
-            if ev_soc_state is None or ev_soc_state.state is None:
-                return "Input sensors not ready."
+        ev_soc = get_parameter(self.config_entry, CONF_EV_SOC_SENSOR)
+        ev_soc_state = self.hass.states.get(ev_soc)
+        if ev_soc_state is None or ev_soc_state.state is None:
+            return "Input sensors not ready."
 
         ev_target_soc = (
             get_parameter(self.config_entry, CONF_EV_TARGET_SOC_SENSOR) or ""
