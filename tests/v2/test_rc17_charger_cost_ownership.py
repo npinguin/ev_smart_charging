@@ -93,3 +93,35 @@ async def test_old_controller_cost_store_migrates_once_to_charger_uid(hass):
     assert (await again._cost_ledger("white")).summary()[
         "known_recorded_cost_eur"
     ] == 0.2
+
+
+async def test_legacy_cost_archive_remains_found_after_controller_transfer(hass):
+    white, _, _ = make_catalog(hass)
+    prior = V2ControllerRuntime(hass, _controller(hass, "north"))
+    ledger, _, _ = _charged_ledger()
+    await prior._cost_store.async_save({"white": ledger.to_storage()})
+
+    hass.config_entries.async_update_entry(white, options={"controller_uid": "south"})
+    current = V2ControllerRuntime(hass, _controller(hass, "south"))
+    await current._restore_legacy_costs()
+    loaded = await current._cost_ledger("white")
+    assert loaded.summary()["known_recorded_energy_kwh"] == 1
+    assert loaded.summary()["known_recorded_cost_eur"] == 0.2
+
+
+async def test_conflicting_old_controller_archives_fail_closed(hass):
+    make_catalog(hass)
+    north = V2ControllerRuntime(hass, _controller(hass, "north"))
+    south = V2ControllerRuntime(hass, _controller(hass, "south"))
+    ledger, now, prices = _charged_ledger()
+    await north._cost_store.async_save({"white": ledger.to_storage()})
+    ledger.observe(
+        now + timedelta(minutes=4), 12, "sensor.charger_meter", prices, "audi"
+    )
+    await south._cost_store.async_save({"white": ledger.to_storage()})
+
+    await south._restore_legacy_costs()
+    assert "white" not in south._legacy_costs
+    assert (await south._cost_ledger("white")).summary()[
+        "known_recorded_cost_eur"
+    ] is None
