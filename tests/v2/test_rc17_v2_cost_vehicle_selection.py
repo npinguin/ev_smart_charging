@@ -86,10 +86,12 @@ def test_restored_vehicle_breakdown_is_same_evidence_not_second_ledger():
     assert V2CostLedger.from_storage(bad).vehicle_breakdown == {}
 
 
-async def test_v2_select_is_native_and_uses_canonical_options(hass, store):
+async def test_v2_select_is_native_and_uses_canonical_options(hass, store, monkeypatch):
     white, _, _ = make_catalog(hass)
     select = V2VehicleSelection(white)
     select.hass = hass
+    # Bare entity is intentionally not registered to an HA platform here.
+    monkeypatch.setattr(select, "async_write_ha_state", lambda: None)
     assert "None" in select.options
     assert "Audi" in select.options
     assert select.current_option == "Audi"
