@@ -68,8 +68,7 @@ async def test_native_binary_platform_creates_correct_entities(hass):
     assert {item.key for item in entities} == {"connected", "charging"}
     assert all(item.device_info["model"] == "Charger V2" for item in entities)
     assert all(
-        next(iter(item.device_info["identifiers"]))[0] == DOMAIN
-        for item in entities
+        next(iter(item.device_info["identifiers"]))[0] == DOMAIN for item in entities
     )
 
 
