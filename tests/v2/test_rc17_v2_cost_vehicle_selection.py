@@ -352,7 +352,5 @@ def test_numeric_meter_string_is_normalized_and_corrupt_history_is_rejected():
     assert ledger.summary()["known_recorded_cost_eur"] == 0.5
 
     invalid = ledger.to_storage()
-    invalid["prior_vehicle_totals"] = {
-        "audi": {"energy_kwh": "invalid", "cost_eur": 1}
-    }
+    invalid["prior_vehicle_totals"] = {"audi": {"energy_kwh": "invalid", "cost_eur": 1}}
     assert V2CostLedger.from_storage(invalid).vehicle_breakdown == {}
