@@ -374,9 +374,7 @@ def test_corrupt_recorded_vehicle_history_fails_closed(bad_archive):
         {
             "prior_known_energy_kwh": 1,
             "prior_known_cost_eur": 0.2,
-            "prior_vehicle_totals": {
-                "audi": {"energy_kwh": 1, "cost_eur": 0.2}
-            },
+            "prior_vehicle_totals": {"audi": {"energy_kwh": 1, "cost_eur": 0.2}},
         }
     )
     old.update(bad_archive)
