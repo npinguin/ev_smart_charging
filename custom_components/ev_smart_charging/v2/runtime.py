@@ -264,6 +264,46 @@ class V2ControllerRuntime:
         # One trailing refresh, not a task per source event.
         self._refresh_requested = False
 
+    async def _restore_legacy_costs(self):
+        """Read previous Controller archives without inventing a merged bill.
+
+        Before the Charger-keyed ledger, moving a Charger could leave its
+        historic cost record under another Controller's storage key.
+        Import a single unambiguous source; conflicting independent
+        histories require explicit review rather than silent data loss or
+        fabricated aggregation.
+        """
+        from . import ENTRY_CONTROLLER
+        from .catalog import entries_of
+
+        candidates = {}
+        ambiguous = set()
+        for entry in entries_of(self.hass, ENTRY_CONTROLLER):
+            uid = entry.data["uid"]
+            store = (
+                self._cost_store
+                if uid == self.entry.data["uid"]
+                else Store(self.hass, 1, f"{DOMAIN}.v2_actual_cost_{uid}")
+            )
+            snapshot = await store.async_load()
+            if not isinstance(snapshot, dict):
+                continue
+            for charger_uid, value in snapshot.items():
+                if not isinstance(charger_uid, str) or not isinstance(value, dict):
+                    continue
+                if charger_uid in candidates and candidates[charger_uid] != value:
+                    ambiguous.add(charger_uid)
+                else:
+                    candidates[charger_uid] = value
+        for charger_uid in ambiguous:
+            candidates.pop(charger_uid, None)
+            _LOGGER.error(
+                "V2 Charger %s has conflicting old cost archives; "
+                "preserving source files for manual reconciliation",
+                charger_uid,
+            )
+        self._legacy_costs = candidates
+
     async def _cost_ledger(self, charger_uid):
         """Restore one authoritative ledger from the Charger's stable UID.
 
@@ -303,8 +343,7 @@ class V2ControllerRuntime:
         self._soc_estimator = SocEstimator(restored)
         self._session_progress = SessionProgress(await self._session_store.async_load())
         self._budget_guard = CostBudgetGuard(await self._budget_store.async_load())
-        stored_costs = await self._cost_store.async_load()
-        self._legacy_costs = stored_costs if isinstance(stored_costs, dict) else {}
+        await self._restore_legacy_costs()
         if self._unsub is None:
             self._unsub = async_track_time_interval(self.hass, self._on_tick, _INTERVAL)
         await self.async_refresh()
