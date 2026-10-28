@@ -480,6 +480,7 @@ class V2ControllerRuntime:
                 }
                 result["vehicle_sources"] = {
                     charger.vehicle_uid: {
+                        "charger_uid": uid,
                         "effective_soc": observed[uid]["soc"],
                         "soc_quality": observed[uid]["soc_quality"],
                     }
