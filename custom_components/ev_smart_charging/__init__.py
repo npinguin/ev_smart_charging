@@ -274,9 +274,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return unloaded
 
     if entry.data.get(CONTROLLER_ENTRY_MARKER) == CONTROLLER_ENTRY_TYPE:
-        if entry.options.get("retired_to_v2"):
+        if (
+            entry.options.get("retired_to_v2")
+            and not isinstance(hass.data[DOMAIN].get(entry.entry_id), ChargeSupervisor)
+        ):
+            # Already retired, no platform/runtime was ever registered.
             hass.data[DOMAIN].pop(entry.entry_id, None)
             return True
+        # During the retirement Options reload the new options are already
+        # visible. The old live supervisor must still be explicitly stopped.
         unloaded = await hass.config_entries.async_forward_entry_unload(
             entry, Platform.SENSOR
         )
