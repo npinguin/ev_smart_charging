@@ -488,15 +488,36 @@ class V2ControllerRuntime:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # Never leave a stale grant/status after a planner exception.
-                # Log traceback for defect correction; no native write occurs.
+                # An invalid plan is not sufficient to stop an EVSE that this
+                # Controller previously started. Explicitly shut down only
+                # already-owned V2 targets, and keep closed writers reserved
+                # until a deliberate reload/repair; never silently resume.
                 _LOGGER.exception("EVSC V2 planner failed: %s", exc)
+                shutdown = {}
+                for uid, writer in tuple(self._writers.items()):
+                    try:
+                        status = await writer.async_shutdown()
+                    except Exception:
+                        _LOGGER.exception(
+                            "V2 planner failure: native OFF raised for %s", uid
+                        )
+                        status = "STOP_EXCEPTION"
+                    shutdown[uid] = status
+                    if status not in ("NOT_OWNED", "VERIFIED_OFF"):
+                        _LOGGER.error(
+                            "V2 planner failure: OFF not verified for %s (%s); "
+                            "check the physical EVSE immediately",
+                            uid,
+                            status,
+                        )
                 result = {
                     "status": "INVALID_CONFIGURATION",
                     "reason": type(exc).__name__,
                     "controller_uid": self.entry.data["uid"],
                     "advisory_only": True,
                     "physical_actuation_authorized": False,
+                    "execution_status": "PLANNER_FAILED_SAFE_HOLD",
+                    "native_shutdown": shutdown,
                 }
             if not self._stopped:
                 self.snapshot = result
