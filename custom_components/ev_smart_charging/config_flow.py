@@ -776,34 +776,14 @@ class ControllerOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_retire_to_v2(self, user_input=None):
-        """Retire duplicate intermediate runtime after explicit complete import.
-
-        Do not delete the historical entry or its persisted source data.
-        Original Local Chargers are completely unaffected by this choice.
-        """
-        from .v2.intermediate_conversion import preview_intermediate
+        """Retire duplicate runtime after explicit complete V2 import."""
+        from .v2.intermediate_conversion import retirement_gaps
 
         source = self.config_entry
         try:
-            plan = preview_intermediate(source)
+            missing = retirement_gaps(self.hass, source)
         except (ValueError, TypeError, KeyError):
             return self.async_abort(reason="intermediate_profiles_invalid")
-        migrated_controllers = {
-            entry.data.get("uid") for entry in v2_entries(self.hass, V2_CONTROLLER)
-        }
-        migrated_vehicles = {
-            entry.data.get("uid") for entry in v2_entries(self.hass, V2_VEHICLE)
-        }
-        missing = []
-        if plan["controller"]["uid"] not in migrated_controllers:
-            missing.append("Controller")
-        missing.extend(
-            vehicle["name"]
-            for vehicle in plan["vehicles"]
-            if vehicle["uid"] not in migrated_vehicles
-        )
-        if source.options.get("participants"):
-            missing.append("unlink old Coordinated participants")
         if missing:
             return self.async_show_form(
                 step_id="retire_to_v2",
