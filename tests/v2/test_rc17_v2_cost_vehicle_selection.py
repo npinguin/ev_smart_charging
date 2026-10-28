@@ -82,9 +82,7 @@ def test_restored_vehicle_breakdown_is_same_evidence_not_second_ledger():
     assert restored.summary()["known_subtotal_eur"] == 0.2
     # Corrupted/duplicated attribution is never accepted as vehicle evidence.
     bad = ledger.to_storage()
-    bad["vehicle_breakdown"] = {
-        "audi": {"energy_kwh": 9999.0, "cost_eur": 9999.0}
-    }
+    bad["vehicle_breakdown"] = {"audi": {"energy_kwh": 9999.0, "cost_eur": 9999.0}}
     assert V2CostLedger.from_storage(bad).vehicle_breakdown == {}
 
 
@@ -107,8 +105,6 @@ async def test_vehicle_switch_cannot_relabel_charging_power(hass, store):
     white, _, _ = make_catalog(hass)
     hass.states.async_set("switch.white", "on")
     with pytest.raises(ConfigurationError, match="stop_charging_before_vehicle_change"):
-        await async_apply_charger_options(
-            hass, "white", {"vehicle_uid": "guest"}
-        )
+        await async_apply_charger_options(hass, "white", {"vehicle_uid": "guest"})
     assert white.options.get("vehicle_uid", white.data["vehicle_uid"]) == "audi"
     assert store.saves == 0
