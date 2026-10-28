@@ -29,7 +29,8 @@ async def test_retired_historical_config_entry_is_inert_across_reload(hass):
     # No old Supervisor and no 31 transitional Controller sensors
     # are forwarded for a safely retired entry.
     assert not [
-        entity for entity in hass.states.async_all()
+        entity
+        for entity in hass.states.async_all()
         if entity.entity_id.startswith("sensor.historical_controller_")
     ]
     assert await async_unload_entry(hass, entry)
