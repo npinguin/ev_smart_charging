@@ -170,3 +170,58 @@ async def test_no_implicit_vehicle_and_idempotent_recovery(hass, store):
     assert not await ownership.async_move_vehicle(hass, "guest", None)
     assert not await ownership.async_recover_ownership(hass)
     assert store.saved is None
+
+
+async def test_native_binding_change_requires_disabled_controller_and_no_owner(hass, store):
+    """A live EVSE may not be silently rebound to another native writer."""
+    white, _, _ = make_catalog(hass)
+    controller = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "north"
+    )
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": True}
+    )
+    with pytest.raises(ConfigurationError, match="disable_controller_before_rebinding"):
+        await ownership.async_apply_charger_options(
+            hass, "white", {"control_entity": "switch.new"}
+        )
+    assert store.saves == 0
+    assert details(white)["control_entity"] == "switch.white"
+
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": False}
+    )
+    hass.data[f"{DOMAIN}.v2_native_writers"] = {
+        "switch.white": ("north", "white")
+    }
+    with pytest.raises(ConfigurationError, match="disable_controller_before_rebinding"):
+        await ownership.async_apply_charger_options(
+            hass, "white", {"control_entity": "switch.new"}
+        )
+    assert store.saves == 0
+
+    hass.data[f"{DOMAIN}.v2_native_writers"].clear()
+    assert await ownership.async_apply_charger_options(
+        hass, "white", {"control_entity": "switch.new"}
+    )
+    assert details(white)["control_entity"] == "switch.new"
+
+
+async def test_equivalent_implicit_native_binding_may_be_saved_while_enabled(hass, store):
+    """An explicit default isn't a physical writer change."""
+    white, _, _ = make_catalog(hass)
+    controller = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data.get("uid") == "north"
+    )
+    hass.config_entries.async_update_entry(
+        controller, options={"physical_enabled": True}
+    )
+    old_semantics = ownership.model(white).control_semantics
+    assert await ownership.async_apply_charger_options(
+        hass, "white", {"control_semantics": old_semantics}
+    )
+    assert details(white)["control_entity"] == "switch.white"
