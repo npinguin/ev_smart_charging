@@ -40,6 +40,13 @@ async def async_setup_entry(
 ):  # pylint: disable=unused-argument
     """Setup select platform."""
     _LOGGER.debug("EVSmartCharging.select.py")
+    from .v2 import ENTRY_CHARGER, TYPES as V2_TYPES
+
+    entry_type = entry.data.get("__evsc_entry_type")
+    if entry_type in V2_TYPES:
+        if entry_type == ENTRY_CHARGER:
+            async_add_devices([V2VehicleSelection(entry)])
+        return
     coordinator = hass.data[DOMAIN][entry.entry_id]
     selects = []
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
@@ -286,5 +293,89 @@ class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
         selected = validate_assignments(requested, profiles, chargers)
         self.hass.config_entries.async_update_entry(
             controller, options={**controller.options, ASSIGNMENTS: selected}
+        )
+        self.async_write_ha_state()
+
+
+class V2VehicleSelection(SelectEntity):
+    """Daily assignment on the existing V2 Charger, not another device.
+
+    The Charger Config Entry owns vehicle_uid. This control is a projection
+    of that one field; it must not restore a separate SelectEntity value.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Vehicle"
+    _attr_icon = "mdi:car"
+
+    def __init__(self, entry):
+        self.entry = entry
+        self._attr_unique_id = (
+            f"{DOMAIN}_v2_charger_{entry.data['uid']}_vehicle_selection"
+        )
+
+    @property
+    def device_info(self):
+        from .v2.catalog import details
+
+        info = details(self.entry)
+        return {
+            "identifiers": {(DOMAIN, f"v2:charger:{self.entry.data['uid']}")},
+            "name": info["name"],
+            "manufacturer": "EV Smart Charging",
+            "model": "Charger V2",
+        }
+
+    def _choices(self):
+        from .v2.catalog import catalog
+
+        vehicles, _, _ = catalog(self.hass)
+        names = {}
+        for uid, vehicle in sorted(vehicles.items()):
+            names.setdefault(vehicle.name, []).append(uid)
+        choices = {"None": ""}
+        for name, uids in sorted(names.items()):
+            for uid in uids:
+                label = name if len(uids) == 1 and name != "None" else f"{name} ({uid})"
+                choices[label] = uid
+        return choices
+
+    @property
+    def options(self):
+        return list(self._choices())
+
+    @property
+    def current_option(self):
+        from .v2.catalog import model
+
+        uid = model(self.entry).vehicle_uid
+        return next(
+            (label for label, value in self._choices().items() if value == uid),
+            "None",
+        )
+
+    async def async_added_to_hass(self):
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{DOMAIN}_v2_relationships",
+                self.async_write_ha_state,
+            )
+        )
+
+    async def async_select_option(self, option):
+        from .v2.ownership import async_apply_charger_options
+
+        choices = self._choices()
+        if option not in choices:
+            raise ValueError("unknown_vehicle")
+        await async_apply_charger_options(
+            self.hass,
+            self.entry.data["uid"],
+            {"vehicle_uid": choices[option]},
         )
         self.async_write_ha_state()
