@@ -183,13 +183,25 @@ class V2CostLedger(ActualCostLedger):
             bucket = recorded.setdefault(uid, {"energy_kwh": 0.0, "cost_eur": 0.0})
             bucket["energy_kwh"] += value["energy_kwh"]
             bucket["cost_eur"] += value["cost_eur"]
+        # An empty ledger has no measured price/energy evidence. Publishing
+        # EUR 0 or 0 kWh here would disguise missing sources as free charging.
+        recorded = bool(
+            self.intervals
+            or self.prior_known_energy_kwh
+            or self.prior_known_cost_eur
+            or self.prior_vehicle_totals
+        )
         return {
             **super().summary(),
-            "known_recorded_energy_kwh": round(
-                self.prior_known_energy_kwh + self.known_energy, 4
+            "known_recorded_energy_kwh": (
+                round(self.prior_known_energy_kwh + self.known_energy, 4)
+                if recorded
+                else None
             ),
-            "known_recorded_cost_eur": round(
-                self.prior_known_cost_eur + self.known_cost, 4
+            "known_recorded_cost_eur": (
+                round(self.prior_known_cost_eur + self.known_cost, 4)
+                if recorded
+                else None
             ),
             "recorded_vehicle_breakdown": {
                 uid: {
