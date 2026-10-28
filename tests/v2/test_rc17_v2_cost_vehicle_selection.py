@@ -110,3 +110,70 @@ async def test_vehicle_switch_cannot_relabel_charging_power(hass, store):
         await async_apply_charger_options(hass, "white", {"vehicle_uid": "guest"})
     assert white.options.get("vehicle_uid", white.data["vehicle_uid"]) == "audi"
     assert store.saves == 0
+
+
+@pytest.mark.parametrize(
+    "source,reading,unit",
+    [
+        ("binary_sensor.white_charging", "on", None),
+        ("sensor.white_power", "3500", "W"),
+        ("switch.white", "on", None),
+    ],
+)
+async def test_reassignment_fails_closed_for_actual_native_activity(
+    hass, store, source, reading, unit
+):
+    white, _, _ = make_catalog(hass)
+    hass.config_entries.async_update_entry(
+        white,
+        options={
+            "charging_entity": "binary_sensor.white_charging",
+            "power_entity": "sensor.white_power",
+        },
+    )
+    hass.states.async_set(
+        source, reading, {"unit_of_measurement": unit} if unit else {}
+    )
+    with pytest.raises(ConfigurationError, match="stop_charging_before_vehicle_change"):
+        await async_apply_charger_options(hass, "white", {"vehicle_uid": "guest"})
+    assert store.saved is None
+
+
+async def test_vehicle_change_when_charger_verified_off_is_permitted(hass, store):
+    white, _, _ = make_catalog(hass)
+    hass.config_entries.async_update_entry(
+        white,
+        options={
+            "charging_entity": "binary_sensor.white_charging",
+            "power_entity": "sensor.white_power",
+        },
+    )
+    hass.states.async_set("binary_sensor.white_charging", "off")
+    hass.states.async_set(
+        "sensor.white_power", "0", {"unit_of_measurement": "W"}
+    )
+    hass.states.async_set("switch.white", "off")
+    assert await async_apply_charger_options(hass, "white", {"vehicle_uid": "guest"})
+    assert white.options["vehicle_uid"] == "guest"
+    assert store.saved is None
+
+
+def test_corrupt_cost_bucket_never_creates_financial_truth():
+    anchor = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    prices = [PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)]
+    ledger = V2CostLedger()
+    ledger.observe(anchor, 1, "sensor.meter", prices, vehicle_uid="audi")
+    ledger.observe(anchor + timedelta(minutes=1), 2, "sensor.meter", prices, "audi")
+    for invalid in (
+        {"audi": {"energy_kwh": -1, "cost_eur": 0.2}},
+        {"audi": {"energy_kwh": float("nan"), "cost_eur": 0.2}},
+        {"audi": {"energy_kwh": 1, "cost_eur": 9}},
+        {"audi": {"energy_kwh": 999, "cost_eur": 199}},
+        ["not_a_dict"],
+    ):
+        snapshot = ledger.to_storage()
+        snapshot["vehicle_breakdown"] = invalid
+        assert V2CostLedger.from_storage(snapshot).vehicle_breakdown == {}
+    legacy = ledger.to_storage()
+    legacy.pop("vehicle_breakdown")
+    assert V2CostLedger.from_storage(legacy).vehicle_breakdown[""]["energy_kwh"] == 1
