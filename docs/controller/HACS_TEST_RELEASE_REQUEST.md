@@ -1,6 +1,6 @@
-# HACS RC18 — full V1 + V2 functional test release request
+# HACS RC19 — full V1 + V2 functional test release request
 
-**Requested: 28 October 2026.** Package the entire installed integration from this exact tested commit as an immutable HACS **prerelease**, not a mock and not a stable tag. Run all 9 software checks on the **same publication SHA** before creating the release. Never change or overwrite a previously issued tag.
+**Requested: 28 October 2026. Existing immutable RC18 is retained; this request must create RC19 only.** Package the entire installed integration from this exact tested commit as an immutable HACS **prerelease**, not a mock and not a stable tag. Run all 9 software checks on the **same publication SHA** before creating the release. Never change or overwrite a previously issued tag.
 
 ## Baseline: upstream original V1 Local is accepted
 
