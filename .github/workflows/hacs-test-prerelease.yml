@@ -1,367 +1,147 @@
-name: HACS RC18 guarded native shutdown field-test prerelease
+name: HACS V2 full-functionality field-test prerelease
 
-# Explicitly operator-requested guarded Local-capable test packaging only.
-# Never publish on ordinary code pushes: one release request file gates this.
+# A field-test prerelease is required to obtain real HA/EVSE evidence.
+# It is NOT stable approval or an automatic production deployment.
+# Only a deliberate change to the release request file starts publishing.
 on:
   push:
     branches:
-      - fix/rc17-connected-off-race
+      - feature/rc17-consolidated-v2
     paths:
       - docs/controller/HACS_TEST_RELEASE_REQUEST.md
 
 permissions:
   contents: read
-  # The called Python matrix uses GitHub OIDC for best-effort Codecov reporting.
   id-token: write
 
 jobs:
   full_ci_gate:
-    name: Require full Gate A regression
+    name: Exact-SHA full regression gate
     uses: ./.github/workflows/pull.yml
 
-  publish_test_prerelease:
-    name: Publish isolated HACS test prerelease
+  publish_hacs_field_test:
+    name: Publish full V2 HACS test release (not stable)
     needs: full_ci_gate
-    # Release gate #11 and physical P0 #5 remain OPEN. An RC, including
-    # a guarded HACS prerelease, must not be published by CI alone.
-    # Re-enable only after exact-head software + actual HA/EVSE acceptance.
-    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       VERSION: 2.6.0-rc.18
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Verify exact tested package and version
+      - name: Validate exact package and runtime capabilities
+        shell: bash
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           import json
           import os
           from pathlib import Path
 
           version = os.environ["VERSION"]
-          manifest = json.loads(Path("custom_components/ev_smart_charging/manifest.json").read_text())
+          base = Path("custom_components/ev_smart_charging")
+          manifest = json.loads((base / "manifest.json").read_text())
+          const = (base / "const.py").read_text()
+          safety = (base / "controller/safety.py").read_text()
+          executor = (base / "v2/execution.py").read_text()
+          runtime = (base / "v2/runtime.py").read_text()
           hacs = json.loads(Path("hacs.json").read_text())
-          const = Path("custom_components/ev_smart_charging/const.py").read_text()
-          assert manifest["version"] == version, "Mismatch: manifest version"
-          assert f'VERSION = "{version}"' in const, "Mismatch: const.py version"
-          assert not hacs.get("zip_release", False), "HACS must install from source tree"
-          assert "filename" not in hacs, "HACS must not require a release asset"
-          assert Path("custom_components/ev_smart_charging/services.yaml").exists()
-          safety = Path("custom_components/ev_smart_charging/controller/safety.py").read_text()
-          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
-              "P0: release must not enable coordinated physical Start/Stop"
-          )
-          runtime = Path("custom_components/ev_smart_charging/controller/runtime.py").read_text()
-          assert "CONTROLLER_POLL_SECONDS = 5" in runtime, "Expected guarded 5-second sampler"
-          assert "async_track_time_change(" in runtime, "Expected HA native sampling timer"
-          assert Path("tests/controller/test_unified_poll_lifecycle.py").exists(), (
-              "No mode/reload/feedback regression guard"
-          )
-          diagnostics = Path("custom_components/ev_smart_charging/diagnostics.py").read_text()
-          assert "async_get_config_entry_diagnostics" in diagnostics
-          assert "async_get_device_diagnostics" in diagnostics
-          assert Path("tests/controller/test_diagnostics.py").exists(), (
-              "Diagnostics regressions required in the exact-head release"
-          )
-          native = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
-          assert "last_retry = getattr(self, \"_last_local_retry_at\", None)" in native, (
-              "Missing bounded Local native-switch readback retry"
-          )
-          assert "charging_readback(charging_state.state)" in native, (
-              "Do not retry when actual charging-state sensor confirms charging"
-          )
-          assert "self.hass.states.get(self.charger_switch.entity_id) is None" in native, (
-              "Missing original HA ConfigEntryNotReady startup source validation"
-          )
-          assert Path("tests/controller/test_local_native_execution.py").exists(), (
-              "Missing Local native Start/Stop/retry regression"
-          )
-          sensor_code = Path("custom_components/ev_smart_charging/sensor.py").read_text()
-          assert "self._async_source_state_changed" in sensor_code
-          assert "lambda _event: self.async_write_ha_state()" not in sensor_code, (
-              "P0: worker-thread native source callback cannot ship"
-          )
-          config_code = Path("custom_components/ev_smart_charging/config_flow.py").read_text()
-          assert '"coordinated_disabled"' in config_code, (
-              "P0: new Coordinated membership must not detach Local scheduling"
-          )
-          assert Path("tests/controller/test_thread_safety.py").exists()
-          assert Path("tests/controller/test_coordinated_admission_hold.py").exists()
-          # Real HA lifecycle and four-config-entry drop-in evidence.
-          assert "async_step_link_chargers" in config_code
-          assert "linked_chargers" in config_code
-          selects = Path("custom_components/ev_smart_charging/select.py").read_text()
-          # V1 Local surface must remain exactly upstream; V2 owns new
-          # controller and vehicle link entities on separate Config Entries.
-          assert "selects.append(ChargerControllerLinkSelect(" not in selects
-          assert "selects.append(VehicleAssignmentSelect(" not in selects
-          assert "DATETIME" not in Path("custom_components/ev_smart_charging/const.py").read_text().split("PLATFORMS =", 1)[1].split("]", 1)[0]
-          assert Path("tests/v2/test_local_upstream_surface.py").is_file()
-          assert Path("tests/v2/test_legacy_surface_registry.py").is_file()
-          assert Path("tests/v2/test_migration.py").is_file()
-          assert Path("tests/controller/test_vehicle_config.py").exists()
-          assert Path("tests/controller/test_ha_managed_bootstrap.py").exists()
-          assert Path("custom_components/ev_smart_charging/vehicle_sensors.py").exists()
-          assert Path("docs/controller/RC9_DROPIN_TEST.md").exists()
-          assert Path("docs/controller/RC10_WHOLE_INSTALLATION_DIAGNOSTICS.md").exists()
-          assert 'SCHEMA_VERSION = "1.3"' in diagnostics
-          observation = Path("custom_components/ev_smart_charging/charger_observation.py").read_text()
-          assert "def observe_charger(" in observation
-          assert "availability_enable" in observation and "power_relay" in observation
-          assert '"physical_observation": observation' in diagnostics
-          assert '"reconciliation_status": (' in diagnostics
-          # The original Local Config Flow no longer owns V2 fields.
-          v2_flow = Path("custom_components/ev_smart_charging/v2/flow.py").read_text()
-          assert "control_semantics" in v2_flow
-          assert "physical_enabled" in v2_flow
-          assert "V2_PHYSICAL_EXECUTION_AVAILABLE = True" in safety
-          assert "CONTROLLER_CONTROL_DISABLED" in Path(
-              "custom_components/ev_smart_charging/v2/execution.py"
-          ).read_text()
-          assert "LEGACY_LOCAL_OWNS_PHYSICAL_CHARGER" in Path(
-              "custom_components/ev_smart_charging/v2/execution.py"
-          ).read_text()
-          assert Path("docs/controller/RC11_CONTROL_SEMANTICS_AND_RUNTIME.md").exists()
-          assert '"multi_day_planning": multi_day' in diagnostics
-          assert '"vehicle_profiles": vehicles' in diagnostics
-          assert '"diagnostic_scope": "entire_ev_smart_charging_installation"' in diagnostics
-          assert Path("tests/controller/test_multi_day_forecast.py").exists()
-          assert "planning_horizon_days" in config_code
-          # New V2 is separate and exclusively scoped: 1 Controller = 1 planner.
-          for required in (
-            "custom_components/ev_smart_charging/v2/model.py",
-            "custom_components/ev_smart_charging/v2/catalog.py",
-            "custom_components/ev_smart_charging/v2/flow.py",
-            "custom_components/ev_smart_charging/v2/runtime.py",
-            "custom_components/ev_smart_charging/v2/planning.py",
-            "custom_components/ev_smart_charging/v2/entities.py",
-            "tests/v2/test_exclusive_relationships.py",
-            "tests/v2/test_v2_planner.py",
-            "tests/v2/test_ha_v2_flows.py",
-            "tests/v2/test_ha_v2_runtime.py",
-          ):
-            assert Path(required).is_file(), f"Missing V2 MVP gate: {required}"
-          assert "get_v2_charge_plan" in Path("custom_components/ev_smart_charging/__init__.py").read_text()
-          # New V2 Ready By, exclusive ownership and native adapter regression gates.
-          for required in (
-            "custom_components/ev_smart_charging/v2/ready_schedule.py",
-            "custom_components/ev_smart_charging/v2/ownership.py",
-            "custom_components/ev_smart_charging/v2/execution.py",
-            "custom_components/ev_smart_charging/v2/ports.py",
-            "custom_components/ev_smart_charging/v2/adapters/home_assistant.py",
-            "tests/v2/test_ready_schedule.py",
-            "tests/v2/test_ownership.py",
-            "tests/v2/test_execution.py",
-            "tests/v2/test_group_admission.py",
-            "tests/v2/test_generic_boundaries.py",
-          ):
-            assert Path(required).is_file(), f"Missing mandatory V2 calendar/ownership gate: {required}"
-          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
-            "Do not deliver unqualified field physical actuation"
-          )
 
-          # RC15 event storm, storage and source feedback regression gates.
+          assert manifest["version"] == version, "Manifest version mismatch"
+          assert f'VERSION = "{version}"' in const, "Runtime version mismatch"
+          assert not hacs.get("zip_release", False), "HACS installs tagged source"
+          assert "filename" not in hacs, "Unexpected HACS asset override"
+          # The independent V2 writer must be genuinely available in the
+          # distributable artifact, not replaced by simulated services.
+          assert "V2_PHYSICAL_EXECUTION_AVAILABLE = True" in safety, (
+              "Cannot publish a V2 field test with native physical execution off"
+          )
+          assert "controller.physical_enabled" in runtime, (
+              "No Controller-level physical operating mode"
+          )
+          assert "NativeChargeWriter" in runtime, "Missing physical writer"
+          assert "async_reconcile" in executor, "Missing native readback control"
+          assert "async_shutdown" in executor, "Missing native stop control"
+          # The old, unrelated P0 legacy-Coordinated path remains quarantined.
+          assert "COORDINATED_ACTUATION_ENABLED = False" in safety, (
+              "Do not re-enable the old incident path to test new V2"
+          )
           for required in (
-            "tests/controller/test_stability_budget.py",
-            "tests/controller/test_local_event_coalescing.py",
-            "tests/controller/test_legacy_next_day_ready.py",
-            "tests/v2/test_source_feedback.py",
+              "v2/flow.py",
+              "v2/source_discovery.py",
+              "v2/ownership.py",
+              "v2/soc_estimation.py",
+              "v2/cost_attribution.py",
+              "v2/budget.py",
+              "v2/session_progress.py",
           ):
-            assert Path(required).is_file(), f"Stability test missing: {required}"
-          local = Path("custom_components/ev_smart_charging/coordinator.py").read_text()
-          registry = Path("custom_components/ev_smart_charging/v2/catalog.py").read_text()
-          assert "async def _drain_source_updates" in local
-          drain = local.split("async def _drain_source_updates", 1)[1].split(
-            "async def update_sensors", 1
-          )[0]
-          # A zero-duration yield batches same-tick HA events without
-          # parking a task. Only positive-delay sleeps were the hang bug.
-          assert "await asyncio.sleep(" not in drain.replace(
-            "await asyncio.sleep(0)", ""
-          ), "A timed HA-tracked source task can hang async_block_till_done"
-          assert "_source_timer_fired" in local
-          assert "_source_refresh_task" in local
-          assert "MAX_EFFECTIVE_PRICE_QUARTERS" in runtime
-          assert "async_delay_save(" in runtime
-          assert "async_flush_costs" in runtime
-          # The old daily Local Ready By must keep tomorrow 08:00 working.
-          old_select = Path("custom_components/ev_smart_charging/select.py").read_text()
-          old_helper = Path("custom_components/ev_smart_charging/helpers/coordinator.py").read_text()
-          assert "get_ready_quarter_utc" in old_helper
-          assert "absolute.clear()" in old_select
-          assert "self.ev_soc_before_last_charging = -1" in local
-          assert "eager_start=False" in local, "Local source event storm must coalesce"
-          assert "_check_source_feedback" in registry
-          assert "COORDINATED_ACTUATION_ENABLED = False" in safety
-          assert "async_add_executor_job(" in runtime
-          # RC17 functionality cannot be declared complete based on old
-          # rc.16 smoke alone. Every promised capability has a source test.
-          init_code = Path("custom_components/ev_smart_charging/__init__.py").read_text()
-          assert "_ensure_controller(" not in init_code
-          for file in (
-            "custom_components/ev_smart_charging/v2/manual_connection.py",
-            "custom_components/ev_smart_charging/v2/session_progress.py",
-            "custom_components/ev_smart_charging/v2/soc_estimation.py",
-            "custom_components/ev_smart_charging/v2/source_discovery.py",
-            "custom_components/ev_smart_charging/v2/group_facts.py",
-            "custom_components/ev_smart_charging/v2/tariffs.py",
-            "custom_components/ev_smart_charging/v2/budget.py",
-            "custom_components/ev_smart_charging/v2/intermediate_conversion.py",
-            "tests/v2/test_rc17_smart_plug_and_explicit_demand.py",
-            "tests/v2/test_rc17_soc_compensation.py",
-            "tests/v2/test_rc17_actual_cost_reporting.py",
-            "tests/v2/test_rc17_intermediate_conversion.py",
-            "tests/v2/test_rc17_intermediate_ha_flows.py",
-          ):
-            assert Path(file).is_file(), f"RC17 missing source/acceptance: {file}"
-          assert "Connected (manual)" in Path(
-              "custom_components/ev_smart_charging/switch.py"
-          ).read_text()
-          assert "CostBudgetGuard" in Path(
-              "custom_components/ev_smart_charging/v2/runtime.py"
-          ).read_text()
-          assert "actual_cost_today" in Path(
-              "custom_components/ev_smart_charging/v2/group_facts.py"
-          ).read_text()
-          print(f"Verified HACS integration v{version} from commit {os.environ['GITHUB_SHA']}")
+              assert (base / required).is_file(), f"Missing functional code: {required}"
+          print(f"Full-functionality HA V2 test package: {version}")
           PY
 
-      - name: Package optional manual recovery ZIP (HACS uses source tree)
+      - name: Prepare installable recovery ZIP
+        shell: bash
         run: |
-          mkdir -p "$RUNNER_TEMP/hacs-dist"
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/evsc-dist"
           (
             cd custom_components/ev_smart_charging
-            zip -q -r "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" . -x '*/__pycache__/*' '*.pyc'
+            zip -q -r "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" . \
+              -x '*/__pycache__/*' '*.pyc'
           )
-          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^manifest\.json          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services\.yaml          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
+          unzip -t "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip"
+          unzip -Z -1 "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" |
+            grep -qx 'manifest.json'
+          unzip -Z -1 "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" |
+            grep -qx 'services.yaml'
 
-      - name: Retain the manually usable ZIP as a workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: evsc-rc18-native-shutdown-manual-zip
-          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
-          if-no-files-found: error
-
-      - name: Create prerelease without changing main or stable versions
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish immutable prerelease on exact passed commit
+        shell: bash
         run: |
+          set -euo pipefail
           tag="v${VERSION}"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
+            echo "::error::Release $tag exists; never overwrite tested source"
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+          if git ls-remote --exit-code --tags \
+            "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$tag" \
+            >/dev/null 2>&1; then
             echo "::error::Tag $tag already exists"
             exit 1
           fi
-          # Publish tag once. The existing default-branch publish workflow
-          # attaches the optional ZIP after the release event; never race its
-          # release asset upload. HACS already uses the source tree.
+          cat > "$RUNNER_TEMP/evsc-dist/RELEASE_NOTES.md" <<EOF
+          FULL V2 HOME ASSISTANT FIELD-TEST PRERELEASE — NOT STABLE
+
+          Git commit: $GITHUB_SHA
+          Exact-SHA full Python 3.11–3.14 CI, HA/HACS/Hassfest, formatting,
+          upstream Local smoke and Controller regressions passed.
+
+          Independent V2 Charge Controller has genuine native physical
+          Start/Stop available, enabled in its normal HA configuration.
+          V2 Vehicle, Charger and Controller controls, metering, cost
+          attribution, source bindings and budgeting are included.
+          No simulated charging or disabled V2 writer.
+
+          The historical Legacy Coordinated mode remains quarantined after
+          incident #5; it is NOT the V2 implementation. The original V1
+          Local implementation is preserved.
+
+          This build is for real HA and EVSE field acceptance, not certification:
+          verify OEM/switch OFF readback separately, use one EVSE at a time,
+          have a backup and physical emergency stop, and preserve diagnostics.
+          Do not connect original V1 Local and V2 simultaneously to one EVSE.
+          An HA restart/crash is not a hardware safety mechanism.
+          Stable/main promotion requires observed hardware + functional tests.
+          EOF
           gh release create "$tag" \
+            "$RUNNER_TEMP/evsc-dist/ev_smart_charging.zip" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
-            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
-
-          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml
-          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
-
-      - name: Retain the manually usable ZIP as a workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: evsc-rc18-native-shutdown-manual-zip
-          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
-          if-no-files-found: error
-
-      - name: Create prerelease without changing main or stable versions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="v${VERSION}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "::error::Tag $tag already exists"
-            exit 1
-          fi
-          # Publish tag once. The existing default-branch publish workflow
-          # attaches the optional ZIP after the release event; never race its
-          # release asset upload. HACS already uses the source tree.
-          gh release create "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
-            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
-
-          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
-
-      - name: Retain the manually usable ZIP as a workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: evsc-rc18-native-shutdown-manual-zip
-          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
-          if-no-files-found: error
-
-      - name: Create prerelease without changing main or stable versions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="v${VERSION}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "::error::Tag $tag already exists"
-            exit 1
-          fi
-          # Publish tag once. The existing default-branch publish workflow
-          # attaches the optional ZIP after the release event; never race its
-          # release asset upload. HACS already uses the source tree.
-          gh release create "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
-            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
-
-          unzip -Z -1 "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip" | grep -q '^services.yaml
-          unzip -t "$RUNNER_TEMP/hacs-dist/ev_smart_charging.zip"
-
-      - name: Retain the manually usable ZIP as a workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: evsc-rc18-native-shutdown-manual-zip
-          path: ${{ runner.temp }}/hacs-dist/ev_smart_charging.zip
-          if-no-files-found: error
-
-      - name: Create prerelease without changing main or stable versions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="v${VERSION}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Test release $tag already exists; never overwrite a tested artifact"
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "::error::Tag $tag already exists"
-            exit 1
-          fi
-          # Publish tag once. The existing default-branch publish workflow
-          # attaches the optional ZIP after the release event; never race its
-          # release asset upload. HACS already uses the source tree.
-          gh release create "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "EV Smart Charging $tag — V1 parity / V2 safe shutdown field test" \
-            --notes "EVSC $tag — HACS SAFETY HOTFIX PRERELEASE. Exact tested SHA $GITHUB_SHA. Retains the V2 features in immutable rc17 and original upstream V1 Local compatibility. Fixes TWO identified rc17 physical hazards: (1) Manual Connected=No during an in-flight Controller plan is rechecked at the final serialized native command boundary, and concurrent updates cause one coalesced follow-up refresh; (2) V2 Controller Configure disable, unload, reload and Charger owner reassignment perform a bounded native OFF on EVSEs exclusively owned by that V2 writer BEFORE releasing ownership. An unowned or original Local switch is never touched. A native service acknowledgement without verified OFF readback is NOT proof of stop; retain the V2 owner reservation and log an error if OFF is uncertain. The old Legacy-Coordinated mode remains quarantined by P0 #5; independent V2 native mode remains per-Controller explicit opt-in. A full HA backup and a reachable OEM emergency stop are required for physical field testing, one charger at a time. Real physical Peblar/Wallbox/smart plug OEM readback and HA stability must be validated by the operator and P0 #5 remains OPEN. HA-side budgets and OFF cannot protect against host crashes/power loss; never claim hardware-certified cut-off. No stable promotion; restore HA backup plus the prior immutable rc17 if needed."
+            --title "EV Smart Charging $tag — full V2 HA field test" \
+            --notes-file "$RUNNER_TEMP/evsc-dist/RELEASE_NOTES.md"
