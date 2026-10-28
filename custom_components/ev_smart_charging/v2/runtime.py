@@ -277,12 +277,13 @@ class V2ControllerRuntime:
             self.hass, 1, f"{DOMAIN}.v2_actual_cost_charger_{charger_uid}"
         )
         saved = await store.async_load()
-        if saved is None:
-            saved = self._legacy_costs.get(charger_uid)
+        legacy_migration = saved is None and charger_uid in self._legacy_costs
+        if legacy_migration:
+            saved = self._legacy_costs[charger_uid]
         ledger = V2CostLedger.from_storage(saved)
         self._cost_stores[charger_uid] = store
         self._cost_ledgers[charger_uid] = ledger
-        if saved is not None and await store.async_load() is None:
+        if legacy_migration:
             # Migrate the old Controller snapshot only once, non-destructively.
             await store.async_save(ledger.to_storage())
         return ledger
@@ -420,7 +421,16 @@ class V2ControllerRuntime:
                 # Actual costs use verified time-aligned meter increments,
                 # never projected kWh multiplied by planned rates.
                 cost_changed = False
+                # A Charger can be reassigned while the executor compiles a
+                # plan. The old Controller must never write a stale ledger
+                # over the new owner's durable financial record.
+                current_chargers = catalog(self.hass)[1]
                 for uid, charger in chargers.items():
+                    if (
+                        uid not in current_chargers
+                        or current_chargers[uid].controller_uid != controller.uid
+                    ):
+                        continue
                     item = observed[uid]
                     ledger = await self._cost_ledger(uid)
                     previous = ledger.to_storage()
@@ -448,9 +458,14 @@ class V2ControllerRuntime:
                     # Keep the certified interval evidence across a transfer
                     # and never depend on a previous Controller remaining.
                     for uid in chargers:
-                        await self._cost_stores[uid].async_save(
-                            self._cost_ledgers[uid].to_storage()
-                        )
+                        if (
+                            uid in self._cost_ledgers
+                            and uid in current_chargers
+                            and current_chargers[uid].controller_uid == controller.uid
+                        ):
+                            await self._cost_stores[uid].async_save(
+                                self._cost_ledgers[uid].to_storage()
+                            )
                 result["session_sources"] = {
                     uid: {
                         "delivered_kwh": item["session_grid_kwh"],
@@ -733,8 +748,14 @@ class V2ControllerRuntime:
                             status,
                         )
                 await self._soc_store.async_save(self._soc_estimator.snapshot())
+                current_chargers = catalog(self.hass)[1]
                 for uid, ledger in self._cost_ledgers.items():
-                    await self._cost_stores[uid].async_save(ledger.to_storage())
+                    if (
+                        uid in current_chargers
+                        and current_chargers[uid].controller_uid
+                        == self.entry.data["uid"]
+                    ):
+                        await self._cost_stores[uid].async_save(ledger.to_storage())
                 await self._session_store.async_save(self._session_progress.snapshot())
                 await self._budget_store.async_save(self._budget_guard.snapshot())
         finally:
