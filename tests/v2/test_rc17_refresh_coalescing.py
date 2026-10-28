@@ -94,11 +94,13 @@ async def test_planner_failure_shutdown_attempts_all_owned_writers(hass):
     verified = OwnedWriter("VERIFIED_OFF")
     uncertain = OwnedWriter("STOP_SENT_AWAITING_READBACK")
     broken = OwnedWriter("RAISE")
-    runtime._writers.update({
-        "verified": verified,
-        "uncertain": uncertain,
-        "broken": broken,
-    })
+    runtime._writers.update(
+        {
+            "verified": verified,
+            "uncertain": uncertain,
+            "broken": broken,
+        }
+    )
     try:
         with patch(
             "custom_components.ev_smart_charging.v2.runtime.catalog",
