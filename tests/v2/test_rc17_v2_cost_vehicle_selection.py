@@ -157,7 +157,11 @@ async def test_vehicle_change_when_charger_verified_off_is_permitted(hass, store
 
 
 def test_corrupt_cost_bucket_never_creates_financial_truth():
-    anchor = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+    # Use the current ledger day; an October 2026 fixture becomes archival
+    # after that date and cannot assert a current-day vehicle bucket.
+    from homeassistant.util import dt
+
+    anchor = dt.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
     prices = [PriceSlot(anchor, anchor + timedelta(minutes=15), 0.2)]
     ledger = V2CostLedger()
     ledger.observe(anchor, 1, "sensor.meter", prices, vehicle_uid="audi")
