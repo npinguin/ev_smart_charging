@@ -6,9 +6,9 @@ name: HACS V2 full-functionality field-test prerelease
 on:
   push:
     branches:
-      - feature/rc17-consolidated-v2
+      - release/v2.6.0-rc.20
     paths:
-      - docs/controller/HACS_TEST_RELEASE_REQUEST.md
+      - docs/controller/HACS_TEST_RELEASE_REQUEST_RC20.md
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: 2.6.0-rc.19
+      VERSION: 2.6.0-rc.20
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
