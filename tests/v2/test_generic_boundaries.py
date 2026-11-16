@@ -37,3 +37,37 @@ def test_hardware_and_local_compatibility_are_isolated_to_adapters():
         source = (ROOT / name).read_text()
         for vendor in ("Peblar", "Wallbox", "Audi", "Mercedes"):
             assert vendor not in source
+
+
+def test_standalone_install_has_no_other_integration_dependency():
+    """No mandatory home-management product or private integration imports."""
+    import ast
+    import json
+
+    integration = ROOT.parent
+    manifest = json.loads((integration / "manifest.json").read_text())
+    assert manifest.get("dependencies", []) == []
+    assert manifest.get("after_dependencies", []) == []
+    assert manifest.get("requirements", []) == []
+    own_package = "custom_components.ev_smart_charging"
+    for path in integration.rglob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                modules = [node.module or ""]
+                if node.module == "custom_components":
+                    modules = [
+                        "custom_components." + alias.name for alias in node.names
+                    ]
+            else:
+                continue
+            for module in modules:
+                if module == "custom_components" or module.startswith(
+                    "custom_components."
+                ):
+                    assert (
+                        module == own_package
+                        or module.startswith(own_package + ".")
+                    ), f"{path}: external custom integration import {module}"
