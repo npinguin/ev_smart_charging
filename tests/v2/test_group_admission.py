@@ -5,7 +5,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from custom_components.ev_smart_charging.v2.model import Charger, Controller, ConfigurationError
+from custom_components.ev_smart_charging.v2.model import (
+    Charger,
+    Controller,
+    ConfigurationError,
+)
 from custom_components.ev_smart_charging.v2.runtime import _group_admissions
 
 NOW = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
