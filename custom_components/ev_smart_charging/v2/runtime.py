@@ -199,7 +199,7 @@ def _group_admissions(
     wanted = [uid for uid in chargers if _desired_now(plan, uid, when)]
 
     def deadline_rank(uid):
-        """UTC instant, never local wall time; unknown dates lose only ties."""
+        """UTC instant, never wall time; missing deadlines rank after known ones."""
         raw = plan.get("loads", {}).get(uid, {}).get("next_ready_by")
         if not isinstance(raw, str):
             return float("inf")
@@ -214,8 +214,8 @@ def _group_admissions(
     wanted.sort(
         key=lambda uid: (
             observed[uid]["power_kw"] <= 0.05,
-            -chargers[uid].priority,
             deadline_rank(uid),
+            -chargers[uid].priority,
             uid,
         )
     )
