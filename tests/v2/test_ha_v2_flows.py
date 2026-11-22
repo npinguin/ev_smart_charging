@@ -347,3 +347,48 @@ async def test_native_charger_priority_is_editable_and_persisted_without_duplica
     # Previously persisted Chargers have a stable zero-priority default.
     entry(hass, ENTRY_CHARGER, "black", "Garage Black", controller_uid="c1")
     assert catalog(hass)[1]["black"].priority == 0
+
+
+async def test_native_controller_envelope_options_persist_and_clear(hass):
+    from custom_components.ev_smart_charging.v2.catalog import model
+    from custom_components.ev_smart_charging.v2.flow import _schema
+
+    created = entry(hass, ENTRY_CONTROLLER, "envelope", "Envelope")
+    schema = await _schema(hass, ENTRY_CONTROLLER, {})
+    assert any(
+        getattr(key, "schema", None) == "ev_group_power_limit_entity"
+        for key in schema.schema
+    )
+    hass.states.async_set(
+        "sensor.native_ev_total_limit", "7000", {"unit_of_measurement": "W"}
+    )
+    form = await hass.config_entries.options.async_init(created.entry_id)
+    assert form["type"] == FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        {
+            "name": "Envelope",
+            "physical_enabled": False,
+            "peak_shaving_enabled": False,
+            "ev_group_power_limit_entity": "sensor.native_ev_total_limit",
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["ev_group_power_limit_entity"] == "sensor.native_ev_total_limit"
+    hass.config_entries.async_update_entry(created, options=result["data"])
+    assert model(created).ev_group_power_limit_entity == "sensor.native_ev_total_limit"
+
+    # Native HA selector omitted on edit explicitly unbinds the source; it
+    # must not reset unrelated ownership, old config or the power policy.
+    form = await hass.config_entries.options.async_init(created.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        {
+            "name": "Envelope",
+            "physical_enabled": False,
+            "peak_shaving_enabled": False,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["ev_group_power_limit_entity"] == ""
+    assert created.data["uid"] == "envelope"
