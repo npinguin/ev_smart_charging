@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from math import isfinite
 
 from homeassistant.core import callback
@@ -197,10 +197,25 @@ def _group_admissions(
     total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
     active = sum(observed[uid]["power_kw"] > 0.05 for uid in chargers)
     wanted = [uid for uid in chargers if _desired_now(plan, uid, when)]
+
+    def deadline_rank(uid):
+        """UTC instant, never local wall time; unknown dates lose only ties."""
+        raw = plan.get("loads", {}).get(uid, {}).get("next_ready_by")
+        if not isinstance(raw, str):
+            return float("inf")
+        try:
+            deadline = datetime.fromisoformat(raw)
+            if deadline.tzinfo is not None and deadline.utcoffset() is not None:
+                return deadline.timestamp()
+        except (ValueError, TypeError, OverflowError):
+            pass
+        return float("inf")
+
     wanted.sort(
         key=lambda uid: (
             observed[uid]["power_kw"] <= 0.05,
             -chargers[uid].priority,
+            deadline_rank(uid),
             uid,
         )
     )
