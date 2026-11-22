@@ -117,9 +117,9 @@ def test_equal_priority_uses_earliest_real_deadline_not_charger_uid():
 
 def test_deadline_admission_compares_real_utc_instants_and_uses_safe_fallback():
     ctrl, chargers, observed, plan = make_scenario()
-    # A is 10:30Z; B is 11:00Z, despite apparently later local hour.
-    plan["loads"]["a"]["next_ready_by"] = "2026-10-26T12:30:00+02:00"
-    plan["loads"]["b"]["next_ready_by"] = "2026-10-26T11:00:00+00:00"
+    # A is 12:30Z; B is 13:00Z, despite the later local wall hour.
+    plan["loads"]["a"]["next_ready_by"] = "2026-10-26T14:30:00+02:00"
+    plan["loads"]["b"]["next_ready_by"] = "2026-10-26T13:00:00+00:00"
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
     # A missing/naive/invalid deadline cannot outrank a verified one.
     plan["loads"]["a"]["next_ready_by"] = "2026-10-26T10:15:00"
