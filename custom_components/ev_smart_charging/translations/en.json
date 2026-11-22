@@ -111,6 +111,8 @@
           "physical_enabled": "Enable real V2 charging control (requires exclusive EVSE ownership)",
           "peak_shaving_enabled": "Enable peak shaving",
           "site_power_entity": "Site net import power sensor (W/kW)",
+          "ev_group_power_limit_entity": "External total EV group charging capacity (W/kW)",
+          "ev_group_power_limit_entity": "External total EV group charging capacity (W/kW)",
           "peak_target_kw": "Maximum site import (kW)",
           "peak_reserve_kw": "Site power safety reserve (kW)"
         },
@@ -118,6 +120,8 @@
           "physical_enabled": "Optional, off by default. Enable only once V1 Local no longer commands this EVSE and connected/power, effective prices, native control and Start/Stop readback are verified.",
           "peak_shaving_enabled": "Constrain EV charging to observed net household import with stable recovery. Requires site meter and power target.",
           "site_power_entity": "Choose signed net site import/export. Positive = import, negative = export. Not an EV-only meter.",
+          "ev_group_power_limit_entity": "Optional actual native HA sensor: TOTAL instantaneous charging power allocated to this Controller's EVSE group, not grid import, surplus or spare headroom. A missing/stale/invalid value blocks new physical starts. Separate Controllers need separate non-overlapping allocations.",
+          "ev_group_power_limit_entity": "Optional actual native HA sensor: TOTAL instantaneous charging power allocated to this Controller's EVSE group, not grid import, surplus or spare headroom. A missing/stale/invalid value blocks new physical starts. Separate Controllers need separate non-overlapping allocations.",
           "peak_target_kw": "Target household import capacity, e.g. 8 kW. No assumed electrical limit.",
           "peak_reserve_kw": "Additional buffer below the limit, e.g. 0.5 kW.",
           "cost_budget_eur": "Applies across currently connected charging sessions, not an automatic daily budget. V2 measures energy and effective tariff, reserving the next 15 minutes conservatively. Missing meter/price coverage blocks physical Start. Leave empty for no cap."
