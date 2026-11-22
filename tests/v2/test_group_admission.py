@@ -135,3 +135,37 @@ def test_deadline_admission_compares_real_utc_instants_and_uses_safe_fallback():
     del plan["loads"]["a"]["next_ready_by"]
     del plan["loads"]["b"]["next_ready_by"]
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+
+
+def test_commanded_but_not_yet_metered_evse_reserves_its_max_kw():
+    """A successful ON readback at 0 W is not proof the power cannot ramp."""
+    ctrl, chargers, observed, plan = make_scenario()
+    observed["a"]["control_enabled"] = True  # real fresh on/off readback
+    observed["a"]["power_kw"] = 0.0  # EVSE currently drawing no watts
+    observed["b"]["control_enabled"] = False
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+    # Even when A is no longer desired, its ON command may still draw later.
+    plan["loads"].pop("a")
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == set()
+    # Once OFF has read back, B can use the released capacity.
+    observed["a"]["control_enabled"] = False
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+
+
+def test_commanded_idle_charger_consumes_parallel_slot():
+    ctrl, chargers, observed, plan = make_scenario(max_parallel=1, budget=100)
+    observed["a"]["control_enabled"] = True
+    observed["b"]["control_enabled"] = False
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+    plan["loads"].pop("a")
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == set()
+
+
+def test_unavailable_selected_physical_readback_blocks_other_admissions():
+    ctrl, chargers, observed, plan = make_scenario(max_parallel=2, budget=100)
+    chargers["a"] = replace(chargers["a"], control_entity="switch.a")
+    observed["a"]["control_enabled"] = None
+    observed["b"]["control_enabled"] = False
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == set()
+    observed["a"]["control_enabled"] = False
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a", "b"}
