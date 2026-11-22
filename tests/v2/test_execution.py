@@ -732,3 +732,27 @@ async def test_shutdown_keeps_owner_reservation_when_adapter_missing(hass, charg
         "main",
         "ch",
     )
+
+
+def test_target_never_uses_partially_invalid_schedule():
+    """One valid current quarter cannot authorize a corrupt remaining plan."""
+    from custom_components.ev_smart_charging.v2.execution import _desired_now
+
+    active = {"start": NOW.isoformat(),
+              "end": (NOW + timedelta(minutes=15)).isoformat()}
+    malformed = [
+        {"start": "not-a-time", "end": (NOW + timedelta(minutes=30)).isoformat()},
+        {"start": (NOW + timedelta(minutes=15)).replace(tzinfo=None).isoformat(),
+         "end": (NOW + timedelta(minutes=30)).isoformat()},
+        {"start": (NOW + timedelta(minutes=15)).isoformat(),
+         "end": (NOW + timedelta(minutes=14)).isoformat()},
+    ]
+    for invalid in malformed:
+        plan = {"loads": {"ch": {"demand_status": "PLANNED",
+                                "slots": [active, invalid]}}}
+        assert _desired_now(plan, "ch", NOW) is False
+    complete = {"loads": {"ch": {"demand_status": "PLANNED",
+                                 "slots": [active, {
+                                     "start": (NOW + timedelta(minutes=15)).isoformat(),
+                                     "end": (NOW + timedelta(minutes=30)).isoformat()}]}}}
+    assert _desired_now(complete, "ch", NOW) is True
