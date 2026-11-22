@@ -29,11 +29,22 @@ _MAX_PLAN_AGE = timedelta(minutes=2)
 
 
 def _desired_now(snapshot: dict, uid: str, when: datetime) -> bool:
+    """A partially invalid 15-minute plan must never authorize a physical ON.
+
+    Validate the *whole* selected plan before deciding whether the current
+    quarter is active. A valid first slot cannot mask a later corrupt row.
+    """
     load = snapshot.get("loads", {}).get(uid, {})
-    if load.get("demand_status") != "PLANNED":
+    if load.get("demand_status") != "PLANNED" or when.tzinfo is None:
         return False
-    slots = load.get("slots") or ()
+    slots = load.get("slots")
+    if not isinstance(slots, (list, tuple)) or not slots:
+        return False
+    active = False
+    previous_end = None
     for slot in slots:
+        if not isinstance(slot, dict):
+            return False
         try:
             start = datetime.fromisoformat(slot["start"])
             end = datetime.fromisoformat(slot["end"])
@@ -41,9 +52,14 @@ def _desired_now(snapshot: dict, uid: str, when: datetime) -> bool:
             return False
         if start.tzinfo is None or end.tzinfo is None:
             return False
-        if start <= when < end:
-            return True
-    return False
+        start, end = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+        if (end - start != timedelta(minutes=15)
+                or int(start.timestamp()) % 900 != 0
+                or (previous_end is not None and start < previous_end)):
+            return False
+        previous_end = end
+        active = active or start <= when < end
+    return active
 
 
 def _fresh(snapshot: dict, now: datetime) -> bool:
