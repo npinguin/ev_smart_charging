@@ -29,7 +29,7 @@ _STEPS = {
 # Do not enforce device_class: valid OCPP/template sensors often lack one.
 _ENTITY_BINDINGS = {
     ENTRY_VEHICLE: ("soc_entity",),
-    ENTRY_CONTROLLER: ("site_power_entity",),
+    ENTRY_CONTROLLER: ("site_power_entity", "ev_group_power_limit_entity"),
     ENTRY_CHARGER: (
         "control_entity",
         "connected_entity",
@@ -239,6 +239,7 @@ async def _schema(hass, kind, old):
                     ),
                     opt("price_cap_eur_kwh", vol.Coerce(float)),
                     opt("site_power_entity", _entity("sensor")),
+                    opt("ev_group_power_limit_entity", _entity("sensor")),
                     opt(
                         "peak_target_kw",
                         vol.All(vol.Coerce(float), vol.Range(min=0.01)),
