@@ -355,6 +355,13 @@ class V2Fact(SensorEntity):
                 "budget_spent_upper_eur": snap.get("budget", {}).get("spent_upper_eur"),
                 "budget_remaining_eur": snap.get("budget", {}).get("remaining_eur"),
                 "available_ev_power_kw": snap.get("available_ev_power_kw"),
+                "ev_group_envelope_status": snap.get(
+                    "ev_group_envelope_status", "not_configured"
+                ),
+                "ev_group_envelope_kw": snap.get("ev_group_envelope_kw"),
+                "ev_group_effective_limit_kw": snap.get(
+                    "ev_group_effective_limit_kw"
+                ),
             }
             return (
                 values[self.key]
@@ -562,6 +569,28 @@ def sensors_for_entry(entry):
                 kind,
                 "available_ev_power_kw",
                 "EV site headroom",
+                SensorDeviceClass.POWER,
+                "kW",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "ev_group_envelope_status",
+                "External EV group capacity source",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "ev_group_envelope_kw",
+                "Verified external EV group capacity",
+                SensorDeviceClass.POWER,
+                "kW",
+            ),
+            V2Fact(
+                entry,
+                kind,
+                "ev_group_effective_limit_kw",
+                "Effective EV group admission limit",
                 SensorDeviceClass.POWER,
                 "kW",
             ),
