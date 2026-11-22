@@ -319,3 +319,27 @@ async def test_v2_controller_physical_enable_is_explicit_and_never_legacy(hass):
     hass.config_entries.async_update_entry(created, options={"physical_enabled": True})
     assert model(created).physical_enabled is True
     assert created.data["uid"] == "safe"
+
+
+async def test_native_charger_priority_is_editable_and_persisted_without_duplicate_owner(
+    hass,
+):
+    entry(hass, ENTRY_CONTROLLER, "c1", "Main")
+    result = await start(hass, "v2_charger")
+    assert result["type"] == FlowResultType.FORM
+    schema = result["data_schema"]
+    assert any(getattr(key, "schema", None) == "priority" for key in schema.schema)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"name": "Garage White", "controller_uid": "c1", "priority": 25},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["priority"] == 25
+    entry(
+        hass, ENTRY_CHARGER, "white", "Garage White",
+        controller_uid="c1", priority=25,
+    )
+    assert catalog(hass)[1]["white"].priority == 25
+    # Previously persisted Chargers have a stable zero-priority default.
+    entry(hass, ENTRY_CHARGER, "black", "Garage Black", controller_uid="c1")
+    assert catalog(hass)[1]["black"].priority == 0
