@@ -359,9 +359,7 @@ class V2Fact(SensorEntity):
                     "ev_group_envelope_status", "not_configured"
                 ),
                 "ev_group_envelope_kw": snap.get("ev_group_envelope_kw"),
-                "ev_group_effective_limit_kw": snap.get(
-                    "ev_group_effective_limit_kw"
-                ),
+                "ev_group_effective_limit_kw": snap.get("ev_group_effective_limit_kw"),
             }
             return (
                 values[self.key]
