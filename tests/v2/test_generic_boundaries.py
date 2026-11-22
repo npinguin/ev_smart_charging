@@ -67,7 +67,6 @@ def test_standalone_install_has_no_other_integration_dependency():
                 if module == "custom_components" or module.startswith(
                     "custom_components."
                 ):
-                    assert (
-                        module == own_package
-                        or module.startswith(own_package + ".")
+                    assert module == own_package or module.startswith(
+                        own_package + "."
                     ), f"{path}: external custom integration import {module}"
