@@ -113,8 +113,11 @@ class Charger:
     def __post_init__(self):
         if not self.uid or not self.name.strip() or not self.controller_uid:
             raise ConfigurationError("charger_requires_controller")
-        if (isinstance(self.priority, bool) or not isinstance(self.priority, int)
-                or not 0 <= self.priority <= 100):
+        if (
+            isinstance(self.priority, bool)
+            or not isinstance(self.priority, int)
+            or not 0 <= self.priority <= 100
+        ):
             raise ConfigurationError("charger_priority_invalid")
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("charger_phases_invalid")
