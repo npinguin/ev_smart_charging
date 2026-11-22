@@ -179,6 +179,25 @@ def test_source_reader_does_not_call_a_native_charger(hass):
     assert inputs["garage"]["energy_kwh"] == 2.1
 
 
+def test_native_on_readback_reserves_idle_charger_without_claiming_charging(hass):
+    """Native selected output may be ON before the meter reports EV power."""
+    _, _, _, ch = _setup_entries(hass)
+    hass.config_entries.async_update_entry(
+        ch, options={"control_entity": "switch.garage_native", "control_semantics": "charge_request"}
+    )
+    hass.states.async_set("sensor.charger_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("switch.garage_native", "on")
+    vehicles, chargers, _ = catalog(hass)
+    readback = read_inputs(hass, chargers, vehicles)["garage"]
+    assert readback["control_enabled"] is True
+    assert readback["power_kw"] == 0.0
+    # This field is a command state, not proof of active charging.
+    hass.states.async_set("switch.garage_native", "unavailable")
+    assert read_inputs(hass, chargers, vehicles)["garage"]["control_enabled"] is None
+    hass.states.async_set("switch.garage_native", "off")
+    assert read_inputs(hass, chargers, vehicles)["garage"]["control_enabled"] is False
+
+
 async def test_each_controller_has_independent_advisory_plan_and_stop(hass):
     c1, c2, *_ = _setup_entries(hass)
     north = V2ControllerRuntime(hass, c1)
