@@ -180,6 +180,7 @@ def compile_advisory(
             usable_capacity_kwh=vehicle.battery_kwh if has_soc_demand else None,
             charge_power_kw=power,
             ready_by=ready_by,
+            priority=charger.priority,
             enabled=True,
             # Demand in explicit mode is GRID kWh/quarters, not battery kWh.
             efficiency=0.90 if has_soc_demand else 1.0,
