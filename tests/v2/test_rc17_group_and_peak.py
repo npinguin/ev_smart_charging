@@ -259,3 +259,77 @@ async def test_peak_runtime_rejects_site_overload_and_unknown_meter(hass):
         assert result["available_ev_power_kw"] is None
     finally:
         await runtime.async_stop()
+
+
+def test_generic_total_ev_power_envelope_is_strict_and_not_site_import():
+    from custom_components.ev_smart_charging.v2.model import validate_catalog
+
+    c = control(ev_group_power_limit_entity="sensor.external_ev_total_limit")
+    assert c.ev_group_power_limit_entity == "sensor.external_ev_total_limit"
+    assert control().ev_group_power_limit_entity == ""
+    for bad in ("switch.ev_limit", "binary_sensor.ev_limit", "sensor.", "not_an_entity", 12):
+        with pytest.raises(ConfigurationError, match="ev_group_envelope"):
+            control(ev_group_power_limit_entity=bad)
+    with pytest.raises(ConfigurationError, match="ev_group_envelope"):
+        control(
+            ev_group_power_limit_entity="sensor.net_import",
+            peak_shaving_enabled=True,
+            site_power_entity="sensor.net_import",
+            peak_target_kw=8,
+        )
+    # An identical total group capacity cannot be allocated independently to
+    # multiple V2 Controllers; that would double-spend the same constraint.
+    with pytest.raises(ConfigurationError, match="shared_ev_group_envelope"):
+        validate_catalog({}, {}, {
+            "a": Controller(uid="a", name="A", ev_group_power_limit_entity="sensor.shared"),
+            "b": Controller(uid="b", name="B", ev_group_power_limit_entity="sensor.shared"),
+        })
+
+
+async def test_generic_external_ev_group_limit_is_source_backed_and_fail_closed(hass):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.ev_smart_charging.const import DOMAIN
+    from custom_components.ev_smart_charging.v2 import ENTRY_CONTROLLER, MARKER
+    from custom_components.ev_smart_charging.v2.runtime import V2ControllerRuntime
+    from custom_components.ev_smart_charging.v2.catalog import catalog
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, entry_id="external_envelope_controller", version=8,
+        data={
+            MARKER: ENTRY_CONTROLLER, "uid": "external", "name": "External",
+            "ev_group_power_limit_entity": "sensor.external_capacity",
+            "max_parallel": 2, "power_budget_kw": 11,
+        },
+    )
+    entry.add_to_hass(hass)
+    runtime = V2ControllerRuntime(hass, entry)
+    try:
+        controller = catalog(hass)[2]["external"]
+        hass.states.async_set("sensor.external_capacity", "5000", {"unit_of_measurement": "W"})
+        result = {"controller_uid": "external", "loads": {}}
+        await runtime._apply_native_plan(controller, {}, {}, result)
+        assert result["ev_group_envelope_status"] == "verified"
+        assert result["ev_group_envelope_kw"] == 5.0
+        assert result["ev_group_envelope_source"] == "sensor.external_capacity"
+        assert result["ev_group_effective_limit_kw"] == 5.0
+
+        hass.states.async_set("sensor.external_capacity", "-1", {"unit_of_measurement": "kW"})
+        result = {"controller_uid": "external", "loads": {}}
+        await runtime._apply_native_plan(controller, {}, {}, result)
+        assert result["ev_group_envelope_status"] == "unavailable"
+        assert result["ev_group_envelope_kw"] is None
+        assert result["ev_group_effective_limit_kw"] == 0.0
+
+        hass.states.async_set("sensor.external_capacity", "8", {"unit_of_measurement": "°C"})
+        result = {"controller_uid": "external", "loads": {}}
+        await runtime._apply_native_plan(controller, {}, {}, result)
+        assert result["ev_group_envelope_status"] == "unavailable"
+
+        hass.states.async_set("sensor.external_capacity", "0", {"unit_of_measurement": "kW"})
+        result = {"controller_uid": "external", "loads": {}}
+        await runtime._apply_native_plan(controller, {}, {}, result)
+        assert result["ev_group_envelope_status"] == "verified"
+        assert result["ev_group_envelope_kw"] == 0.0
+        assert result["ev_group_effective_limit_kw"] == 0.0
+    finally:
+        await runtime.async_stop()
