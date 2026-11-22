@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -315,3 +316,20 @@ def test_capability_power_calculation_uses_configured_supply_not_local_assumptio
     assert effective_charge_kw(vehicles["v1"], chargers["a"]) == pytest.approx(3.84)
     chargers["a"] = replace(chargers["a"], nominal_phase_voltage_v=230)
     assert effective_charge_kw(vehicles["v1"], chargers["a"]) == pytest.approx(7.36)
+
+
+def test_configured_charger_priority_reaches_existing_joint_planner():
+    from custom_components.ev_smart_charging.v2 import planning
+
+    vehicles, controllers, chargers, observed = fixture_data()
+    chargers["b"] = replace(chargers["b"], controller_uid="c1", priority=25)
+    chargers["a"] = replace(chargers["a"], priority=2)
+    ctrl = replace(controllers["c1"], max_parallel=1, power_budget_kw=11)
+    with patch.object(planning, "build_plan", wraps=planning.build_plan) as build:
+        result = compile_advisory(ctrl, chargers, vehicles, observed, NOW)
+    assert build.call_count == 1
+    requests = {load.id: load for load in build.call_args.args[0]}
+    assert requests["a"].priority == 2
+    assert requests["b"].priority == 25
+    assert result["advisory_only"] is True
+    assert result["physical_actuation_authorized"] is False
