@@ -374,7 +374,9 @@ async def test_native_controller_envelope_options_persist_and_clear(hass):
         },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"]["ev_group_power_limit_entity"] == "sensor.native_ev_total_limit"
+    assert (
+        result["data"]["ev_group_power_limit_entity"] == "sensor.native_ev_total_limit"
+    )
     hass.config_entries.async_update_entry(created, options=result["data"])
     assert model(created).ev_group_power_limit_entity == "sensor.native_ev_total_limit"
 
