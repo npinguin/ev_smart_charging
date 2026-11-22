@@ -367,3 +367,56 @@ async def test_generic_external_ev_group_limit_is_source_backed_and_fail_closed(
         assert result["ev_group_effective_limit_kw"] == 0.0
     finally:
         await runtime.async_stop()
+
+
+def test_existing_v2_controller_exposes_exact_external_envelope_facts(hass):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.ev_smart_charging.const import DOMAIN
+    from custom_components.ev_smart_charging.v2 import ENTRY_CONTROLLER, MARKER
+    from custom_components.ev_smart_charging.v2.entities import sensors_for_entry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="existing_native_controller",
+        version=8,
+        data={
+            MARKER: ENTRY_CONTROLLER,
+            "uid": "stable-existing",
+            "name": "Existing",
+            "ev_group_power_limit_entity": "sensor.selected_limit",
+        },
+    )
+    entry.add_to_hass(hass)
+    rows = sensors_for_entry(entry)
+    by_key = {sensor.key: sensor for sensor in rows}
+    keys = (
+        "ev_group_envelope_status",
+        "ev_group_envelope_kw",
+        "ev_group_effective_limit_kw",
+    )
+    assert all(key in by_key for key in keys)
+    assert len({row.unique_id for row in rows}) == len(rows)
+    for key in keys:
+        assert by_key[key].unique_id == (
+            f"{DOMAIN}_v2_{ENTRY_CONTROLLER}_stable-existing_{key}"
+        )
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = SimpleNamespace(
+        snapshot={
+            "ev_group_envelope_status": "verified",
+            "ev_group_envelope_kw": 5.0,
+            "ev_group_effective_limit_kw": 3.0,
+        }
+    )
+    assert by_key["ev_group_envelope_status"].native_value == "verified"
+    assert by_key["ev_group_envelope_kw"].native_value == 5.0
+    assert by_key["ev_group_effective_limit_kw"].native_value == 3.0
+
+    hass.data[DOMAIN][entry.entry_id].snapshot = {
+        "ev_group_envelope_status": "unavailable",
+        "ev_group_envelope_kw": None,
+        "ev_group_effective_limit_kw": 0.0,
+    }
+    assert by_key["ev_group_envelope_status"].native_value == "unavailable"
+    assert by_key["ev_group_envelope_kw"].native_value is None
+    assert by_key["ev_group_effective_limit_kw"].native_value == 0.0
