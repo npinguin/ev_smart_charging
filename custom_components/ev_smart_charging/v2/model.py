@@ -84,9 +84,6 @@ class Charger:
     uid: str
     name: str
     controller_uid: str
-    # Higher value wins when several stopped EVSEs contend for one site limit.
-    # Default 0 retains existing native behavior for every persisted Charger.
-    priority: int = 0
     vehicle_uid: str = ""
     control_entity: str = ""
     control_semantics: str = "unspecified"
@@ -109,6 +106,9 @@ class Charger:
     requested_grid_kwh: float | None = None
     requested_duration_quarters: int | None = None
     charge_ready_time: str = "08:00"
+    # Append-only field retains the full constructor ABI for existing V2 uses.
+    # Higher priority wins new admission; a running EVSE is not preempted.
+    priority: int = 0
 
     def __post_init__(self):
         if not self.uid or not self.name.strip() or not self.controller_uid:
