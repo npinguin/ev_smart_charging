@@ -14,6 +14,7 @@ from homeassistant.util import dt
 from .catalog import catalog
 from ..controller import safety
 from .execution import NativeChargeWriter, _desired_now
+from .adapters.home_assistant import resolve_control_port
 from .planning import compile_advisory
 from .tariffs import source_tariff_slots
 from .group_facts import group_facts
@@ -137,7 +138,15 @@ def read_inputs(hass, chargers, vehicles):
         energy_state = (
             hass.states.get(charger.energy_entity) if charger.energy_entity else None
         )
+        control = resolve_control_port(charger.control_entity)
+        control_readback = (
+            control.readback(hass, charger.control_entity)
+            if control is not None else None
+        )
         result[charger.uid] = {
+            # Fresh ON readback reserves capacity even while measured kW is 0.
+            # It does not mean the EV is actually charging.
+            "control_enabled": control_readback,
             "energy_observed_at": (
                 (
                     getattr(energy_state, "last_reported", None)
@@ -194,8 +203,28 @@ def _group_admissions(
         return set()
     if any(observed.get(uid, {}).get("power_kw") is None for uid in chargers):
         return set()
-    total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
-    active = sum(observed[uid]["power_kw"] > 0.05 for uid in chargers)
+    # A physical ON readback is not charging proof, but IS a load commitment:
+    # an idle EVSE may ramp immediately after admission. Reserve its verified
+    # maximum until OFF is read back, including when the old plan no longer
+    # requests it. Missing readback for a selected writer blocks new starts.
+    if any(
+        charger.control_entity
+        and "control_enabled" in observed.get(uid, {})
+        and observed[uid]["control_enabled"] is None
+        for uid, charger in chargers.items()
+    ):
+        return set()
+    reserved = {}
+    for uid, charger in chargers.items():
+        reading = observed[uid]["power_kw"]
+        if observed[uid].get("control_enabled") is True:
+            if charger.max_ac_kw is None:
+                return set()
+            reserved[uid] = max(reading, charger.max_ac_kw)
+        else:
+            reserved[uid] = reading
+    total_kw = sum(reserved.values())
+    active = sum(value > 0.05 for value in reserved.values())
     wanted = [uid for uid in chargers if _desired_now(plan, uid, when)]
 
     def deadline_rank(uid):
@@ -214,6 +243,7 @@ def _group_admissions(
     wanted.sort(
         key=lambda uid: (
             observed[uid]["power_kw"] <= 0.05,
+            reserved[uid] <= 0.05,
             deadline_rank(uid),
             -chargers[uid].priority,
             uid,
@@ -226,8 +256,8 @@ def _group_admissions(
         ceiling = charger.max_ac_kw
         if ceiling is None:
             continue
-        running = measured > 0.05
-        extra_kw = max(0.0, ceiling - measured)
+        running = reserved[uid] > 0.05
+        extra_kw = max(0.0, ceiling - reserved[uid])
         if not running and active >= controller.max_parallel:
             continue
         effective_budget_kw = (
