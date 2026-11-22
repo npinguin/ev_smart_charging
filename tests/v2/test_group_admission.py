@@ -88,3 +88,9 @@ def test_native_charger_priority_rejects_boolean_and_out_of_range():
     for priority in (-1, 101, True, 1.5):
         with pytest.raises(ConfigurationError, match="priority"):
             Charger(uid="a", name="A", controller_uid="ctrl", priority=priority)
+
+
+def test_priority_field_keeps_existing_positional_vehicle_identity():
+    original = Charger("white", "Garage White", "main", "vehicle_audi")
+    assert original.vehicle_uid == "vehicle_audi"
+    assert original.priority == 0
