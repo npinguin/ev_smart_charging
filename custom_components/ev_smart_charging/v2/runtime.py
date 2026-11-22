@@ -141,7 +141,8 @@ def read_inputs(hass, chargers, vehicles):
         control = resolve_control_port(charger.control_entity)
         control_readback = (
             control.readback(hass, charger.control_entity)
-            if control is not None else None
+            if control is not None
+            else None
         )
         result[charger.uid] = {
             # Fresh ON readback reserves capacity even while measured kW is 0.
