@@ -53,9 +53,11 @@ def _desired_now(snapshot: dict, uid: str, when: datetime) -> bool:
         if start.tzinfo is None or end.tzinfo is None:
             return False
         start, end = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
-        if (end - start != timedelta(minutes=15)
-                or int(start.timestamp()) % 900 != 0
-                or (previous_end is not None and start < previous_end)):
+        if (
+            end - start != timedelta(minutes=15)
+            or int(start.timestamp()) % 900 != 0
+            or (previous_end is not None and start < previous_end)
+        ):
             return False
         previous_end = end
         active = active or start <= when < end
