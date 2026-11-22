@@ -98,3 +98,35 @@ def test_priority_field_keeps_existing_positional_vehicle_identity():
     original = Charger("white", "Garage White", "main", "vehicle_audi")
     assert original.vehicle_uid == "vehicle_audi"
     assert original.priority == 0
+
+
+def test_equal_priority_uses_earliest_real_deadline_not_charger_uid():
+    """Under a shared 10 kW budget, urgent B beats alphabetical A."""
+    ctrl, chargers, observed, plan = make_scenario()
+    plan["loads"]["a"]["next_ready_by"] = (NOW + timedelta(hours=6)).isoformat()
+    plan["loads"]["b"]["next_ready_by"] = (NOW + timedelta(hours=1)).isoformat()
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+    # Explicit higher priority still wins; only equal priority uses deadline.
+    chargers["a"] = replace(chargers["a"], priority=25)
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+    # Running charger cannot be displaced by a newly urgent stop/start.
+    chargers["a"] = replace(chargers["a"], priority=0)
+    observed["a"]["power_kw"] = 6.0
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+
+
+def test_deadline_admission_compares_real_utc_instants_and_uses_safe_fallback():
+    ctrl, chargers, observed, plan = make_scenario()
+    # A is 10:30Z; B is 11:00Z, despite apparently later local hour.
+    plan["loads"]["a"]["next_ready_by"] = "2026-10-26T12:30:00+02:00"
+    plan["loads"]["b"]["next_ready_by"] = "2026-10-26T11:00:00+00:00"
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+    # A missing/naive/invalid deadline cannot outrank a verified one.
+    plan["loads"]["a"]["next_ready_by"] = "2026-10-26T10:15:00"
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+    plan["loads"]["a"]["next_ready_by"] = "not-a-time"
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+    # Old plans without a timestamp retain deterministic UID ordering.
+    del plan["loads"]["a"]["next_ready_by"]
+    del plan["loads"]["b"]["next_ready_by"]
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
