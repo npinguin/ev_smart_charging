@@ -388,6 +388,8 @@ def test_existing_v2_controller_exposes_exact_external_envelope_facts(hass):
     )
     entry.add_to_hass(hass)
     rows = sensors_for_entry(entry)
+    for sensor in rows:
+        sensor.hass = hass
     by_key = {sensor.key: sensor for sensor in rows}
     keys = (
         "ev_group_envelope_status",
