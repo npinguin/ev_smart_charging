@@ -53,6 +53,7 @@ Connected **No** blocks a new automatic session and requests the owned charger O
 
 - Select max parallel active Chargers, planning horizon (1–14 days), optional total Charger power budget and verified effective price cap.
 - Optionally enable **peak shaving** with a real net site-import sensor (W/kW, **positive import / negative export**), a validated import target and reserve; unknown or stale site readings disable physical admission.
+- Optionally select **External total EV group charging capacity**: a fresh native HA power sensor (W/kW) declaring the *maximum total power already allocated to this Controller's complete EVSE group*, including power currently drawn by active chargers. It is **not** a grid meter, incremental spare capacity, raw PV export or automatically inferred Solar mode. The existing single writer takes the minimum of this limit, its own configured group budget and peak headroom. Unknown/stale, negative or invalid units block new starts; a genuine 0 kW is a valid no-charging constraint. Bind separate, non-overlapping allocations for separate Controllers; the same source cannot be shared by two Controllers.
 - Optional **cost budget** uses real timestamped meter deltas, verified effective price coverage and conservative future rate reservations. It fails closed if session provenance, price or current meter is unverified. This is a **controller-enforced limit while HA runs**, not a fail-safe hardware disconnect if HA itself is unavailable.
 - **Physical enabled** defaults to **False**. First inspect V2 diagnostics/plan, then test **only one** Charger with original Local ownership disabled/unloaded. Commands require fresh native control readback. A successful HA service response is **not** proof of physical charging.
 
@@ -75,6 +76,7 @@ Historical Local Charger associations are informational; create or link physical
 | Vehicle SoC | Manual/OEM/estimated distinguished, stale OEM and reset meter do not invent progress |
 | Multiple Chargers | Exclusive physical ownership, max parallel and group load budget; one Controller per Charger |
 | Peak shaving | Actual site import/headroom and stable recovery; unavailable site meter prevents Start |
+| External total EV group capacity | Source W/kW, stale/negative/invalid/0 states, four-EVSE admission under dynamic total limit, independent Controllers cannot reuse one group envelope; no physical charge commands or battery writes |
 | Physical control | Disable original Local writer for this EVSE; opt-in V2; OEM readback; real Start and Stop; no HA event-loop hangs |
 | Data integrity | Source change, reload, timezone/DST, partial meter coverage, price gaps and HA backup/rollback |
 | Vehicle + Charger costs | Compare native session meter against verified EUR/kWh over time; validate per-Charger/Vehicle totals, unassigned EV, no fabricated €0, transfer to another Controller and midnight restart |
