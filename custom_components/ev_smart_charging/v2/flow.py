@@ -147,6 +147,11 @@ async def _schema(hass, kind, old):
             dict(
                 [
                     opt("vehicle_uid", vol.In(vehicles), ""),
+                    opt(
+                        "priority",
+                        vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+                        0,
+                    ),
                     opt("control_entity", _entity(["switch", "input_boolean"])),
                     opt(
                         "control_semantics",
