@@ -336,8 +336,12 @@ async def test_native_charger_priority_is_editable_and_persisted_without_duplica
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["priority"] == 25
     entry(
-        hass, ENTRY_CHARGER, "white", "Garage White",
-        controller_uid="c1", priority=25,
+        hass,
+        ENTRY_CHARGER,
+        "white",
+        "Garage White",
+        controller_uid="c1",
+        priority=25,
     )
     assert catalog(hass)[1]["white"].priority == 25
     # Previously persisted Chargers have a stable zero-priority default.
