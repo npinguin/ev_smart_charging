@@ -183,7 +183,11 @@ def test_native_on_readback_reserves_idle_charger_without_claiming_charging(hass
     """Native selected output may be ON before the meter reports EV power."""
     _, _, _, ch = _setup_entries(hass)
     hass.config_entries.async_update_entry(
-        ch, options={"control_entity": "switch.garage_native", "control_semantics": "charge_request"}
+        ch,
+        options={
+            "control_entity": "switch.garage_native",
+            "control_semantics": "charge_request",
+        },
     )
     hass.states.async_set("sensor.charger_power", "0", {"unit_of_measurement": "kW"})
     hass.states.async_set("switch.garage_native", "on")
