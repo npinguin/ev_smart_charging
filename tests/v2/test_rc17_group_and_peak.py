@@ -304,10 +304,17 @@ async def test_generic_external_ev_group_limit_is_source_backed_and_fail_closed(
     entry.add_to_hass(hass)
     runtime = V2ControllerRuntime(hass, entry)
     try:
+        from unittest.mock import patch
+        from custom_components.ev_smart_charging.v2 import runtime as native_runtime
+
         controller = catalog(hass)[2]["external"]
         hass.states.async_set("sensor.external_capacity", "5000", {"unit_of_measurement": "W"})
         result = {"controller_uid": "external", "loads": {}}
-        await runtime._apply_native_plan(controller, {}, {}, result)
+        with patch.object(
+            native_runtime, "_group_admissions", wraps=native_runtime._group_admissions
+        ) as admitted:
+            await runtime._apply_native_plan(controller, {}, {}, result)
+        assert admitted.call_args.kwargs["peak_limit_kw"] == 5.0
         assert result["ev_group_envelope_status"] == "verified"
         assert result["ev_group_envelope_kw"] == 5.0
         assert result["ev_group_envelope_source"] == "sensor.external_capacity"
