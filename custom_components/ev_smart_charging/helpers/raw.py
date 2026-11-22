@@ -143,7 +143,9 @@ class Raw:
         self.data.append(extra_item3)
 
     def __init__(
-        self, raw: list[dict[str, Any]], platform: str | PriceFormat | None = PLATFORM_NORDPOOL
+        self,
+        raw: list[dict[str, Any]],
+        platform: str | PriceFormat | None = PLATFORM_NORDPOOL,
     ) -> None:
         self.data = []
         if raw:

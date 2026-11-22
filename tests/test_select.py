@@ -1,6 +1,7 @@
 """Test ev_smart_charging select."""
 
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -92,6 +93,22 @@ async def test_select(hass, bypass_validate_input_and_control):
     assert coordinator.ready_quarter_local == 13 * 4
     await select_ready_quarter.async_select_option("None")
     assert coordinator.ready_quarter_local == READY_QUARTER_NONE
+
+    # A restored one-time deadline must never silently override an explicit
+    # selection of the original daily 08:00 clock. The date-time entity
+    # and its runtime value are cleared together.
+    coordinator.absolute_ready_by = datetime.now(timezone.utc) + timedelta(days=2)
+    coordinator.absolute_ready_by_pending = True
+    if coordinator.absolute_ready_by_entity is not None:
+        coordinator.absolute_ready_by_entity._attr_native_value = (
+            coordinator.absolute_ready_by
+        )
+    await select_ready_quarter.async_select_option("08:00")
+    assert coordinator.ready_quarter_local == 8 * 4
+    assert coordinator.absolute_ready_by is None
+    assert coordinator.absolute_ready_by_pending is False
+    if coordinator.absolute_ready_by_entity is not None:
+        assert coordinator.absolute_ready_by_entity.native_value is None
 
     # Unload the entry and verify that the data has been removed
     assert await async_unload_entry(hass, config_entry)

@@ -19,7 +19,6 @@ from unittest.mock import patch
 import pytest
 from homeassistant.util import dt as dt_util
 
-
 # pylint: disable=invalid-name
 pytest_plugins = "pytest_homeassistant_custom_component"
 

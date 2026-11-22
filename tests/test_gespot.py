@@ -1,11 +1,15 @@
 """Test GE-Spot integration."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 from collections import UserDict
 from datetime import datetime, timedelta
 
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers.entity_registry import EntityRegistry, async_get as async_entity_registry_get
+from homeassistant.helpers.entity_registry import (
+    EntityRegistry,
+    async_get as async_entity_registry_get,
+)
 from homeassistant.util import dt
 
 from custom_components.ev_smart_charging.const import (
@@ -36,7 +40,10 @@ class TestGESpotIntegration:
         entity_registry.entities = MagicMock()
 
         # Mock the async_entity_registry_get function
-        with patch('custom_components.ev_smart_charging.helpers.config_flow.async_entity_registry_get', return_value=entity_registry):
+        with patch(
+            "custom_components.ev_smart_charging.helpers.config_flow.async_entity_registry_get",
+            return_value=entity_registry,
+        ):
             # Test with no GE-Spot entities
             entity_registry.entities.items.return_value = []
             assert FindEntity.find_gespot_sensor(hass) == ""
@@ -142,10 +149,12 @@ class TestGESpotIntegration:
             # GE-Spot format: {"time": datetime, "value": float}
             assert "time" in current, f"Interval {i} should have 'time' key"
             assert "value" in current, f"Interval {i} should have 'value' key"
-            
+
             # Verify 15-minute intervals
             time_diff = (next_item["time"] - current["time"]).total_seconds() / 60
-            assert time_diff == 15, f"Interval {i} to {i+1} should be 15 minutes, got {time_diff}"
+            assert (
+                time_diff == 15
+            ), f"Interval {i} to {i+1} should be 15 minutes, got {time_diff}"
 
         # Verify validator accepts this data
         price_state = State(

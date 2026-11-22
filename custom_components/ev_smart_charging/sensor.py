@@ -2,8 +2,9 @@
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import STATE_OFF
 
 
@@ -14,6 +15,7 @@ from .const import (
     SENSOR,
 )
 from .entity import EVSmartChargingEntity
+from .controller.individual import individual_facts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,10 +23,29 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_devices):
     """Setup sensor platform."""
     _LOGGER.debug("EVSmartCharging.sensor.py")
+    from .v2 import TYPES as V2_TYPES
+
+    if entry.data.get("__evsc_entry_type") in V2_TYPES:
+        from .v2.entities import sensors_for_entry
+
+        async_add_devices(sensors_for_entry(entry))
+        return
+    if entry.data.get("__evsc_entry_type") == "charge_controller":
+        from .controller.sensors import controller_sensors
+        from .vehicle_sensors import vehicle_sensors
+
+        async_add_devices(
+            controller_sensors(hass.data[DOMAIN][entry.entry_id])
+            + vehicle_sensors(entry)
+        )
+        return
+
     coordinator = hass.data[DOMAIN][entry.entry_id]
     sensors = []
     sensors.append(EVSmartChargingSensorCharging(entry))
     sensors.append(EVSmartChargingSensorStatus(entry))
+    # Legacy V1 exposes exactly the two original upstream sensors.
+    # Extended facts live on independent V2 logical devices, not this Device.
     async_add_devices(sensors)
     await coordinator.add_sensor(sensors)
 
@@ -45,9 +66,7 @@ class EVSmartChargingSensorCharging(EVSmartChargingSensor):
 
     _entity_key = ENTITY_KEY_CHARGING_SENSOR
 
-    _unrecorded_attributes = frozenset(
-        ["raw_two_days", "charging_schedule"]
-    )
+    _unrecorded_attributes = frozenset(["raw_two_days", "charging_schedule"])
 
     def __init__(self, entry):
         _LOGGER.debug("EVSmartChargingSensor.__init__()")
@@ -204,3 +223,126 @@ class EVSmartChargingSensorStatus(EVSmartChargingSensor):
         """Set new status."""
         self._attr_native_value = new_status
         self.update_ha_state()
+
+
+# Historical RC-only per-Charger fact entities are no longer registered on V1.
+# Retained temporarily for compatibility tests; V2 owns new public facts.
+INDIVIDUAL_FACT_SENSORS = (
+    ("current_charging_power", "Current charging power", SensorDeviceClass.POWER, "kW"),
+    ("battery_capacity", "Usable battery capacity", SensorDeviceClass.ENERGY, "kWh"),
+    (
+        "battery_energy_current",
+        "Current battery energy",
+        SensorDeviceClass.ENERGY,
+        "kWh",
+    ),
+    ("battery_energy_target", "Target battery energy", SensorDeviceClass.ENERGY, "kWh"),
+    ("charging_required", "Charging required", SensorDeviceClass.ENERGY, "kWh"),
+    (
+        "indicative_charging_cost",
+        "Indicative charging cost",
+        SensorDeviceClass.MONETARY,
+        "EUR",
+    ),
+    (
+        "actual_charging_cost",
+        "Actual charging cost",
+        SensorDeviceClass.MONETARY,
+        "EUR",
+    ),
+)
+
+
+class EVSmartChargingIndividualFact(EVSmartChargingSensor):
+    """Source-dependent new scalar with stable entry-owned identity."""
+
+    _attr_should_poll = False
+
+    def __init__(self, entry, coordinator, key, name, device_class, unit):
+        self._entity_key = key
+        super().__init__(entry)
+        self.coordinator = coordinator
+        self._attr_translation_key = None
+        self._attr_name = name
+        self._attr_device_class = device_class
+        self._attr_native_unit_of_measurement = unit
+        # Unlike legacy sensor, use a genuinely unique per-entry key.
+        self._attr_unique_id = f"{entry.entry_id}.sensor.{key}"
+
+    @property
+    def native_value(self):
+        return individual_facts(self.coordinator)[self._entity_key]
+
+    @property
+    def extra_state_attributes(self):
+        facts = individual_facts(self.coordinator)
+        if self._entity_key == "current_charging_power":
+            return {"source_entity": facts["power_source_entity"]}
+        if self._entity_key == "battery_capacity":
+            return {"source_entity": facts["battery_capacity_source"]}
+        if self._entity_key == "battery_energy_current":
+            return {
+                "source_entity": facts["battery_current_source"],
+                "resolution": facts["battery_current_resolution"],
+            }
+        if self._entity_key == "battery_energy_target":
+            return {
+                "source_entity": facts["battery_target_source"],
+                "resolution": facts["battery_target_resolution"],
+            }
+        if self._entity_key in ("indicative_charging_cost", "actual_charging_cost"):
+            return {
+                "price_source_entity": facts["price_source_entity"],
+                "quality": (
+                    facts["cost_quality"]
+                    if self._entity_key == "indicative_charging_cost"
+                    else "unavailable_without_historical_meter_intervals"
+                ),
+            }
+        return None
+
+    @callback
+    def _async_source_state_changed(self, _event):
+        """Publish source-dependent facts on the Home Assistant event loop.
+
+        An undecorated lambda would run as an executor job and crash on
+        async_write_ha_state. Do not request native charger state here.
+        """
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        # Refresh from authoritative native sources rather than duplicating
+        # their device registration or adding one timer per scalar entity.
+        options = self.coordinator.config_entry.options
+        sources = {
+            "soc": self.coordinator.ev_soc_entity_id,
+            "target_soc": self.coordinator.ev_target_soc_entity_id,
+            "power": options.get("evsc_actual_power_entity"),
+            "energy": options.get("evsc_actual_energy_entity"),
+            "capacity": options.get("evsc_capacity_entity"),
+            "current": options.get("evsc_current_energy_entity"),
+            "target": options.get("evsc_target_energy_entity"),
+            "price": options.get("evsc_effective_price_entity")
+            or getattr(self.coordinator, "price_entity_id", None),
+        }
+        dependencies = {
+            "current_charging_power": ("power",),
+            "battery_capacity": ("capacity",),
+            "battery_energy_current": ("current", "capacity", "soc"),
+            "battery_energy_target": ("target", "capacity", "target_soc"),
+            "charging_required": ("current", "target", "capacity", "soc", "target_soc"),
+            "indicative_charging_cost": ("price", "soc", "target_soc"),
+            "actual_charging_cost": ("price", "energy"),
+        }
+        ids = {
+            sources[name] for name in dependencies[self._entity_key] if sources[name]
+        }
+        if ids:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    list(ids),
+                    self._async_source_state_changed,
+                )
+            )

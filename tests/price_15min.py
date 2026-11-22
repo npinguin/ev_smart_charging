@@ -3,7 +3,6 @@
 from zoneinfo import ZoneInfo
 from datetime import datetime
 
-
 PRICE_20220930_15MIN = [
     {
         "start": datetime(2022, 9, 30, 0, 0, tzinfo=ZoneInfo(key="Europe/Stockholm")),

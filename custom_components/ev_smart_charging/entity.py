@@ -1,4 +1,5 @@
 """EV Smart Charging Entity class"""
+
 import logging
 from homeassistant.helpers.entity import Entity
 
@@ -24,7 +25,6 @@ class EVSmartChargingEntity(Entity):
         entity_id = str(platform_str) + "." + DOMAIN + "_" + key
         _LOGGER.debug("entity_id = %s", entity_id)
         self.entity_id = entity_id
-
 
     def update_ha_state(self):
         """Update the HA state"""

@@ -147,9 +147,7 @@ class PriceAdaptor:
             price_data_tomorrow = state.attributes[self._price_attribute_tomorrow] or []
         price_data = price_data_today + price_data_tomorrow
 
-        return Raw(
-            price_data, self._price_format
-        ).today()
+        return Raw(price_data, self._price_format).today()
 
     def get_raw_tomorrow_local(self, state) -> Raw:
         """Get the tomorrow's prices in local timezone"""

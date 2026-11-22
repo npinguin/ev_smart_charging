@@ -21,7 +21,15 @@ from .const import (
     START_QUARTER_NONE,
 )
 from .coordinator import EVSmartChargingCoordinator
+from .controller.runtime import (
+    controller_entry,
+    is_supervised,
+    set_control_mode,
+    set_controller_link,
+)
 from .entity import EVSmartChargingEntity
+from .domain import suggested_entity_object_id
+from .vehicle_config import ASSIGNMENTS, VEHICLES, validate_assignments
 from .helpers.general import get_parameter, get_quarter_index
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,10 +40,20 @@ async def async_setup_entry(
 ):  # pylint: disable=unused-argument
     """Setup select platform."""
     _LOGGER.debug("EVSmartCharging.select.py")
+    from .v2 import ENTRY_CHARGER, TYPES as V2_TYPES
+
+    entry_type = entry.data.get("__evsc_entry_type")
+    if entry_type in V2_TYPES:
+        if entry_type == ENTRY_CHARGER:
+            async_add_devices([V2VehicleSelection(entry)])
+        elif entry_type == "vehicle_v2":
+            async_add_devices([V2SoCSourceSelection(entry)])
+        return
     coordinator = hass.data[DOMAIN][entry.entry_id]
     selects = []
     selects.append(EVSmartChargingSelectStartQuarter(entry, coordinator))
     selects.append(EVSmartChargingSelectReadyQuarter(entry, coordinator))
+    # Legacy V1 registers only upstream Start Quarter and Ready Quarter.
     async_add_devices(selects)
 
 
@@ -105,10 +123,28 @@ class EVSmartChargingSelectReadyQuarter(EVSmartChargingSelect):
             )
             self.update_ha_state()
 
+    async def async_added_to_hass(self) -> None:
+        """Restoring the old daily selection is not a new user command."""
+        self._restoring_ready_quarter = True
+        try:
+            await super().async_added_to_hass()
+        finally:
+            self._restoring_ready_quarter = False
+
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """The original repeating Ready By time takes precedence when selected."""
         await super().async_select_option(option)
         if self.state:
+            if not getattr(self, "_restoring_ready_quarter", False):
+                # Older installations can retain a one-time calendar deadline.
+                # An explicit selection of the original recurring time must
+                # stop that date from silently overriding tomorrow's 08:00.
+                absolute = self.coordinator.absolute_ready_by_entity
+                if absolute is not None:
+                    absolute.clear()
+                else:
+                    self.coordinator.absolute_ready_by = None
+                    self.coordinator.absolute_ready_by_pending = False
             self.coordinator.ready_quarter_local = get_quarter_index(self.state)
             if self.coordinator.ready_quarter_local is None:
                 self.coordinator.ready_quarter_local = READY_QUARTER_NONE
@@ -116,3 +152,281 @@ class EVSmartChargingSelectReadyQuarter(EVSmartChargingSelect):
                 # Treat 00:00 as 24:00
                 self.coordinator.ready_quarter_local = 24 * 4
             await self.coordinator.update_configuration()
+
+
+class EVSmartChargingSelectControlMode(EVSmartChargingSelect):
+    """Per-charger operator mode backed only by controller membership."""
+
+    _attr_should_poll = False
+
+    _entity_key = "control_mode"
+    _attr_name = "Control mode"
+    _attr_icon = "mdi:source-branch"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = ["local", "coordinated"]
+
+    @property
+    def current_option(self):
+        return (
+            "coordinated"
+            if is_supervised(self.coordinator.hass, self.config_entry.entry_id)
+            else "local"
+        )
+
+    async def async_added_to_hass(self):
+        # Controller config entry is the sole persistent mode owner.
+        # Never apply an independently restored SelectEntity state.
+        await SelectEntity.async_added_to_hass(self)
+
+    async def async_select_option(self, option):
+        set_control_mode(self.coordinator.hass, self.config_entry.entry_id, option)
+        self.async_write_ha_state()
+
+
+class ChargerControllerLinkSelect(EVSmartChargingEntity, SelectEntity):
+    """HA Charger config select with persisted, non-actuating Controller link."""
+
+    _entity_key = "charge_controller"
+    _attr_name = "Charge Controller"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = True
+    _attr_options = ["Not linked", "EVSC Charge Controller"]
+
+    def __init__(self, entry):
+        super().__init__(entry)
+        self._attr_unique_id = f"{entry.entry_id}.charge_controller"
+        self._attr_suggested_object_id = suggested_entity_object_id(
+            entry.title, "charge_controller"
+        )
+
+    @property
+    def current_option(self):
+        controller = controller_entry(self.hass)
+        if controller is None:
+            return "Not linked"
+        charger_ids = {
+            entry.entry_id
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type") != "charge_controller"
+        }
+        linked = controller.options.get("linked_chargers", charger_ids)
+        return (
+            "EVSC Charge Controller"
+            if self.config_entry.entry_id in linked
+            else "Not linked"
+        )
+
+    async def async_select_option(self, option):
+        if option not in self._attr_options:
+            raise ValueError("invalid_controller_link")
+        set_controller_link(
+            self.hass,
+            self.config_entry.entry_id,
+            option == "EVSC Charge Controller",
+        )
+        self.async_write_ha_state()
+
+
+class VehicleAssignmentSelect(EVSmartChargingEntity, SelectEntity):
+    """Native HA Charger attribute to select a Vehicle or explicitly None.
+
+    The single controller Options dict stores the assignment; no duplicate
+    device, new ConfigEntry, cloud bridge or charge command is introduced.
+    """
+
+    _entity_key = "assigned_vehicle"
+    _attr_name = "Assigned vehicle"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = True
+
+    def __init__(self, entry):
+        super().__init__(entry)
+        self._attr_unique_id = f"{entry.entry_id}.assigned_vehicle"
+        self._attr_suggested_object_id = suggested_entity_object_id(
+            entry.title, "assigned_vehicle"
+        )
+
+    def _controller(self):
+        return next(
+            (
+                entry
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get("__evsc_entry_type") == "charge_controller"
+            ),
+            None,
+        )
+
+    @property
+    def options(self):
+        controller = self._controller()
+        profiles = controller.options.get(VEHICLES, {}) if controller else {}
+        return ["None", *sorted(profile["name"] for profile in profiles.values())]
+
+    @property
+    def current_option(self):
+        controller = self._controller()
+        if not controller:
+            return "None"
+        assigned = controller.options.get(ASSIGNMENTS, {}).get(
+            self.config_entry.entry_id
+        )
+        return (
+            controller.options.get(VEHICLES, {}).get(assigned, {}).get("name", "None")
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        controller = self._controller()
+        if controller is None:
+            raise ValueError("controller_unavailable")
+        profiles = controller.options.get(VEHICLES, {})
+        names = {v["name"]: key for key, v in profiles.items()}
+        if option != "None" and option not in names:
+            raise ValueError("unknown_vehicle")
+        requested = {
+            **controller.options.get(ASSIGNMENTS, {}),
+            self.config_entry.entry_id: names.get(option, ""),
+        }
+        chargers = {
+            entry.entry_id: entry.title
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get("__evsc_entry_type")
+            not in ("charge_controller", "vehicle")
+        }
+        selected = validate_assignments(requested, profiles, chargers)
+        self.hass.config_entries.async_update_entry(
+            controller, options={**controller.options, ASSIGNMENTS: selected}
+        )
+        self.async_write_ha_state()
+
+
+class V2VehicleSelection(SelectEntity):
+    """Daily assignment on the existing V2 Charger, not another device.
+
+    The Charger Config Entry owns vehicle_uid. This control is a projection
+    of that one field; it must not restore a separate SelectEntity value.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Vehicle"
+    _attr_icon = "mdi:car"
+
+    def __init__(self, entry):
+        self.entry = entry
+        self._attr_unique_id = (
+            f"{DOMAIN}_v2_charger_{entry.data['uid']}_vehicle_selection"
+        )
+
+    @property
+    def device_info(self):
+        from .v2.entities import logical_device_info
+
+        return logical_device_info(self.entry)
+
+    def _choices(self):
+        from .v2.catalog import catalog
+
+        vehicles, _, _ = catalog(self.hass)
+        names = {}
+        for uid, vehicle in sorted(vehicles.items()):
+            names.setdefault(vehicle.name, []).append(uid)
+        choices = {"None": ""}
+        for name, uids in sorted(names.items()):
+            for uid in uids:
+                label = name if len(uids) == 1 and name != "None" else f"{name} ({uid})"
+                choices[label] = uid
+        return choices
+
+    @property
+    def options(self):
+        return list(self._choices())
+
+    @property
+    def current_option(self):
+        from .v2.catalog import model
+
+        uid = model(self.entry).vehicle_uid
+        return next(
+            (label for label, value in self._choices().items() if value == uid),
+            "None",
+        )
+
+    async def async_added_to_hass(self):
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{DOMAIN}_v2_relationships",
+                self.async_write_ha_state,
+            )
+        )
+
+    async def async_select_option(self, option):
+        from .v2.ownership import async_apply_charger_options
+
+        choices = self._choices()
+        if option not in choices:
+            raise ValueError("unknown_vehicle")
+        await async_apply_charger_options(
+            self.hass,
+            self.entry.data["uid"],
+            {"vehicle_uid": choices[option]},
+        )
+        self.async_write_ha_state()
+
+
+class V2SoCSourceSelection(SelectEntity):
+    """OEM/manual/meter compensated; never stores an independent selected mode."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "SoC source"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:car-battery"
+    _MODES = {
+        "OEM": "oem",
+        "Manual": "manual",
+        "Meter compensated": "meter_compensated",
+    }
+
+    def __init__(self, entry):
+        self.entry = entry
+        self._attr_unique_id = f"{DOMAIN}_v2_vehicle_{entry.data['uid']}_soc_source"
+
+    @property
+    def device_info(self):
+        from .v2.entities import logical_device_info
+
+        return logical_device_info(self.entry)
+
+    @property
+    def options(self):
+        return list(self._MODES)
+
+    @property
+    def current_option(self):
+        from .v2.catalog import model
+
+        mode = model(self.entry).soc_source_mode
+        return next(
+            (label for label, value in self._MODES.items() if value == mode), "OEM"
+        )
+
+    async def async_select_option(self, option):
+        from types import SimpleNamespace
+
+        from .v2.catalog import model
+
+        if option not in self._MODES:
+            raise ValueError("unknown_soc_source")
+        updated = {
+            **self.entry.options,
+            "soc_source_mode": self._MODES[option],
+        }
+        # Manual requires a deliberate user-entered SoC. Compensated
+        # requires a source, verified capacity and charging efficiency.
+        model(SimpleNamespace(data=self.entry.data, options=updated))
+        self.hass.config_entries.async_update_entry(self.entry, options=updated)
+        self.async_write_ha_state()

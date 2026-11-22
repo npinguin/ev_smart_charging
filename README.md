@@ -1,5 +1,8 @@
 # EV Smart Charging
 
+> **Fork V1 / V2 status (2026-10-27):** The original upstream Local V1 charging devices, Options and scheduling remain the compatibility baseline. V2 adds independent native HA **Vehicle, Charger and Charge Controller** Config Entries, including device-assisted setup, actual metering, source quality, manual Connected and optional physical execution. The latest published HACS build is **v2.6.0-rc.16**; **v2.6.0-rc.17 is being validated on the feature branch**, not yet approved for general production. Follow the [V2 Home Assistant setup & field-acceptance guide](docs/V2_HOME_ASSISTANT_SETUP_AND_FIELD_TEST.md) and [RC17 scope](https://github.com/npinguin/ev_smart_charging/issues/11). CI alone does not close the previous on-site Peblar HA-hang investigation or prove EVSE physical readback; leave Local ownership intact until an individual V2 charger passes field acceptance.
+
+
 [![GitHub Release][releases-shield]][releases]
 [![Codecov][coverage-shield]][coverage]
 [![License][license-shield]][license]

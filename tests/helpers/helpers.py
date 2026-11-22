@@ -398,9 +398,7 @@ class MockTeslaFleetSOCEntity:
     @staticmethod
     def set_state(hass: HomeAssistant, new_state: str):
         """Set state"""
-        hass.states.async_set(
-            "sensor.tesla_fleet_battery_level", new_state
-        )
+        hass.states.async_set("sensor.tesla_fleet_battery_level", new_state)
 
 
 class MockTeslaFleetTargetSOCEntity:
@@ -419,6 +417,4 @@ class MockTeslaFleetTargetSOCEntity:
     @staticmethod
     def set_state(hass: HomeAssistant, new_state: str):
         """Set state"""
-        hass.states.async_set(
-            "sensor.tesla_fleet_charge_limit", new_state
-        )
+        hass.states.async_set("sensor.tesla_fleet_charge_limit", new_state)

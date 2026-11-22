@@ -1,4 +1,5 @@
 """Constants for ev_smart_charging/helpers tests."""
+
 from custom_components.ev_smart_charging.const import (
     CONF_MIN_SOC,
     CONF_PCT_PER_HOUR,
