@@ -50,3 +50,27 @@ def test_native_external_source_remains_supported(hass):
         {"uid": "v2", "name": "Car", "soc_entity": native.entity_id},
     )
     assert proposed.soc_entity == native.entity_id
+
+
+def test_external_envelope_source_must_not_read_own_v2_controller_output(hass):
+    controller = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="owned_envelope_controller",
+        data={MARKER: ENTRY_CONTROLLER, "uid": "owned-envelope", "name": "Planner"},
+        version=8,
+    )
+    controller.add_to_hass(hass)
+    owned = entity_registry_get(hass).async_get_or_create(
+        "sensor", DOMAIN, "v2_envelope_output", config_entry=controller
+    )
+    with pytest.raises(ValueError, match="v2_source_feedback_cycle"):
+        check_proposed(
+            hass,
+            ENTRY_CONTROLLER,
+            {
+                "uid": "owned-envelope",
+                "name": "Planner",
+                "ev_group_power_limit_entity": owned.entity_id,
+            },
+            editing_uid="owned-envelope",
+        )
