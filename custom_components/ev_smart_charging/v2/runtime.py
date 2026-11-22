@@ -197,7 +197,13 @@ def _group_admissions(
     total_kw = sum(observed[uid]["power_kw"] for uid in chargers)
     active = sum(observed[uid]["power_kw"] > 0.05 for uid in chargers)
     wanted = [uid for uid in chargers if _desired_now(plan, uid, when)]
-    wanted.sort(key=lambda uid: (observed[uid]["power_kw"] <= 0.05, uid))
+    wanted.sort(
+        key=lambda uid: (
+            observed[uid]["power_kw"] <= 0.05,
+            -chargers[uid].priority,
+            uid,
+        )
+    )
     admitted = set()
     for uid in wanted:
         charger = chargers[uid]
