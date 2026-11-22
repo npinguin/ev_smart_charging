@@ -62,6 +62,7 @@ def model(entry):
             uid=data["uid"],
             name=data["name"],
             controller_uid=data["controller_uid"],
+            priority=data.get("priority", 0),
             vehicle_uid=data.get("vehicle_uid", ""),
             control_entity=data.get("control_entity", ""),
             control_semantics=data.get("control_semantics", "unspecified"),
