@@ -180,6 +180,9 @@ class Controller:
     site_power_entity: str = ""
     peak_target_kw: float | None = None
     peak_reserve_kw: float = 0.0
+    # Optional source-backed TOTAL group charging limit, not free headroom or PV
+    # surplus. Separate V2 Controllers must have separately allocated caps.
+    ev_group_power_limit_entity: str = ""
 
     def __post_init__(self):
         if not self.uid or not self.name.strip():
@@ -202,6 +205,17 @@ class Controller:
             raise ConfigurationError("peak_reserve_invalid")
         if self.price_cap_eur_kwh is not None and not isfinite(self.price_cap_eur_kwh):
             raise ConfigurationError("price_cap_invalid")
+        if self.ev_group_power_limit_entity:
+            source = self.ev_group_power_limit_entity
+            if (
+                not isinstance(source, str)
+                or not source.startswith("sensor.")
+                or not source[7:]
+                or source == self.site_power_entity
+            ):
+                raise ConfigurationError("ev_group_envelope_invalid")
+        elif not isinstance(self.ev_group_power_limit_entity, str):
+            raise ConfigurationError("ev_group_envelope_invalid")
 
 
 def validate_catalog(
@@ -216,6 +230,13 @@ def validate_catalog(
         raise ConfigurationError("charger_key_mismatch")
     if any(key != item.uid for key, item in controllers.items()):
         raise ConfigurationError("controller_key_mismatch")
+    envelopes = [
+        item.ev_group_power_limit_entity
+        for item in controllers.values()
+        if item.ev_group_power_limit_entity
+    ]
+    if len(envelopes) != len(set(envelopes)):
+        raise ConfigurationError("shared_ev_group_envelope_requires_allocation")
     selected_vehicles: set[str] = set()
     control_sources: set[str] = set()
     legacy_sources: set[str] = set()
