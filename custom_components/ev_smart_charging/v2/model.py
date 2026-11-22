@@ -84,6 +84,9 @@ class Charger:
     uid: str
     name: str
     controller_uid: str
+    # Higher value wins when several stopped EVSEs contend for one site limit.
+    # Default 0 retains existing native behavior for every persisted Charger.
+    priority: int = 0
     vehicle_uid: str = ""
     control_entity: str = ""
     control_semantics: str = "unspecified"
@@ -110,6 +113,9 @@ class Charger:
     def __post_init__(self):
         if not self.uid or not self.name.strip() or not self.controller_uid:
             raise ConfigurationError("charger_requires_controller")
+        if (isinstance(self.priority, bool) or not isinstance(self.priority, int)
+                or not 0 <= self.priority <= 100):
+            raise ConfigurationError("charger_priority_invalid")
         if self.phase_count not in (None, 1, 2, 3):
             raise ConfigurationError("charger_phases_invalid")
         if self.nominal_phase_voltage_v is not None:
