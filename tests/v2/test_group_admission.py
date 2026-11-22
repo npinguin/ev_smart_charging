@@ -1,8 +1,11 @@
 """Guard against overlapping physical load admissions across one Controller."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
-from custom_components.ev_smart_charging.v2.model import Charger, Controller
+import pytest
+
+from custom_components.ev_smart_charging.v2.model import Charger, Controller, ConfigurationError
 from custom_components.ev_smart_charging.v2.runtime import _group_admissions
 
 NOW = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
@@ -69,3 +72,19 @@ def test_no_desired_load_means_no_reserved_start():
     ctrl, chargers, observed, plan = make_scenario()
     plan["loads"] = {}
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == set()
+
+
+def test_native_priority_wins_unstarted_capacity_contention():
+    ctrl, chargers, observed, plan = make_scenario()
+    chargers["a"] = replace(chargers["a"], priority=0)
+    chargers["b"] = replace(chargers["b"], priority=10)
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+    # Actual running EVSE keeps its grant; priority cannot forcibly steal power.
+    observed["a"]["power_kw"] = 6.0
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
+
+
+def test_native_charger_priority_rejects_boolean_and_out_of_range():
+    for priority in (-1, 101, True, 1.5):
+        with pytest.raises(ConfigurationError, match="priority"):
+            Charger(uid="a", name="A", controller_uid="ctrl", priority=priority)
