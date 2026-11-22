@@ -733,6 +733,22 @@ class V2ControllerRuntime:
         headroom = peak_headroom(controller, observed, site_kw)
         result["peak_status"] = "disabled"
         result["available_ev_power_kw"] = None
+        # Generic opt-in external envelope is an absolute total EV charging
+        # group limit. It is NOT incremental headroom, export or a battery
+        # command, and its source must be fresh and unit-qualified.
+        envelope_source = controller.ev_group_power_limit_entity
+        envelope_kw = (
+            _meter(self.hass.states.get(envelope_source), "power")
+            if envelope_source
+            else None
+        )
+        result["ev_group_envelope_source"] = envelope_source or None
+        result["ev_group_envelope_kw"] = envelope_kw
+        result["ev_group_envelope_status"] = (
+            "unavailable"
+            if envelope_source and envelope_kw is None
+            else "verified" if envelope_source else "not_configured"
+        )
         if controller.peak_shaving_enabled:
             result["available_ev_power_kw"] = headroom
             if headroom is None:
@@ -767,7 +783,19 @@ class V2ControllerRuntime:
                         self._peak_latched = False
                         self._peak_recovery_since = None
                 result["peak_status"] = "paused" if self._peak_latched else "active"
+        else:
+            # A deliberate Options switch-off removes the old peak latch.
+            self._peak_latched = False
+            self._peak_recovery_since = None
+
         limit = 0.0 if self._peak_latched else headroom
+        if envelope_source:
+            # Configured but stale/invalid envelope never becomes unlimited.
+            # Missing and a genuine metered 0 kW have different readback
+            # quality, but both block all new physical EVSE admission.
+            qualified = 0.0 if envelope_kw is None else envelope_kw
+            limit = qualified if limit is None else min(limit, qualified)
+        result["ev_group_effective_limit_kw"] = limit
         admitted = _group_admissions(
             controller, chargers, observed, result, when, peak_limit_kw=limit
         )
