@@ -111,6 +111,8 @@
           "physical_enabled": "Fysieke V2-laadsturing inschakelen (vereist afzonderlijke ownership)",
           "peak_shaving_enabled": "Piekbewaking inschakelen",
           "site_power_entity": "Huismeter netto netvermogen (W/kW)",
+          "ev_group_power_limit_entity": "Extern totaal laadvermogensbudget voor deze groep (W/kW)",
+          "ev_group_power_limit_entity": "Extern totaal laadvermogensbudget voor deze groep (W/kW)",
           "peak_target_kw": "Maximaal netvermogen (kW)",
           "peak_reserve_kw": "Veiligheidsreserve (kW)"
         },
@@ -118,6 +120,8 @@
           "physical_enabled": "Optioneel, standaard uit. Alleen activeren wanneer dit laadpunt niet meer door V1 Local bediend wordt en echte connected/vermogen, effectieve tarieven, OEM-switch en Start/Stop-readback werken.",
           "peak_shaving_enabled": "Beperkt automatisch EV-laden op basis van werkelijk netto huishoudverbruik, met hysterese. Vereist huismeter en doelvermogen.",
           "site_power_entity": "Kies netto import/export sensor. Positief = import, negatief = export. Geen EV-submeter gebruiken.",
+          "ev_group_power_limit_entity": "Optionele echte HA-sensor: TOTAAL beschikbaar laadvermogen voor alle laadpunten van deze Controller, niet de netimport, zonne-overschot of vrije restcapaciteit. Ontbrekende, verouderde of ongeldige meting blokkeert nieuwe Starts. Elke Controller heeft een eigen, niet-overlappende toewijzing nodig.",
+          "ev_group_power_limit_entity": "Optionele echte HA-sensor: TOTAAL beschikbaar laadvermogen voor alle laadpunten van deze Controller, niet de netimport, zonne-overschot of vrije restcapaciteit. Ontbrekende, verouderde of ongeldige meting blokkeert nieuwe Starts. Elke Controller heeft een eigen, niet-overlappende toewijzing nodig.",
           "peak_target_kw": "Netimportlimiet voor EV load balancing, bijvoorbeeld 8 kW. Geen fictieve limiet wordt aangenomen.",
           "peak_reserve_kw": "Extra marge onder de pieklimiet, bijvoorbeeld 0,5 kW.",
           "cost_budget_eur": "Geldt voor de momenteel verbonden laadsessies, niet als automatisch dagbudget. V2 meet verbruik en effectieve tarieven en reserveert conservatief de volgende 15 minuten. Meter- of prijsgaten blokkeren fysieke Start; leeg laten voor geen limiet."
