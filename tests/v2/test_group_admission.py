@@ -106,11 +106,16 @@ def test_equal_priority_uses_earliest_real_deadline_not_charger_uid():
     plan["loads"]["a"]["next_ready_by"] = (NOW + timedelta(hours=6)).isoformat()
     plan["loads"]["b"]["next_ready_by"] = (NOW + timedelta(hours=1)).isoformat()
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
-    # Explicit higher priority still wins; only equal priority uses deadline.
+    # The existing joint planner grants real deadline urgency before
+    # configured priority; admission must make the same decision.
     chargers["a"] = replace(chargers["a"], priority=25)
+    assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"b"}
+    # For equally urgent requests, the explicit Charger priority wins.
+    plan["loads"]["a"]["next_ready_by"] = plan["loads"]["b"]["next_ready_by"]
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
-    # Running charger cannot be displaced by a newly urgent stop/start.
+    # A running charger must never be forcibly displaced by a new request.
     chargers["a"] = replace(chargers["a"], priority=0)
+    plan["loads"]["a"]["next_ready_by"] = (NOW + timedelta(hours=6)).isoformat()
     observed["a"]["power_kw"] = 6.0
     assert _group_admissions(ctrl, chargers, observed, plan, NOW) == {"a"}
 
