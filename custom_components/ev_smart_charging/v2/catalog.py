@@ -123,6 +123,7 @@ def model(entry):
             site_power_entity=data.get("site_power_entity", ""),
             peak_target_kw=optional_positive(data.get("peak_target_kw"), "peak_target"),
             peak_reserve_kw=float(data.get("peak_reserve_kw") or 0),
+            ev_group_power_limit_entity=data.get("ev_group_power_limit_entity", ""),
         )
     raise ValueError("unsupported_v2_entry")
 
@@ -138,7 +139,7 @@ def _unique_entries(hass, entry_type):
     return result
 
 
-def _check_source_feedback(hass, vehicles, chargers):
+def _check_source_feedback(hass, vehicles, chargers, controllers=None):
     """A V2 output cannot be an input to another EVSC V2 source reader."""
     from homeassistant.helpers.entity_registry import async_get
 
@@ -163,6 +164,11 @@ def _check_source_feedback(hass, vehicles, chargers):
             charger.control_entity,
         )
     )
+    sources.extend(
+        controller.ev_group_power_limit_entity
+        for controller in (controllers or {}).values()
+        if controller.ev_group_power_limit_entity
+    )
     for source in sources:
         if not source:
             continue
@@ -176,7 +182,7 @@ def catalog(hass):
     chargers = _unique_entries(hass, ENTRY_CHARGER)
     controllers = _unique_entries(hass, ENTRY_CONTROLLER)
     validate_catalog(vehicles, chargers, controllers)
-    _check_source_feedback(hass, vehicles, chargers)
+    _check_source_feedback(hass, vehicles, chargers, controllers)
     return vehicles, chargers, controllers
 
 
@@ -204,5 +210,5 @@ def check_proposed(hass, entry_type, data, editing_uid=None):
     else:
         controllers[item.uid] = item
     validate_catalog(vehicles, chargers, controllers)
-    _check_source_feedback(hass, vehicles, chargers)
+    _check_source_feedback(hass, vehicles, chargers, controllers)
     return item
